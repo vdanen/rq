@@ -11,7 +11,9 @@ re_brpm = re.compile(r'\.rpm$')
 #
 # function to connect to the database
 #
-def db_connect():
+def db_connect(type):
+    global config
+
     if config['hostspec'] == '':
         sys.stderr.write('Missing hostspec in the configuration!\n')
         exit(1)
@@ -21,9 +23,20 @@ def db_connect():
     if config['password'] == '':
         sys.stderr.write('Missing password in the configuration!\n')
         exit(1)
-    if (config['database'] == ''):
-        sys.stderr.write('Missing database in the configuration!\n')
-        exit(1)
+
+    if type == 'binary':
+        if (config['rpm_database'] == ''):
+            sys.stderr.write('Missing rpm_database in the configuration!\n')
+            exit(1)
+        else:
+            config['database'] = config['rpm_database']
+
+    if type == 'source':
+        if (config['srpm_database'] == ''):
+            sys.stderr.write('Missing srpm_database in the configuration!\n')
+            exit(1)
+        else:
+            config['database'] = config['srpm_database']
 
     print_debug('Using host=>%s, user=>%s, db=>%s' % (config['hostspec'], config['username'], config['database']))
 
@@ -689,15 +702,21 @@ if __name__ == '__main__':
     if options.verbose:
         print_verbose("Verbose mode enabled")
 
-    config_file = '/etc/rqprc'
+    config = {}
+
+    config_file = '/etc/rqrc'
     if os.path.isfile(config_file):             # look for a system-wide one first
         config = read_config(config_file)
 
-    config_file = os.getenv('HOME') + '/.rqprc'
+    config_file = os.getenv('HOME') + '/.rqrc'
     if os.path.isfile(config_file):             # if we find a local one, overwrite anything defined
         config = read_config(config_file)
 
-    db = db_connect()
+    if not config:
+        sys.stderr.write('\n\nERROR: No configuration file found!\n')
+        exit(1)
+
+    db = db_connect('binary')
 
     # start doing useful things
     if options.list:

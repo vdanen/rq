@@ -1,16 +1,14 @@
-; This is a configuration file for rqs
+; This is a configuration file for rq
 ;
 ; $Id$
 
 ; configure the database options to use
-[dsn]
-; database type
-phptype=pgsql
 ; database username
-username=secteam
+username=rq
 ; database username's password
-password=secpw28
+password=rq
 ; connection to use to the database
 hostspec=localhost
 ; database name
-database=srpm
+rpm_database=rqp
+srpm_database=rsq
