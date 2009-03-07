@@ -648,11 +648,13 @@ def run_query(qstring, type):
 if __name__ == '__main__':
     global options, config
 
-    sys.stdout.write("rqp $Id$\n\n")
+    rq_version = '0.2'
+
+    sys.stdout.write("rqp %s ($Id$)\n\n" % rq_version)
 
     p = optparse.OptionParser(description="RPM package query tool",
                               prog="rqp",
-                              version="%prog 0.2",
+                              version="%prog " + rq_version,
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p] <substring>] [-t <tag>]")
     p.add_option('-C', '--count', dest="count", default=False, action="store_true", help="Only output the count of query matches")
     p.add_option('-d', '--debug', dest="debug", default=False, action="store_true", help="Enable debugging output")
