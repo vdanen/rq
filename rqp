@@ -1,0 +1,1152 @@
+#!/usr/bin/php -q
+<?php
+/* rqp -- script to build/query database of rpm binary packages
+ * based on the srpm script of similar function copyright (c) 2005 Stew Benedict <sbenedict@mandriva.com>
+ * copyright (c) 2007 Vincent Danen <vdanen@linsec.ca>
+ *
+ * $Id$
+ */
+
+define("_VERSION",   "0.1");
+define("_NAME",      "rqp");
+define("_COPYRIGHT", "(c) 2007 Vincent Danen <vdanen@linsec.ca>");
+
+error_reporting(E_ERROR & ~E_WARNING);
+
+$debug       = FALSE;
+$verbose     = FALSE;
+$progress    = FALSE;
+$quiet       = FALSE;
+$update_db   = FALSE;
+$do_count    = FALSE;
+$extra_info  = FALSE;
+$no_case     = FALSE;
+
+$db_access   = array();
+
+// for progress
+$pstate      = 1;
+$lprefix     = '';
+
+/**
+ * Function to display help/usage
+ *
+ * @param string $self program name
+ */
+function print_help($self)
+{
+    p_debug("=> print_help()\n");
+    
+    printf("Usage: %s [-h] [-v] [-c <directory>] [-[q|r|p] <substring>] [-t <tag>]\n\n", $self);
+    printf("  -h  Prints this help\n");
+    printf("  -a  <path> Add a binary rpm entry with <tag> to the database\n");
+    printf("  -c  <directory> Create database entries with <tag> from a binary rpm <directory>\n");
+    printf("  -C  Only output the count of query matches\n");
+    printf("  -d  Debugging output\n");
+    printf("  -D  <tag> Delete all <tag> entries\n");
+    printf("  -e  Show extra info (version, release, date)\n");
+    printf("  -i  Case insensitive search\n");
+    printf("  -l  List database tags\n");
+    printf("  -p  Query database for substring match on provides\n");
+    printf("  -P  Show processing progress\n");
+    printf("  -q  Query database for substring match on files\n");
+    printf("  -Q  Quiet query - show tag and package name only (or numeric count only)\n");
+    printf("  -r  Query database for substring match on requires\n");
+    printf("  -t  <tag> Tag for created database entries or database queries\n");
+    printf("  -u  <tag> Update <tag> entries (new/removed files in directory)\n");
+    printf("  -x  Show database statistics\n");
+    printf("  -v  Verbose output\n");
+    printf("  -V  Version\n");
+    exit(0);
+}
+
+/**
+ * Function to read configuration file
+ *
+ * @return array
+ */
+function read_inifile() {
+    // look for inifile
+    global $self;
+    
+    p_debug("=> read_inifile()\n");
+    $inifile = $_ENV['HOME'] . "/.rqprc";
+    if (!file_exists($inifile))
+    {
+        printf("%s: The configuration file %s does not exist!\n", $self, $inifile);
+        exit(1);
+    }
+    $conf = parse_ini_file($inifile, 1);
+    return($conf);
+}
+
+/**
+ * Function to print debug strings
+ *
+ * @param unknown_type $string
+ * @param unknown_type $var
+ */
+function p_debug($string, $var = NULL)
+{
+    global $debug;
+    
+    if ($debug)
+        printf("$string", $var);
+}
+
+/**
+ * Function to print verbose strings
+ *
+ * @param string $string
+ * @param string $var
+ */
+function p_verbose($string, $var)
+{
+    global $verbose;
+    
+    if ($verbose)
+        printf("$string", $var);
+}
+
+/**
+ * Handle database errors and debug logging
+ *
+ * @param $result the result identifier from a db->query
+ */
+function dberror($result, $query)
+{
+    global $debug;
+
+    if (PEAR::isError($result))
+    {
+        printf("%s - %s\n", $result->getMessage(), $result->getUserinfo());
+
+        if ($debug)
+            printf("\nDEBUG: Query was: $query\n");
+        exit(1);
+    }
+}
+
+/**
+ * Function to display the progress indicator
+ *
+ * @param string $prefix
+ */
+function s_progress($prefix)
+{
+    global $verbose, $debug, $progress, $pstate, $lprefix;
+    
+    if (!$verbose && !$debug && $progress)
+    {
+        if (!$prefix)
+        {
+            if ($pstate == 1)
+                print(".");
+            $pstate++;
+            if ($pstate > 20)
+                $pstate = 1;
+            return;
+        }
+        if ($prefix != 'files' && $prefix != 'sources' && $prefix != '')
+        {
+            printf("%s", $prefix . ": ");
+            $pstate = 1;
+            return;
+        } elseif ($prefix != $lprefix)
+        {
+            print("\t$prefix: ");
+            $lprefix = $prefix;
+            return;
+        }
+    }
+}
+
+function perror($str)
+{
+    global $progress;
+
+    print("ERROR: $str\n");
+}
+
+function add_package_record($tag, $path)
+{
+    global $db;
+
+    p_debug("=> add_package_record()\n");
+    $rtags   = `rpm -qp --nosignature --qf '%{name}|%{version}|%{release}|%{buildtime}' $path`;
+    $tlist   = split("\|", $rtags);
+    //print_r($tlist);
+    $tag     = $tag;
+    $path    = basename($path);
+    $package = $tlist[0];
+    $version = $tlist[1];
+    $release = $tlist[2];
+    $pdate   = $tlist[3];
+    $query   = sprintf("SELECT tag, package, version, release FROM packages WHERE tag = %s AND package = %s AND version = %s AND release = %s", 
+        $db->quote($tag), $db->quote($package), $db->quote($version), $db->quote($release));
+    $r       = $db->query($query);
+    dberror($r, $query);
+    if ($r->numRows() >= 1)
+    {
+        perror("file $tlist[0]-$tlist[1]-$tlist[2] already in the database under tag $tag...");
+        return(0);
+    }
+    $r->free();
+    $query = sprintf("INSERT INTO packages (tag, package, version, release, pdate) VALUES (%s, %s, %s, %s, %s)", 
+        $db->quote($tag), $db->quote($package), $db->quote($version), $db->quote($release), $db->quote($pdate));
+    $r     = $db->exec($query);
+    dberror($r, $query);
+    s_progress($path);
+    $query = sprintf("SELECT record FROM packages WHERE tag = %s AND package = %s ORDER BY record DESC", 
+        $db->quote($tag), $db->quote($package));
+    $r     = $db->query($query);
+    dberror($r, $query);
+    if ($r->numRows() >= 1)
+    {
+	    $row = $r->fetchRow(MDB2_FETCHMODE_ASSOC);
+	    $r->free();
+        return($row['record']);
+    } else {
+        $r->free();
+        perror("adding file $path failed...");
+    }
+    return(0);
+}
+
+function add_file_records($record, $sfiles)
+{
+    global $verbose, $db;
+
+    p_debug("=> add_file_records()\n");
+    foreach ($sfiles as $sfile)
+    {
+        s_progress();
+        if ($verbose)
+            printf("File: %s\n", $dfile);
+        $query = sprintf("INSERT into files (record, file) VALUES (%s, %s)", 
+            $db->quote($record), $db->quote($sfile));
+        $r     = $db->exec($query);
+        dberror($r, $query);
+    }
+}
+
+function add_file_requires($record, $rpm)
+{
+    global $verbose, $db;
+    
+    p_debug("=> add_file_provides()\n");
+    $list = `rpm -qp --nosignature --requires $rpm | grep -v rpmlib | uniq`;
+    $deps = spliti("\n", $list);
+    foreach ($deps as $dep)
+    {
+        if ($dep != "")
+        {
+            s_progress();
+            if ($verbose)
+                printf("Dependency: %s\n", $dep);
+            $query = sprintf("INSERT INTO requires (record, requires) VALUES (%s, %s)", 
+                $db->quote($record), $db->quote($dep));
+            $r     = $db->exec($query);
+            dberror($r, $query);
+        }
+    }
+}
+
+function add_file_provides($record, $rpm)
+{
+    global $verbose, $db;
+    
+    p_debug("=> add_file_provides()\n");
+    $list  = `rpm -qp --nosignature --provides $rpm`;
+    $provs = spliti("\n", $list);
+    foreach ($provs as $prov)
+    {
+        if ($prov != "")
+        {
+            s_progress();
+            if ($verbose)
+                printf("Provides: %s\n", $dep);
+            $query = sprintf("INSERT INTO provides (record, provides) VALUES (%s, %s)", 
+                $db->quote($record), $db->quote($prov));
+            $r     = $db->exec($query);
+            dberror($r, $query);
+        }
+    }
+}
+
+function add_record($tag, $path)
+{
+    global $progress, $verbose;
+    
+    p_debug("=> add_record()\n");
+    // corrupts add data - not needed
+    if ($verbose)
+        $verbose = FALSE;
+    $cur_dir  = getcwd();
+    $path     = fix_path($path, $cur_dir);
+    p_debug("Path:\t%s\n", $path);
+    check_file($path);
+    p_debug("Add package record for: %s\n", $path);
+    $record   = add_package_record($tag, $path);
+    if (!$record)
+		return;
+    p_debug("Add file records for package record: %s\n", $record);
+    $sfiles   = rpm_list($path);
+    $files    = spliti("\n", $sfiles);
+    //add_source_records($record, $files);
+    //$cpio_dir = make_tmp_dir();
+    // get_all_files($path);
+    add_file_records($record, $files);
+    add_file_requires($record, $path);
+    add_file_provides($record, $path);
+    //chdir($cur_dir);
+    //clean_tmp_dir($cpio_dir);
+    if ($progress)
+        print("\n");
+}
+
+function add_tag_record($tag, $path)
+{
+    global $db;
+
+    p_debug("=> add_tag_record()\n");
+    p_debug("Add tag record $tag for: %s\n", $path);
+    $cur_date = date("D M j G:i:s T Y");
+    $query    = sprintf("SELECT tag FROM tags WHERE tag = %s OR path = %s",
+        $db->quote($tag), $db->quote($path));
+    $r        = $db->query($query);
+    dberror($r, $query);
+    if ($r->numRows() >= 1)
+    {
+        printf("Tag or path already exist in the database!\n");
+        $r->free();
+        exit(1);
+    }
+    $r->free();
+	$query = sprintf("INSERT INTO tags (tag, path, tdate) VALUES (%s, %s, %s)",
+	    $db->quote($tag), $db->quote($path), $db->quote($cur_date));
+	$r     = $db->exec($query);
+	dberror($r, $query);
+	return(0);
+}
+
+function add_rpm_directory($tag, $path)
+{
+    p_debug("=> add_rpm_directory()\n");
+    
+    $path    = fix_path($path, getcwd());
+    $new_tag = add_tag_record($tag, $path);
+    if ($new_tag)
+        exit(1);
+    foreach (glob("$path/*.rpm") as $rpm)
+    {
+        if (!eregi("src.rpm", $rpm))
+        {
+            add_record($tag, $rpm);
+        }
+    }
+}
+
+function check_for_tag($tag, $path)
+{
+    global $db;
+
+    p_debug("=> check_for_tag()\n");
+    $path  = fix_path($path, getcwd());
+    $path  = dirname($path);
+    $query = sprintf("SELECT DISTINCT tag, path FROM tags WHERE tag = %s", $db->quote($tag));
+    $r     = $db->query($query);
+    dberror($r, $query);
+    if ($r->numRows() >= 1)
+    {
+        $row = $r->fetchRow(MDB2_FETCHMODE_ASSOC);
+        if ($row[path] != $path)
+            die("Tag ($tag) already in database with path: $row[path]\n");
+        $r->free();
+        return(TRUE);
+    } else {
+        $r->free();
+        return(FALSE);
+    }
+}
+
+function add_tag_path($tag, $path)
+{
+    p_debug("=> add_tag_path()\n");
+    $path    = fix_path($path, getcwd());
+    $path    = dirname($path);
+    $new_tag = add_tag_record($tag, $path);
+    if ($new_tag)
+        exit(1);
+}
+
+function list_tags()
+{
+    global $db;
+    
+    p_debug("=> list_tags()\n");
+    $query = "SELECT * FROM tags ORDER BY tag";
+    $r     = $db->query($query);
+    dberror($r, $query);
+    while ($row = $r->fetchRow(MDB2_FETCHMODE_ASSOC))
+    {
+        printf("Tag: %-22sDate Added: %-18s\n  Path: %s\n", $row[tag], $row[tdate], $row[path]);
+    }
+    $r->free();
+    exit(0);
+}
+
+/**
+ * Delete all entries with given tag
+ *
+ * @param string $tag entry to delete
+ */
+function delete_tag_entries($tag)
+{
+    global $progress, $db;
+
+    p_debug("=> delete_tag_entries()\n");
+    $to_remove = array();
+    $query     = sprintf("SELECT * FROM tags WHERE tag = %s", $db->quote($tag));
+    $r         = $db->query($query);
+    dberror($r, $query);
+    if ($r->numRows() >= 1)
+    {
+        s_progress($tag);
+        p_verbose("Remove $tag from Tags...\n");
+        $r->free();
+        $query = sprintf("DELETE FROM tags WHERE tag = %s", $db->quote($tag));
+        $r     = $db->exec($query);
+        dberror($r, $query);
+        $query = sprintf("SELECT DISTINCT record FROM packages WHERE tag = %s", $db->quote($tag));
+        $r     = $db->query($query);
+        dberror($r, $query);
+        while ($row = $r->fetchRow(MDB2_FETCHMODE_ASSOC))
+        {
+            array_push($to_remove, $row[record]);
+        }
+        $r->free();
+        if (sizeof($to_remove) > 0)
+        {
+            $nrecs = sizeof($to_remove);
+            p_verbose("Removing $nrecs tagged Packages (and associated Requires, Provides and Files) entries for $tag...\n");
+            foreach($to_remove as $rnum)
+            {
+                s_progress();
+                $query = sprintf("DELETE FROM packages WHERE record = %d", $db->quote($rnum));
+                $r     = $db->exec($query);
+                dberror($r, $query);
+                $query = sprintf("DELETE FROM requires WHERE record = %d", $db->quote($rnum));
+                $r     = $db->exec($query);
+                dberror($r, $query);
+                $query = sprintf("DELETE FROM provides WHERE record = %d", $db->quote($rnum));
+                $r     = $db->exec($query);
+                dberror($r, $query);
+                $query = sprintf("DELETE FROM files WHERE record = %d", $db->quote($rnum));
+                $r     = $db->exec($query);
+                dberror($r, $query);
+            }
+        }
+        if ($progress)
+            print("\n");
+    } else {
+        perror("no Tag entry found for $tag");
+    }
+}
+
+function update_tag_entries($tag)
+{
+    global $db;
+    
+    p_debug("=> update_tag_entries()\n");
+
+    // walk through a listed tag dir and add/remove packages that have changed
+	$to_remove = array();
+	$to_add    = array();
+	$query     = sprintf("SELECT DISTINCT path FROM tags WHERE tag = %s", $db->quote($tag));
+	$r         = $db->query($query);
+    dberror($r, $query);
+    if ($r->numRows() >= 1)
+    {
+        $row   = $r->fetchRow(MDB2_FETCHMODE_ASSOC);
+        $r->free();
+        $spath = $row[path];
+        p_verbose("Update $tag entries from %s...\n", $spath);
+        // get the existing entries
+        $query = sprintf("SELECT DISTINCT record, tag, package, version, release FROM packages WHERE tag = %s", $db->quote($tag));
+        $r     = $db->query($query);
+        dberror($r, $query);
+        while ($row = $r->fetchRow(MDB2_FETCHMODE_ASSOC))
+        {
+            $pname = sprintf("%s-%s-%s.src.rpm", $row[package], $row[version], $row[release]);
+            p_verbose("Check for $pname in $spath...");
+            if (file_exists($spath . "/" . $pname))
+            {
+                p_verbose("OK\n");
+            } else {
+                p_verbose("remove\n");
+                array_push($to_remove, $row[record]);
+            }
+        }
+        $r->free();
+        foreach (glob("$spath/*.src.rpm") as $src_rpm)
+        {
+            p_verbose("Check for $src_rpm in db...");
+            $rtags   = `rpm -qp --nosignature --qf '%{name}|%{version}|%{release}' $src_rpm`;
+            $tlist   = split("\|", $rtags);
+            $package = $tlist[0];
+            $version = $tlist[1];
+            $release = $tlist[2];
+            $query   = sprintf("SELECT package FROM packages WHERE tag = %s AND package = %s AND version = %s AND release = %s", 
+                $db->quote($tag), $db->quote($package), $db->quote($version), $db->quote($release));
+            $r       = $db->query($query);
+            dberror($r, $query);
+            if ($r->numRows() >= 1)
+			{
+                p_verbose("OK\n");
+            } else {
+                p_verbose("add\n");
+                array_push($to_add, $src_rpm);
+            }
+            $r->free();
+        }
+    } else {
+        perror("no Tag entry found for $tag");
+    }
+    if (sizeof($to_remove) > 0)
+    {
+        p_verbose("Removing tagged entries for $tag...\n");
+        foreach($to_remove as $rnum)
+        {
+			$query = sprintf("DELETE FROM packages WHERE record = %d", $db->quote($rnum));
+			$r     = $db->exec($query);
+            dberror($r, $query);
+			$query = sprintf("DELETE FROM requires WHERE record = %d", $db->quote($rnum));
+			$r     = $db->exec($query);
+            dberror($r, $query);
+            $query = sprintf("DELETE FROM provides WHERE record = %d", $db->quote($rnum));
+			$r     = $db->exec($query);
+            dberror($r, $query);
+			$query = sprintf("DELETE FROM files WHERE record = %d", $db->quote($rnum));
+			$r     = $db->exec($query);
+            dberror($r, $query);
+        }
+    }
+    if (sizeof($to_add) > 0)
+    {
+        p_verbose("Adding tagged entries for $tag...\n");
+        foreach($to_add as $rpm)
+        {
+            add_record($tag, $rpm);
+        }
+    }
+}
+
+/**
+ * Function to return some search options based on the selected database type
+ *
+ * @return array
+ */
+function db_search_opts()
+{
+    // this probably needs more work; right now I'm just concerned with pgsql
+    global $dsn;
+    
+    p_debug("=> db_search_opts()\n");
+    
+    $dso = array();
+    switch($dsn['phptype'])
+    {
+        case "pgsql":
+            $dso['nocase']   = "~* ";
+            $dso['nocasewc'] = "";
+            $dso['case']     = "~ ";
+            $dso['casewc']   = "";
+            break;
+        case "sqlite":
+            $dso['nocase']   = "LIKE ";
+            $dso['nocasewc'] = "%";
+            $dso['case']     = "GLOB ";
+            $dso['casewc']   = "*";
+            break;
+        case "mysql":
+            $dso['nocase']   = "LIKE ";
+            $dso['nocasewc'] = "%";
+            $dso['case']     = "LIKE ";
+            $dso['casewc']   = "%";
+            break;
+        case "mysqli":
+            $dso['nocase']   = "LIKE ";
+            $dso['nocasewc'] = "%";
+            $dso['case']     = "LIKE ";
+            $dso['casewc']   = "%";
+            break;
+    }
+    return($dso);
+}
+
+function do_query($q_str, $q_type)
+{
+    // XXX: this needs to be largely overhauled
+    global $db_tag, $quiet, $debug, $do_count, $extra_info, $no_case, $db;
+
+    p_debug("=> do_query()\n");
+    $dsopts = db_search_opts();
+	switch($q_type)
+	{
+	    case "requires":
+	        // search requires
+	        $qcol   = "requires";
+	        $qtable = $qcol;
+	        $qname  = "Requires";
+	        break;
+	    case "provides":
+	        // search provides
+	        $qcol   = "provides";
+	        $qtable = $qcol;
+	        $qname  = "Provides";
+	        break;
+	    case "query":
+	        // search files
+	        $qcol   = "file";
+	        $qtable = "files";
+	        $qname  = "File";
+	        break;
+	}
+    printf("Searching database records for substring match for %s (%s)\n", $qcol, $q_str);
+	$query  = sprintf("SELECT DISTINCT tag, package, version, release, pdate, %s FROM %s JOIN packages ON (packages.record = %s.record) WHERE %s ", $qcol, $qtable, $qtable, $qcol);
+    if ($no_case)
+    {
+        $query .= $dsopts['nocase'];
+        $wc     = $dsopts['nocasewc'];
+    } else {
+        $query .= $dsopts['case'];
+        $wc     = $dsopts['casewc'];
+    }
+    $query .= "'" . $wc .  $q_str . $wc . "'";
+    if ($db_tag)
+        $query .= " AND tag = " . $db->quote($db_tag);
+    $query .= sprintf(" ORDER BY tag, package, %s", $qcol);
+    p_debug("Query: %s\n", $query);
+    $r     = $db->query($query);
+    dberror($r, $query);
+    $nrows = $r->numRows();
+    if ($nrows >= 1)
+    {
+        if ($do_count)
+        {
+            if ($quiet)
+            {
+                printf("%d\n", $nrows);
+            } else {
+                if ($db_tag) {
+                    printf("%d matche(s) in database for tag ($db_tag) and substring ($q_str)\n", $nrows);
+                } else {
+                    printf("%d matche(s) in database for substring ($q_str)\n", $nrows);
+                }
+            }
+            return;
+        }
+        $ltag = NULL;
+        $lsrc = NULL;
+        while ($row = $r->fetchRow(MDB2_FETCHMODE_ASSOC))
+        {
+            if ($ltag != $row['tag'])
+            {
+                printf("\nResults in Tag: %s\n", $row['tag']);
+                $ltag = $row['tag'];
+            }
+            if ($debug)
+            {
+                print_r($row);
+            } else {
+                $rpm = sprintf("%s", $row[package]);
+                if ($rpm != $lsrc)
+                {
+                    printf("%s: %s\n", $rpm, $row[$qcol]);
+                }
+                if ($quiet)
+                    $lsrc = $rpm;
+                if (!$quiet)
+                {
+                    if ($extra_info)
+                    {
+                        printf("%-16s%-27s%-9s%s\n", "Package:", $row[package], "Date:", date("D M j G:i:s T Y", $row[pdate]));
+                        printf("%-16s%-27s%-9s%s\n", "Version:", $row[version], "Release:", $row[release]);
+                    }
+                    //printf("%-16s%-30s\n", "$qname:", $row[file]);
+                }
+            }
+        }
+        $r->free();
+    } else {
+        if ($db_tag)
+        {
+            perror("No matches in database for tag ($db_tag) and substring ($q_str) ...");
+        } else {
+            perror("No matches in database for substring ($q_str) ...");
+        }
+    }
+}
+
+function rpm_list($fname)
+{
+    global $verbose, $update_db;
+    
+    p_debug("=> rpm_list()\n");
+    $list = `rpm -qlp --nosignature $fname`;
+    return($list);
+}
+
+/*
+function tar_list($fname)
+{
+    $comp = 'tjf';
+    if (eregi("tar.gz$", $fname))
+        $comp = "tzf";
+    if (eregi("tar$", $fname))
+        $comp = "tf";
+    $list = `tar -$comp $fname 2>/dev/null`;
+    return($list);
+}
+
+function patch_list($fname)
+{
+    global $verbose, $update_db;
+    
+    $grep = "bzgrep";
+    if (eregi("patch.gz$", $fname))
+        $grep = "zgrep";
+    if (eregi("patch$", $fname))
+        $grep = "grep";
+    if ($verbose && !$update_db)
+    {
+        $list = `$grep '+++' $fname 2>/dev/null | sed 's|^+++ ||g'`;
+    } else {
+        $list = `$grep '+++' $fname 2>/dev/null | awk '{print $2}'`;
+    }
+    return($list);
+}
+*/
+function check_file($file)
+{
+    p_debug("=> check_file()\n");
+    if (!file_exists($file))
+    {
+        printf("File %s not found\n", $file);
+        exit(1);
+    }
+    if (!eregi(".rpm$", $file) || eregi(".src.rpm$", $file))
+    {
+        printf("File %s not a binary rpm\n", $file);
+        exit(1);
+    }
+}
+
+function verbose_name($fname)
+{
+    // fname is messy is this case
+    $flist = preg_split("/[\s]+/", $fname);
+    return($flist[8]);
+}
+
+/**
+ * Create a temporary directory for cpio to work from
+ *
+ * @return string
+ */
+/*
+function make_tmp_dir()
+{
+    global $debug;
+    
+    $cpio_dir = tmp_dir("~/tmp", "srpm");
+    if (!$cpio_dir)
+    {
+        printf("Can't create temporary dir for cpio\n");
+        exit(1);
+    }
+    p_debug("Creating tmp dir $cpio_dir\n");
+
+    chdir($cpio_dir);
+    return($cpio_dir);
+}
+
+function clean_tmp_dir($cpio_dir)
+{
+    global $debug;
+    
+    p_debug("Cleaning tmp dir $cpio_dir\n");
+
+    foreach (glob("$cpio_dir/*") as $fname)
+    {
+        if (!unlink($fname))
+            printf("Error removing file %s\n", $fname);
+    }
+    if (!rmdir($cpio_dir))
+    {
+        printf("Error removing directory %s\n", $cpio_dir);
+        exit(1);
+    }
+}
+
+function get_tar_files($srpm)
+{
+    system("rpm2cpio $srpm | cpio -i --quiet *.tar.?z* 2>/dev/null");
+}
+
+function get_patch_files($srpm)
+{
+    system("rpm2cpio $srpm | cpio -i --quiet *patch* 2>/dev/null");
+}
+
+function get_all_files($srpm)
+{
+    get_tar_files($srpm);
+    get_patch_files($srpm);
+}
+*/
+function fix_path($src_file, $cur_dir)
+{
+    // if the path is relative, fix it
+    $lslash = strpos($src_file, "/");
+    if ($lslash === FALSE || $lslash > 0)
+        $src_file = $cur_dir . "/" . $src_file;
+    return($src_file);
+}
+/*
+function dump_file($src_file)
+{
+    global $skip_tar, $show_patch, $verbose;
+    
+    p_debug("=> dump_file()\n");
+    $cur_dir  = getcwd();
+    $src_file = fix_path($src_file, $cur_dir);
+    p_debug("File:\t%s\n", $src_file);
+    check_file($src_file);
+
+    // stage1 - list the rpm contents
+    $src_list = rpm_list($src_file);
+    printf("Contents:\n%s\n", $src_list);
+
+    $cpio_dir = make_tmp_dir();
+    $files    = spliti("\n", $src_list);
+
+    // stage2 - list patched files
+    if ($show_patch)
+    {
+        get_patch_files($src_file);
+        foreach ($files as $pfile)
+        {
+            if ($verbose)
+                $pfile = verbose_name($pfile);
+            if (eregi("patch.bz2$|patch.gz$|patch$", $pfile))
+            {
+                $plist = patch_list($pfile);
+                printf("Patch file %s modifies:\n%s\n", $pfile, $plist);
+            }
+        }
+    }
+
+    // stage3 - list the tarball contents
+    if (!$skip_tar)
+    {
+        get_tar_files($src_file);
+        foreach ($files as $tfile)
+        {
+            if ($verbose)
+                $tfile = verbose_name($tfile);
+            if (eregi("tar.bz2$|tar.gz$|tar$", $tfile))
+            {
+                $tlist = tar_list($tfile);
+                printf("Tarfile %s contents:\n%s\n", $tfile, $tlist);
+            }
+        }
+    }
+
+    // clean up our tmpdir stuff
+    chdir($cur_dir);
+    clean_tmp_dir($cpio_dir);
+}
+*/
+function tmp_dir($path, $prefix)
+{
+    p_debug("=> tmp_dir()\n");
+    // Use PHP's tmpfile function to create a temporary
+    // directory name. Delete the file and keep the name.
+    $tempname = tempnam($path,$prefix);
+    if (!$tempname)
+        return(FALSE);
+
+    if (!unlink($tempname))
+        return(FALSE);
+
+    // Create the temporary directory and returns its name.
+    if (mkdir($tempname))
+        return($tempname);
+
+    return(FALSE);
+}
+
+/**
+ * Display database statistics
+ *
+ */
+function showdbstats()
+{
+    global $db, $dsn;
+    
+    printf("Database statistics:\n\n");
+    $query   = "SELECT tag FROM tags";
+    $r       = $db->query($query);
+    dberror($r, $query);
+    $t_tags  = $r->numRows();
+    $r->free();
+    $query   = "SELECT record FROM packages";
+    $r       = $db->query($query);
+    dberror($r, $query);
+    $t_pkgs  = $r->numRows();
+    $r->free();
+    $query   = "SELECT record FROM requires";
+    $r       = $db->query($query);
+    dberror($r, $query);
+    $t_req   = $r->numRows();
+    $r->free();
+    $query   = "SELECT record FROM provides";
+    $r       = $db->query($query);
+    dberror($r, $query);
+    $t_prov  = $r->numRows();
+    $r->free();
+    $query   = "SELECT record FROM files";
+    $r       = $db->query($query);
+    dberror($r, $query);
+    $t_files = $r->numRows();
+    $r->free();
+    printf("DB Type: %-10s DB User: %-15s\n", $dsn['phptype'], $dsn['username']);
+    printf("DB Host: %-10s DB Name: %-15s\n\n", $dsn['hostspec'], $dsn['database']);
+    printf("Tag Records : %-15d Package Records : %-15d\n", $t_tags, $t_pkgs);
+    printf("File Records: %-15d Requires Records: %-15d\n", $t_files, $t_req);
+    printf("                              Provides Records: %-15d\n\n", $t_prov);
+    exit(0);
+}
+
+// *************************************************************************************
+// main program execution
+// *************************************************************************************
+fwrite(STDOUT, sprintf("%s \$Id$\n\n", _NAME));
+
+// first check; check the memory limit setting
+$memsize = preg_replace('/(\d+)(\w+)/', '\\1', ini_get('memory_limit'));
+if ($memsize < '64')
+{
+    perror(sprintf("You will need to increase your memory_limit to at least 64MB (currently %sMB).", $memsize));
+    exit(1);
+}
+
+// parse the arguments
+$self  = $GLOBALS['argv'][0];
+$opt   = getopt("CdehilPQvVxa:c:D:f:q:t:u:p:r:");
+$flist = array();
+
+/*// default to extra args like -f
+if ($GLOBALS['argc'] > sizeof($opt))
+{
+    for ($i = sizeof($opt) + 1; $i < $GLOBALS['argc']; $i++)
+    {
+        if (!eregi("^-", $GLOBALS['argv'][$i]))
+            array_push($flist, $GLOBALS['argv'][$i]);
+	}
+} */
+
+// debugging
+//print_r($flist);
+//print_r($opt);
+
+if (array_key_exists('d', $opt))
+{
+    $debug = TRUE;
+    p_debug("Debugging enabled.\n");
+}
+
+$conf = read_inifile();
+
+// DSN for database connection
+$dsn = array(
+    'phptype'  => $conf['dsn']['phptype'],
+    'username' => $conf['dsn']['username'],
+    'password' => $conf['dsn']['password'],
+    'hostspec' => $conf['dsn']['hostspec'],
+    'database' => $conf['dsn']['database'],
+);
+$options = array(
+    'debug'       => 2,
+    'portability' => MDB2_PORTABILITY_ALL,
+);
+
+if (!include_once("MDB2.php")) die("The PEAR MDB2 class is required and unavailable!\n");
+$db  =& MDB2::connect($dsn);
+if (PEAR::isError($db))
+{
+    die ($db->getMessage());
+}
+
+if (array_key_exists('V', $opt))
+{
+    printf("%s %s, %s\n", _NAME, _VERSION, _COPYRIGHT);
+    exit(0);
+}
+
+if (array_key_exists('l', $opt))
+{
+    list_tags();
+}
+
+if (array_key_exists('x', $opt))
+{
+    showdbstats();
+}
+
+if (array_key_exists('v', $opt))
+{
+    $verbose = TRUE;
+    p_debug("Verbose output ...\n", NULL);
+}
+
+if (array_key_exists('P', $opt))
+{
+    $progress = TRUE;
+    p_debug("Show progess ...\n", NULL);
+}
+
+if (($opt[c] == '' && $opt[D] == '' && $opt[f] == '' && $opt[q] == '' && $opt[t] == ''
+     && $opt[u] == '' && $opt[p] == '' && $opt[r] == '') || array_key_exists('h', $opt))
+{
+    print_help($self);
+}
+
+// bail on missing argument
+foreach (array('a', 'c', 'D', 'f', 'q', 't', 'p', 'r') as $args)
+{
+    if (eregi("^-", $opt[$args]))
+    {
+        printf("Option -%s requires a valid argument\n", $args);
+        exit(1);
+    }
+}
+
+if (array_key_exists('e', $opt))
+{
+    $extra_info = TRUE;
+}
+
+if (array_key_exists('i', $opt))
+{
+    $no_case = TRUE;
+}
+
+if (array_key_exists('C', $opt))
+{
+    $do_count = TRUE;
+    p_debug("Show counts only ...\n", NULL);
+}
+
+if (array_key_exists('Q', $opt))
+{
+    $quiet = TRUE;
+    p_debug("Quiet output ...\n", NULL);
+}
+
+if (array_key_exists('t', $opt))
+{
+    $db_tag = $opt[t];
+    p_debug("Tag:\t%s\n", $db_tag);
+}
+
+if (sizeof($flist) > 0 && array_key_exists('a', $opt))
+{
+    $update_db = TRUE;
+    if (!$db_tag)
+    {
+        perror("Please specify a tag...\n");
+        exit(1);
+    }
+    foreach ($flist as $fname)
+    {
+        $havetag = check_for_tag($db_tag, $fname);
+        if (!$havetag)
+        {
+            add_tag_path($db_tag, $fname);
+        }
+        add_record($db_tag, $fname);
+    }
+    exit(0);
+}
+
+if (array_key_exists('c', $opt))
+{
+    $src_dir = $opt[c];
+    p_debug("Dir: \t%s\n", $src_dir);
+    if (!$db_tag)
+    {
+        perror("Please specify a tag...");
+        exit(1);
+    }
+    printf("Searching for rpms to import...\n");
+    add_rpm_directory($db_tag, $src_dir);
+    exit(0);
+}
+
+if (array_key_exists('D', $opt))
+{
+    $db_tag = $opt[D];
+    p_debug("Tag: \t%s\n", $db_tag);
+    delete_tag_entries($db_tag);
+    exit(0);
+}
+
+if (array_key_exists('u', $opt))
+{
+    $db_tag = $opt[u];
+    p_debug("Tag: \t%s\n", $db_tag);
+    update_tag_entries($db_tag);
+    exit(0);
+}
+
+if (array_key_exists('q', $opt))
+{
+    $q_str = $opt[q];
+    p_debug("Query: \t%s\n", $opt[q]);
+    do_query($q_str, "query");
+    exit(0);
+}
+
+if (array_key_exists('p', $opt))
+{
+    $q_str = $opt[p];
+    p_debug("Query: \t%s\n", $opt[q]);
+    do_query($q_str, "provides");
+    exit(0);
+}
+
+if (array_key_exists('r', $opt))
+{
+    $q_str = $opt[r];
+    p_debug("Query: \t%s\n", $opt[q]);
+    do_query($q_str, "requires");
+    exit(0);
+}
+
+/*if (array_key_exists('f', $opt)) {
+    dump_file($opt[f]);
+}
+
+if (sizeof($flist) > 0 && !array_key_exists('f', $opt))
+{
+    foreach ($flist as $fname)
+    {
+        dump_file($fname);
+    }
+}
+*/
+exit(0);
+?>
