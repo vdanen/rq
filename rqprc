@@ -3,13 +3,10 @@
 ; $Id$
 
 ; configure the database options to use
-[dsn]
-; database type
-phptype=pgsql
 ; database username
-username=secteam
+username=rq
 ; database username's password
-password=secpw28
+password=rq
 ; connection to use to the database
 hostspec=localhost
 ; database name
