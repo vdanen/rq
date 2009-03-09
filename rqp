@@ -16,25 +16,25 @@ def db_connect(type):
 
     if config['hostspec'] == '':
         sys.stderr.write('Missing hostspec in the configuration!\n')
-        exit(1)
+        sys.exit(1)
     if config['username'] == '':
         sys.stderr.write('Missing username in the configuration!\n')
-        exit(1)
+        sys.exit(1)
     if config['password'] == '':
         sys.stderr.write('Missing password in the configuration!\n')
-        exit(1)
+        sys.exit(1)
 
     if type == 'binary':
         if (config['rpm_database'] == ''):
             sys.stderr.write('Missing rpm_database in the configuration!\n')
-            exit(1)
+            sys.exit(1)
         else:
             config['database'] = config['rpm_database']
 
     if type == 'source':
         if (config['srpm_database'] == ''):
             sys.stderr.write('Missing srpm_database in the configuration!\n')
-            exit(1)
+            sys.exit(1)
         else:
             config['database'] = config['srpm_database']
 
@@ -47,7 +47,7 @@ def db_connect(type):
                              db=config['database'])
     except MySQLdb.Error, e:
         sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
-        exit(1)
+        sys.exit(1)
 
     return db
 
@@ -80,7 +80,7 @@ def db_fetchall(query):
             return False
     except MySQLdb.Error, e:
         sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
-        exit(1)
+        sys.exit(1)
 
 
 #
@@ -101,7 +101,7 @@ def db_fetchone(query):
             return False
     except MySQLdb.Error, e:
         sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
-        exit(1)
+        sys.exit(1)
 
 
 #
@@ -117,7 +117,7 @@ def db_doquery(query):
         cursor.close()
     except MySQLdb.Error, e:
         sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
-        exit(1)
+        sys.exit(1)
 
 
 #
@@ -180,7 +180,7 @@ def tag_list():
         print 'No tags exist in the database!\n'
 
     db_close()
-    exit(0)
+    sys.exit(0)
 
 
 #
@@ -196,9 +196,8 @@ def tag_delete_entries(tag):
 
     if not result:
         print 'No matching tag found for entry %s!\n' % tag
-        exit(1)
+        sys.exit(1)
     else:
-        show_progress(tag)
         print_verbose('Remove %s from Tags...\n' % tag)
         query = "DELETE FROM tags WHERE tag = '%s'" % tag
         db_doquery(query)
@@ -206,25 +205,29 @@ def tag_delete_entries(tag):
         query  = "SELECT DISTINCT p_record FROM packages WHERE p_tag = '%s'" % tag
         result = db_fetchall(query)
         if result:
-            while row in result:
-                to_remove.append(row['p_record'])
+            for row in result:
+                to_remove.append(row[0])
 
-        if len(to_remove) > 0:
-            nrecs = len(to_remove)
-            print_verbose('Removing %d tagged Packages (and associated Requires, Provides, and Files) entries for %s...\n' % (nrecs, tag))
+        nrecs = len(to_remove)
+        if nrecs > 0:
+            if nrecs == 1:
+                word_package = 'Package'
+                word_entry   = 'entry'
+            else:
+                word_package = 'Packages'
+                word_entry   = 'entries'
+
+            sys.stdout.write('Removing %d tagged %s %s for %s... ' % (nrecs, word_package, word_entry, tag))
+
             for rnum in to_remove:
-                show_progress()
-                query = "DELETE FROM packages WHERE p_record = '%d'" % rnum
-                res   = db_doquery(query)
-                query = "DELETE FROM requires WHERE record = '%d'" % rnum
-                res   = db_doquery(query)
-                query = "DELETE FROM provides WHERE record = '%d'" % rnum
-                res   = db_doquery(query)
-                query = "DELETE FROM files WHERE record = '%d'" % rnum
-                res   = db_doquery(query)
+                tables = ('packages', 'requires', 'provides', 'files')
+                for table in tables:
+                    query = "DELETE FROM %s WHERE p_record = '%d'" % (table, rnum)
+                    res   = db_doquery(query)
 
-        if options.progress:
-            print '\n'
+            sys.stdout.write(' done\n')
+        else:
+            sys.stdout.write('No matching package tags to remove.\n')
 
 
 #
@@ -275,15 +278,11 @@ def tag_update_entries(tag):
 
     if to_remove:
         print_verbose('Removing tagged entries for tag: %s...' % tag)
+        tables = ('packages', 'requires', 'provides', 'files')
         for rnum in to_remove:
-            query  = "DELETE FROM packages WHERE p_record = %d" % rnum
-            result = db_doquery(query)
-            query  = "DELETE FROM requires WHERE record = %d" % rnum
-            result = db_doquery(query)
-            query  = "DELETE FROM provides WHERE record = %d" % rnum
-            result = db_doquery(query)
-            query  = "DELETE FROM files WHERE record = %d" % rnum
-            result = db_doquery(query)
+            for table in tables:
+                query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
+                result = db_doquery(query)
 
     if to_add:
         print_verbose('Adding tagged entries for tag: %s...' % tag)
@@ -313,7 +312,7 @@ def showdbstats():
     print '   Tag records : %-15d Package records : %-15d' % (c_tags, c_pkgs)
     print '   File records: %-15d Requires records: %-15d' % (c_files, c_reqs)
     print '                                 Provides records: %-15d\n' % c_provs
-    exit(0)
+    sys.exit(0)
 
 
 #
@@ -363,7 +362,7 @@ def tag_check(tag, file):
 #        if len(result) > 0:
 #            if result[1] != path:
 #                #print 'Tag (%s) is already in the database with path: %s\n' % (tag, result[1])
-#                #exit(1)
+#                #sys.exit(1)
 #                return(True)
 #            else:
 #                return(False)
@@ -388,9 +387,9 @@ def tag_add_record(tag, file):
     query  = "SELECT tag FROM tags WHERE tag = '%s'" % tag
     result = db_fetchone(query)
     if result:
-        print 'Tag already exists in the database!\n'
+        print 'Tag (%s) already exists in the database!\n' % tag
         db_close()
-        exit(1)
+        sys.exit(1)
 
     query = "INSERT INTO tags (tag, path, tdate) VALUES ('%s', '%s', '%s')" % (tag.strip(), path.strip(), cur_date)
     db_doquery(query)
@@ -440,7 +439,7 @@ def add_file_requires(record, file):
             show_progress()
             if options.verbose:
                 print 'Dependency: %s' % dep
-            query  = "INSERT INTO requires (record, requires) VALUES ('%s', '%s')" % (record, dep.strip())
+            query  = "INSERT INTO requires (p_record, requires) VALUES ('%s', '%s')" % (record, dep.strip())
             result = db_doquery(query)
 
 
@@ -457,7 +456,7 @@ def add_file_provides(record, file):
             show_progress()
             if options.verbose:
                 print 'Provides: %s' % prov
-            query  = "INSERT INTO provides (record, provides) VALUES ('%s', '%s')" % (record, prov.strip())
+            query  = "INSERT INTO provides (p_record, provides) VALUES ('%s', '%s')" % (record, prov.strip())
             result = db_doquery(query)
 
 
@@ -480,7 +479,7 @@ def rpm_add_directory(tag, path, type='binary'):
 
     new_tag = tag_add_record(tag, path)
     if new_tag:
-        exit(1)
+        sys.exit(1)
 
     file_list = glob(path + "/*.rpm")
     for file in file_list:
@@ -513,7 +512,7 @@ def add_file_records(record, file):
         show_progress()
         if options.verbose:
             print 'File: %s' % single_file
-        query  = "INSERT INTO files (record, files) VALUES ('%s', '%s')" % (record, single_file.strip())
+        query  = "INSERT INTO files (p_record, files) VALUES ('%s', '%s')" % (record, single_file.strip())
         result = db_doquery(query)
 
 
@@ -524,20 +523,21 @@ def package_add_record(tag, file):
     print_debug('in package_add_record(%s, %s)' % (tag, file))
 
     path    = os.path.basename(file)
-    rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file)
+    rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file)
     tlist   = rtags.split('|')
     package = tlist[0].strip()
     version = tlist[1].strip()
     release = tlist[2].strip()
     pdate   = tlist[3].strip()
+    arch    = tlist[4].strip()
 
-    query = "SELECT p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag, package, version, release)
+    query = "SELECT p_tag, p_package, p_version, p_release, p_arch FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (tag, package, version, release, arch)
     result = db_fetchall(query)
     if result:
-        print 'File %s-%s-%s is already in the database under tag %s' % (package, version, release, tag)
+        print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
         return(0)
 
-    query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate)
+    query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate, arch)
     result = db_doquery(query)
     show_progress(path)
 
@@ -559,17 +559,17 @@ def file_rpm_check(file, type='binary'):
 
     if not os.path.isfile(file):
         print 'File %s not found!\n' % file
-        exit(1)
+        sys.exit(1)
 
     if type == 'binary':
         if not re_brpm.search(file) or re_srpm.search(file):
             print 'File %s is not a binary rpm!\n' % file
-            exit(1)
+            sys.exit(1)
 
     if type == 'source':
         if not re_srpm.search(file):
             print 'File %s is not a source rpm!\n' % file
-            exit(1)
+            sys.exit(1)
 
 
 #
@@ -581,7 +581,7 @@ def run_query(qstring, type):
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
 
-    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.record) WHERE %s " % (type, type, type, type)
+    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
 
     if options.ignorecase:
         query = query + "LIKE '%" + qstring + "%'"
@@ -716,7 +716,7 @@ if __name__ == '__main__':
 
     if not config:
         sys.stderr.write('\n\nERROR: No configuration file found!\n')
-        exit(1)
+        sys.exit(1)
 
     db = db_connect('binary')
 
@@ -732,23 +732,23 @@ if __name__ == '__main__':
 
     if options.tagdelete:
         tag_delete_entries(options.tagdelete)
-        exit(0)
+        sys.exit(0)
 
     if options.tagupdate:
         tag_update_entries(options.tagupdate)
-        exit(0)
+        sys.exit(0)
 
     if options.query:
         run_query(options.query, 'files')
-        exit(0)
+        sys.exit(0)
 
     if options.provides:
         run_query(options.provides, 'provides')
-        exit(0)
+        sys.exit(0)
 
     if options.requires:
         run_query(options.requires, 'requires')
-        exit(0)
+        sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
     # have a new tag?  or can we add it (despite the path) to an existing tag?
@@ -757,7 +757,7 @@ if __name__ == '__main__':
     if options.addfile:
         if not options.tag:
             sys.stdout.write('The --add option requires a tag entry!\n')
-            exit(1)
+            sys.exit(1)
 
         havetag = tag_check(options.tag, options.addfile)
         print_debug('havetag is: %s' % havetag)
@@ -766,15 +766,15 @@ if __name__ == '__main__':
             tag_add_record(options.tag, options.addfile)
 
         record_add(options.tag, options.addfile)
-        exit(0)
+        sys.exit(0)
 
     if options.createpath:
         createpath = os.path.abspath(options.createpath)
         print_debug('Dir:\t%s' % createpath)
         if not options.tag:
             sys.stdout.write('The --create option requires a tag entry!\n')
-            exit(1)
+            sys.exit(1)
 
         sys.stdout.write('Searching for rpms to import...\n\n')
         rpm_add_directory(options.tag, createpath, 'binary')
-        exit(0)
+        sys.exit(0)

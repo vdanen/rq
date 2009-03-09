@@ -22,10 +22,10 @@ SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 DROP TABLE IF EXISTS `files`;
 CREATE TABLE `files` (
   `f_id` int(24) NOT NULL auto_increment,
-  `record` int(24) NOT NULL,
+  `p_record` int(24) NOT NULL,
   `files` text NOT NULL,
   PRIMARY KEY  (`f_id`),
-  KEY `rec` USING BTREE (`record`)
+  KEY `rec` USING BTREE (`p_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1 ;
 
 -- --------------------------------------------------------
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `packages` (
   `p_version` text NOT NULL,
   `p_release` text NOT NULL,
   `p_date` text NOT NULL,
+  `p_arch` varchar(10) NOT NULL,
   PRIMARY KEY  (`p_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
 
@@ -54,10 +55,10 @@ CREATE TABLE IF NOT EXISTS `packages` (
 DROP TABLE IF EXISTS `provides`;
 CREATE TABLE IF NOT EXISTS `provides` (
   `p_id` int(24) NOT NULL auto_increment,
-  `record` int(24) NOT NULL,
+  `p_record` int(24) NOT NULL,
   `provides` text NOT NULL,
   PRIMARY KEY  (`p_id`),
-  KEY `rec` USING BTREE (`record`)
+  KEY `rec` USING BTREE (`p_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -69,10 +70,10 @@ CREATE TABLE IF NOT EXISTS `provides` (
 DROP TABLE IF EXISTS `requires`;
 CREATE TABLE IF NOT EXISTS `requires` (
   `r_id` int(24) NOT NULL auto_increment,
-  `record` int(24) NOT NULL,
+  `p_record` int(24) NOT NULL,
   `requires` text NOT NULL,
   PRIMARY KEY  (`r_id`),
-  KEY `rec` USING BTREE (`record`)
+  KEY `rec` USING BTREE (`p_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
