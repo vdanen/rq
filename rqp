@@ -631,7 +631,8 @@ def run_query(qstring, type):
                     lsrc = rpm
                 else:
                     if options.extrainfo:
-                        print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", fromdb_file)
+                        rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
+                        print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                         print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
                     #print '%-16s%-30s' % (type.title(), row[5])
 
