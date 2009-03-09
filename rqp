@@ -186,7 +186,7 @@ def tag_list():
 #
 # function to delete database tags and associated entries
 #
-def tag_delete_entries(tag):
+def tag_delete_entries(tag, type='binary'):
     print_debug('in tag_delete_entries(%s)' % tag)
 
     to_remove = []
@@ -220,7 +220,10 @@ def tag_delete_entries(tag):
             sys.stdout.write('Removing %d tagged %s %s for %s... ' % (nrecs, word_package, word_entry, tag))
 
             for rnum in to_remove:
-                tables = ('packages', 'requires', 'provides', 'files')
+                if type == 'binary':
+                    tables = ('packages', 'requires', 'provides', 'files')
+                if type == 'source':
+                    tables = ('packages', 'sources')
                 for table in tables:
                     query = "DELETE FROM %s WHERE p_record = '%d'" % (table, rnum)
                     res   = db_doquery(query)
@@ -233,7 +236,7 @@ def tag_delete_entries(tag):
 #
 # function to update entries for a given tag
 #
-def tag_update_entries(tag):
+def tag_update_entries(tag, type='binary'):
     print_debug('in tag_update_entries(%s)' % tag)
     #
     # this function is designed for src.rpm handling, but we can update it for binary rpm handling too
@@ -278,7 +281,10 @@ def tag_update_entries(tag):
 
     if to_remove:
         print_verbose('Removing tagged entries for tag: %s...' % tag)
-        tables = ('packages', 'requires', 'provides', 'files')
+        if type == 'binary':
+            tables = ('packages', 'requires', 'provides', 'files')
+        if type == 'source':
+            tables = ('packages', 'sources')
         for rnum in to_remove:
             for table in tables:
                 query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
@@ -287,7 +293,7 @@ def tag_update_entries(tag):
     if to_add:
         print_verbose('Adding tagged entries for tag: %s...' % tag)
         for rpm in to_add:
-            record_add(tag, rpm)
+            record_add(tag, rpm, type)
 
 
 #
@@ -399,8 +405,8 @@ def tag_add_record(tag, file):
 #
 # function to add a record to the database
 #
-def record_add(tag, file):
-    print_debug('in record_add(%s, %s)' % (tag, file))
+def record_add(tag, file, type):
+    print_debug('in record_add(%s, %s, %s)' % (tag, file, type))
 
     # corrupts add data -- not needed
     if options.verbose:
@@ -412,16 +418,34 @@ def record_add(tag, file):
         path = os.path.abspath(file)
     print_debug('Path:\t%s' % path)
 
-    file_rpm_check(file, 'binary')
+    file_rpm_check(file, type)
 
     record = package_add_record(tag, file)
     if not record:
         return
 
-    print_debug('Add file records for package record: %s' % record)
-    add_file_records(record, file)
-    add_file_requires(record, file)
-    add_file_provides(record, file)
+    if type == 'binary':
+        print_debug('Add file records for package record: %s' % record)
+        add_file_records(record, file)
+        add_file_requires(record, file)
+        add_file_provides(record, file)
+
+    if type == 'source':
+        print_debug('Add source records for package record: %s' % record)
+        add_source_records(record, file) # XXX: TODO (rqs)
+        cpio_dir = make_tmp_dir()
+        get_all_files(path)
+        add_file_records(record, file)
+        clean_tmp_dir(cpio_dir)
+    #        $sfiles   = rpm_list($path);
+    #$files    = spliti("\n", $sfiles);
+    #add_source_records($record, $files);
+    #$cpio_dir = make_tmp_dir();
+    #get_all_files($path);
+    #add_file_records($record, $files);
+    #chdir($cur_dir);
+    #clean_tmp_dir($cpio_dir);
+
     if options.progress:
         sys.stdout.write('\n')
 
@@ -481,7 +505,12 @@ def rpm_add_directory(tag, path, type='binary'):
     if new_tag:
         sys.exit(1)
 
-    file_list = glob(path + "/*.rpm")
+    if type == 'binary':
+        file_list = glob(path + "/*.rpm")
+
+    if type == 'source':
+        file_list = glob(path + "/*.src.rpm")
+
     for file in file_list:
         if not os.path.isfile(file):
             print 'File %s not found!\n' % file
@@ -497,7 +526,7 @@ def rpm_add_directory(tag, path, type='binary'):
                 print 'File %s is not a source rpm!\n' % file
                 next
 
-        record_add(tag, file)
+        record_add(tag, file, type)
 
 
 #
@@ -573,10 +602,10 @@ def file_rpm_check(file, type='binary'):
 
 
 #
-# function to run the query
+# function to run the query for binary rpms
 #
-def run_query(qstring, type):
-    print_debug('in run_query(%s, %s)' % (qstring, type))
+def run_binary_query(qstring, type):
+    print_debug('in run_binary_query(%s, %s)' % (qstring, type))
 
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
@@ -634,7 +663,6 @@ def run_query(qstring, type):
                         rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
                         print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                         print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
-                    #print '%-16s%-30s' % (type.title(), row[5])
 
     else:
         if options.tag:
@@ -644,17 +672,31 @@ def run_query(qstring, type):
 
 
 #
+# function to run the query for source rpms
+#
+def run_source_query(qstring, type):
+    print_debug('in run_source_query(%s, %s)' % qstring)
+    # XXX: TODO
+
+
+#
 # the main program
 #
 if __name__ == '__main__':
     global options, config
 
     rq_version = '0.2'
+    rq_prog    = 'rqp'
 
-    sys.stdout.write("rqp %s ($Id$)\n\n" % rq_version)
+    if rq_prog == 'rqs':
+        rq_type = 'source'
+    if rq_prog == 'rqp':
+        rq_type = 'binary'
+
+    sys.stdout.write(rq_prog + " %s ($Id$)\n\n" % rq_version)
 
     p = optparse.OptionParser(description="RPM package query tool",
-                              prog="rqp",
+                              prog=rq_prog,
                               version="%prog " + rq_version,
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p] <substring>] [-t <tag>]")
     p.add_option('-C', '--count', dest="count", default=False, action="store_true", help="Only output the count of query matches")
@@ -662,21 +704,31 @@ if __name__ == '__main__':
     p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true", help="Show extra info (version, release, date)")
     p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true", help="Case insensitive search")
     p.add_option('-l', '--list', dest="list", default=False, action="store_true", help="List database tags")
+    if rq_type == 'source':
+        p.add_option('-p', '--patch', dest="path", default=False, action="store_true", help="List patched files")
     p.add_option('-P', '--progress', dest="progress", default=False, action="store_true", help="Show processing progress")
     p.add_option('-Q', '--quiet', dest="quiet", default=False, action="store_true", help="Quiet query - show tag and package name only (or numeric count only)")
+    if rq_type == 'source':
+        p.add_option('-s', '--skip-tar', dest="skiptar", default=False, action="store_true", help="Skip tarfile extract")
+        p.add_option('-S', '--source-only', dest="sourceonly", default=False, action="store_true", help="Limit query to source files (no patches)")
+    p.add_option('-T', '--suppresstag', dest="suppresstag", default=False, action="store_true", help="Suppress Tag and Path label output for queries") # was only in rqs -- why?
     p.add_option('-x', '--statistics', dest="stats", default=False, action="store_true", help="Show database statistics")
     p.add_option('-v', '--verbose', dest="verbose", default=False, action="store_true", help="Verbose output")
     dbgroup = optparse.OptionGroup(p, "Database Options")
-    dbgroup.add_option('-a', '--add', dest="addfile", help="Add a binary rpm entry with TAG to the database", metavar="FILE")
-    dbgroup.add_option('-c', '--createpath', dest="createpath", help="Create database entries with TAG from a binary rpm DIR", metavar="DIR")
+    dbgroup.add_option('-a', '--add', dest="addfile", help="Add a " + rq_type + " rpm entry with TAG to the database", metavar="FILE")
+    dbgroup.add_option('-c', '--createpath', dest="createpath", help="Create database entries with TAG from a " + rq_type + " rpm DIR", metavar="DIR")
     dbgroup.add_option('-D', '--delete', dest="tagdelete", help="Delete all TAG entries", metavar="TAG")
+    if rq_type == 'source':
+        p.add_options('-f', '--file', dest="src_examine", help="Examine a src.rpm FILE and output to stdout", metavar="FILE")
     dbgroup.add_option('-t', '--tag', dest="tag", help="TAG for created database entries or database queries", metavar="TAG")
     dbgroup.add_option('-u', '--update', dest="tagupdate", help="Update TAG entries (new/removed files in directory)", metavar="TAG")
     p.add_option_group(dbgroup)
     group = optparse.OptionGroup(p, "Query Options")
-    group.add_option('-p', '--provides', dest="provides", help="Query database for substring match on provides", metavar="STRING")
+    if rq_type == 'binary':
+        group.add_option('-p', '--provides', dest="provides", help="Query database for substring match on provides", metavar="STRING")
     group.add_option('-q', '--query', dest="query", help="Query database for substring match on files", metavar="STRING")
-    group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
+    if rq_type == 'binary':
+        group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
     p.add_option_group(group)
     (options, arguments) = p.parse_args()
 
@@ -732,23 +784,26 @@ if __name__ == '__main__':
         print_debug('Tag:\t%s\n' % options.tag)
 
     if options.tagdelete:
-        tag_delete_entries(options.tagdelete)
+        tag_delete_entries(options.tagdelete, rq_type)
         sys.exit(0)
 
     if options.tagupdate:
-        tag_update_entries(options.tagupdate)
+        tag_update_entries(options.tagupdate, rq_type)
         sys.exit(0)
 
     if options.query:
-        run_query(options.query, 'files')
+        if rq_type == 'binary':
+            run_binary_query(options.query, 'files')
+        elif rq_type == 'source':
+            run_source_query(options.query)
         sys.exit(0)
 
     if options.provides:
-        run_query(options.provides, 'provides')
+        run_binary_query(options.provides, 'provides')
         sys.exit(0)
 
     if options.requires:
-        run_query(options.requires, 'requires')
+        run_binary_query(options.requires, 'requires')
         sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
@@ -766,7 +821,7 @@ if __name__ == '__main__':
         if not havetag:
             tag_add_record(options.tag, options.addfile)
 
-        record_add(options.tag, options.addfile)
+        record_add(options.tag, options.addfile, rq_type)
         sys.exit(0)
 
     if options.createpath:
@@ -777,5 +832,5 @@ if __name__ == '__main__':
             sys.exit(1)
 
         sys.stdout.write('Searching for rpms to import...\n\n')
-        rpm_add_directory(options.tag, createpath, 'binary')
+        rpm_add_directory(options.tag, createpath, rq_type)
         sys.exit(0)
