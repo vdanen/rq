@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import optparse, os, sys, re, datetime, commands
+import optparse, os, sys, re, datetime, commands, shutil, tempfile
 import MySQLdb
 from glob import glob
 #import MySQLdb.connect
@@ -408,10 +408,6 @@ def tag_add_record(tag, file):
 def record_add(tag, file, type):
     print_debug('in record_add(%s, %s, %s)' % (tag, file, type))
 
-    # corrupts add data -- not needed
-    if options.verbose:
-        verbose = False
-
     if os.path.isfile(file):
         path = os.path.abspath(os.path.dirname(file))
     else:
@@ -433,21 +429,48 @@ def record_add(tag, file, type):
     if type == 'source':
         print_debug('Add source records for package record: %s' % record)
         add_source_records(record, file) # XXX: TODO (rqs)
-        cpio_dir = make_tmp_dir()
-        get_all_files(path)
-        add_file_records(record, file)
-        clean_tmp_dir(cpio_dir)
-    #        $sfiles   = rpm_list($path);
-    #$files    = spliti("\n", $sfiles);
-    #add_source_records($record, $files);
-    #$cpio_dir = make_tmp_dir();
-    #get_all_files($path);
-    #add_file_records($record, $files);
-    #chdir($cur_dir);
-    #clean_tmp_dir($cpio_dir);
+        cpio_dir = tempfile.mkdtemp()
+        try:
+            current_dir = os.getcwd()
+            os.chdir(cpio_dir)
+            get_all_files(file, cpio_dir)
+            add_source_file_records(record, file) # XXX: TODO (rqs)
+            os.chdir(current_dir)
+        finally:
+            shutil.rmtree(cpio_dir)
 
     if options.progress:
         sys.stdout.write('\n')
+
+
+#
+# function to get source and patch files from a srpm
+#
+def source_get_all_files(file):
+    print_debug('in source_get_all_files(%s)' % file)
+    source_get_tar_files(file)
+    source_get_patch_files(file)
+
+
+#
+# function to get tar files from a src.rpm
+#
+def source_get_tar_files(file):
+    print_debug('in source_get_tar_files(%s)' % file)
+    (rc, output) = commands.getstatusoutput("rpm2cpio %s | cpio -i --quiet *.tar.?z* 2>/dev/null")
+    if not rc == "0":
+        sys.stderr.write('Failed to execute rpm2cpio!  Output was:\n%s\n' % output)
+        sys.exit(1)
+
+#
+# function to get patch files from a src.rpm
+#
+def source_get_patch_files(file):
+    print_debug('in source_get_patch_files(%s)' % file)
+    (rc, output) = commands.getstatusoutput("rpm2cpio %s | cpio -i --quiet *patch* 2>/dev/null" % file)
+    if not rc == "0":
+        sys.stderr.write('Failed to execute rpm2cpio!  Output was:\n%s\n' % output)
+        sys.exit(1)
 
 
 #
