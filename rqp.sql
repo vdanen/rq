@@ -24,6 +24,10 @@ CREATE TABLE `files` (
   `f_id` int(24) NOT NULL auto_increment,
   `p_record` int(24) NOT NULL,
   `files` text NOT NULL,
+  `f_user` varchar(16) NOT NULL,
+  `f_group` varchar(16) NOT NULL,
+  `f_is_suid` tinyint DEFAULT 0,
+  `f_is_sgid` tinyint DEFAULT 0,
   PRIMARY KEY  (`f_id`),
   KEY `rec` USING BTREE (`p_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1 ;

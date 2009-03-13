@@ -513,9 +513,22 @@ def add_file_provides(record, file):
 def rpm_list(file):
     print_debug('in rpm_list(%s)' % file)
 
-    list = commands.getoutput("rpm -qlp --nosignature " + file)
-    list = list.splitlines()
-    return(list)
+    list  = commands.getoutput("rpm -qlvp --nosignature " + file)
+    list  = list.splitlines()
+    rlist = {}
+    count = 0
+    for entry in list:
+        is_suid = 0
+        is_sgid = 0
+        foo = entry.split()
+        if foo[0][3] == 's':
+            is_suid = 1
+        if foo[0][6] == 's':
+            is_sgid = 1
+        rlist[count] = {'file': foo[8], 'user': foo[2], 'group': foo[3], 'is_suid': is_suid, 'is_sgid': is_sgid}
+        count = count + 1
+
+    return(rlist)
 
 
 #
@@ -560,11 +573,11 @@ def add_file_records(record, file):
 
     file_list = rpm_list(file)
 
-    for single_file in file_list:
+    for x in file_list.keys():
         show_progress()
         if options.verbose:
-            print 'File: %s' % single_file
-        query  = "INSERT INTO files (p_record, files) VALUES ('%s', '%s')" % (record, single_file.strip())
+            print 'File: %s' % file_list[x]['file']
+        query  = "INSERT INTO files (p_record, files, f_user, f_group, f_is_suid, f_is_sgid) VALUES ('%s', '%s', '%s', '%s', %d, %d)" % (record, file_list[x]['file'].strip(), file_list[x]['user'], file_list[x]['group'], file_list[x]['is_suid'], file_list[x]['is_sgid'])
         result = db_doquery(query)
 
 
@@ -633,7 +646,11 @@ def run_binary_query(qstring, type):
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
 
-    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+    if type == 'files' and options.ownership:
+        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+    else:
+        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+
 
     if options.ignorecase:
         query = query + "LIKE '%" + qstring + "%'"
@@ -666,9 +683,14 @@ def run_binary_query(qstring, type):
             fromdb_rel  = row[3]
             fromdb_date = row[4]
             fromdb_file = row[5]
+            if type == 'files' and options.ownership:
+                fromdb_user = row[6]
+                fromdb_group = row[7]
+                fromdb_is_suid = row[8]
+                fromdb_is_sgid = row[9]
 
             if not ltag == fromdb_tag:
-                print '\nResults in Tag: %s' % fromdb_tag
+                print '\nResults in Tag: %s\n' % fromdb_tag
                 ltag = fromdb_tag
 
             if options.debug:
@@ -677,7 +699,16 @@ def run_binary_query(qstring, type):
                 rpm = fromdb_rpm
 
                 if not rpm == lsrc:
-                    print '%s: %s' % (rpm, fromdb_file)
+                    if type == 'files' and options.ownership:
+                        is_suid = ''
+                        is_sgid = ''
+                        if fromdb_is_suid == 1:
+                            is_suid = '*'
+                        if fromdb_is_sgid == 1:
+                            is_sgid = '*'
+                        print '%s: %s (%s%s, %s%s)' % (rpm, fromdb_file, is_suid, fromdb_user, is_sgid, fromdb_group)
+                    else:
+                        print '%s: %s' % (rpm, fromdb_file)
 
                 if options.quiet:
                     lsrc = rpm
@@ -727,6 +758,8 @@ if __name__ == '__main__':
     p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true", help="Show extra info (version, release, date)")
     p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true", help="Case insensitive search")
     p.add_option('-l', '--list', dest="list", default=False, action="store_true", help="List database tags")
+    if rq_type == 'binary':
+        p.add_option('-o', '--ownership', dest="ownership", default=False, action="store_true", help="Display ownership information on files")
     if rq_type == 'source':
         p.add_option('-p', '--patch', dest="path", default=False, action="store_true", help="List patched files")
     p.add_option('-P', '--progress', dest="progress", default=False, action="store_true", help="Show processing progress")
