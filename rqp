@@ -5,8 +5,15 @@ import MySQLdb
 from glob import glob
 #import MySQLdb.connect
 
-re_srpm = re.compile(r'\.src\.rpm$')
-re_brpm = re.compile(r'\.rpm$')
+re_srpm    = re.compile(r'\.src\.rpm$')
+re_brpm    = re.compile(r'\.rpm$')
+re_patch   = re.compile(r'\.(patch.bz2|patch.gz|patch)$') # should handle diff and dif
+re_tar     = re.compile(r'\.(tar.bz2|tar.gz|tar)$')
+re_targz   = re.compile(r'\.tar\.gz$')
+re_tarbz   = re.compile(r'\.tar\.bz2$')
+re_patchgz = re.compile(r'\.patch\.gz$') # should also handle diff and dif
+re_patchbz = re.compile(r'\.patch\.bz2$')
+
 
 #
 # function to connect to the database
@@ -416,7 +423,7 @@ def record_add(tag, file, type):
 
     file_rpm_check(file, type)
 
-    record = package_add_record(tag, file)
+    record = package_add_record(tag, file, type)
     if not record:
         return
 
@@ -428,15 +435,16 @@ def record_add(tag, file, type):
 
     if type == 'source':
         print_debug('Add source records for package record: %s' % record)
-        add_source_records(record, file) # XXX: TODO (rqs)
+        add_source_records(record, file)
         cpio_dir = tempfile.mkdtemp()
         try:
             current_dir = os.getcwd()
             os.chdir(cpio_dir)
-            get_all_files(file, cpio_dir)
-            add_source_file_records(record, file) # XXX: TODO (rqs)
+            source_get_all_files(file)
+            add_source_file_records(record, file)
             os.chdir(current_dir)
         finally:
+            print_debug('Removing temporary directory: %s...' % cpio_dir)
             shutil.rmtree(cpio_dir)
 
     if options.progress:
@@ -457,9 +465,12 @@ def source_get_all_files(file):
 #
 def source_get_tar_files(file):
     print_debug('in source_get_tar_files(%s)' % file)
-    (rc, output) = commands.getstatusoutput("rpm2cpio %s | cpio -i --quiet *.tar.?z* 2>/dev/null")
-    if not rc == "0":
-        sys.stderr.write('Failed to execute rpm2cpio!  Output was:\n%s\n' % output)
+
+    command = 'rpm2cpio %s | cpio -i --quiet "*.tar.?z*" 2>/dev/null' % file
+    (rc, output) = commands.getstatusoutput(command)
+
+    if not rc == 0:
+        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
         sys.exit(1)
 
 #
@@ -467,9 +478,12 @@ def source_get_tar_files(file):
 #
 def source_get_patch_files(file):
     print_debug('in source_get_patch_files(%s)' % file)
-    (rc, output) = commands.getstatusoutput("rpm2cpio %s | cpio -i --quiet *patch* 2>/dev/null" % file)
-    if not rc == "0":
-        sys.stderr.write('Failed to execute rpm2cpio!  Output was:\n%s\n' % output)
+
+    command = 'rpm2cpio %s | cpio -i --quiet "*patch*" 2>/dev/null' % file
+    (rc, output) = commands.getstatusoutput(command)
+
+    if not rc == 0:
+        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
         sys.exit(1)
 
 
@@ -518,6 +532,7 @@ def rpm_list(file):
     rlist = {}
     count = 0
     for entry in list:
+        print_debug('processing: ' + entry) ### DEBUG
         is_suid = 0
         is_sgid = 0
         foo = entry.split()
@@ -582,27 +597,142 @@ def add_file_records(record, file):
 
 
 #
+# function to add source records
+#
+def add_source_records(record, file):
+    print_debug('in add_source_records(%s, %s)' % (record, file))
+
+    file_list = rpm_list(file)
+
+    for x in file_list.keys():
+        print_debug('processing source: ' + file_list[x]['file'])
+        show_progress()
+        stype = ''
+
+        if re_patch.search(file_list[x]['file']):
+            stype = 'P'
+        if re_tar.search(file_list[x]['file']):
+            stype = 'S'
+
+        # we only care about source and patch files, nothing else
+        if stype == '':
+            continue
+
+        if options.verbose:
+            print 'Source: %s, Type: %s' % (file_list[x]['file'], stype)
+        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, file_list[x]['file'].strip())
+        result = db_doquery(query)
+
+
+#
+# function to add all source file records
+#
+def add_source_file_records(record, file):
+    print_debug('in add_source_file_records(%s, %s)' % (record, file))
+
+    file_list = rpm_list(file)
+
+    for x in file_list.keys():
+        good_src = False
+        print_debug('processing file: ' + file_list[x]['file']) ### DEBUG
+
+        if re_patch.search(file_list[x]['file']):
+            flist = patch_list(file_list[x]['file'])
+            good_src = True
+
+        if re_tar.search(file_list[x]['file']):
+            flist = tar_list(file_list[x]['file'])
+            good_src = True
+
+        # only proceed for tarballs and patches
+        if good_src:
+            files = flist.split()
+
+            # get the s_record for this source from the db
+            query  = "SELECT s_id FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, file_list[x]['file'])
+            db_sid = db_fetchone(query)
+            if not db_sid:
+                sys.stderr.write('adding files from %s failed...' % file_list[x]['file'])
+                sys.exit(1)
+
+            for dfile in files:
+                show_progress()
+                print_verbose('File: %s\n' % dfile)
+                query  = "INSERT INTO files (p_record, s_record, sfile) VALUES ('%s', '%s', '%s')" % (record, db_sid, dfile)
+                result = db_doquery(query)
+
+
+#
+# function to get list of files a patch touches
+#
+def patch_list(file):
+    print_debug('in patch_list(%s)' % file)
+
+    grep = 'grep'
+
+    if re_patchgz.search(file):
+        grep = 'zgrep'
+
+    if re_patchbz.search(file):
+        grep = 'bzgrep'
+
+    list = commands.getoutput(grep + " '^+++' " + file + " 2>/dev/null | awk '{print $2}'")
+
+    return(list)
+
+
+#
+# function to get a list of files in a tarball
+#
+def tar_list(file):
+    print_debug('in tar_list(%s)' % file)
+
+    comp = 'tf'
+    if re_targz.search(file):
+        comp = 'tzf'
+    if re_tarbz.search(file):
+        comp = 'tjf'
+
+    list = commands.getoutput("tar -%s %s 2>/dev/null" % (comp, file))
+
+    return(list)
+
+
+#
 # function to add a package record
 #
-def package_add_record(tag, file):
+def package_add_record(tag, file, type):
     print_debug('in package_add_record(%s, %s)' % (tag, file))
 
     path    = os.path.basename(file)
-    rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file)
+    if type == 'binary':
+        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file)
+    else:
+        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file)
     tlist   = rtags.split('|')
     package = tlist[0].strip()
     version = tlist[1].strip()
     release = tlist[2].strip()
     pdate   = tlist[3].strip()
-    arch    = tlist[4].strip()
+    if type == 'binary':
+        arch    = tlist[4].strip()
 
-    query = "SELECT p_tag, p_package, p_version, p_release, p_arch FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (tag, package, version, release, arch)
+    if type == 'binary':
+        query = "SELECT p_tag, p_package, p_version, p_release, p_arch FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (tag, package, version, release, arch)
+    else:
+        query = "SELECT p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag, package, version, release)
     result = db_fetchall(query)
     if result:
-        print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
+        if type == 'binary':
+            print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
+        else:
+            print 'File %s-%s-%s is already in the database under tag %s' % (package, version, release, tag)
         return(0)
 
-    query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate, arch)
+    if type == 'binary':
+        query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate, arch)
+    else:
+        query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate)
     result = db_doquery(query)
     show_progress(path)
 
@@ -620,7 +750,7 @@ def package_add_record(tag, file):
 # defaults to binary
 #
 def file_rpm_check(file, type='binary'):
-    print_debug('in file_check(%s, %s)' % (file, type))
+    print_debug('in file_rpm_check(%s, %s)' % (file, type))
 
     if not os.path.isfile(file):
         print 'File %s not found!\n' % file
@@ -740,7 +870,10 @@ if __name__ == '__main__':
     global options, config
 
     rq_version = '0.2'
-    rq_prog    = 'rqp'
+    if os.path.basename(sys.argv[0]) == 'rqs':
+        rq_prog    = 'rqs'
+    else:
+        rq_prog    = 'rqp'
 
     if rq_prog == 'rqs':
         rq_type = 'source'
@@ -748,6 +881,8 @@ if __name__ == '__main__':
         rq_type = 'binary'
 
     sys.stdout.write(rq_prog + " %s ($Id$)\n\n" % rq_version)
+
+    # XXX: TODO add options to search files by ownership and sgid/suid status
 
     p = optparse.OptionParser(description="RPM package query tool",
                               prog=rq_prog,
@@ -775,7 +910,7 @@ if __name__ == '__main__':
     dbgroup.add_option('-c', '--createpath', dest="createpath", help="Create database entries with TAG from a " + rq_type + " rpm DIR", metavar="DIR")
     dbgroup.add_option('-D', '--delete', dest="tagdelete", help="Delete all TAG entries", metavar="TAG")
     if rq_type == 'source':
-        p.add_options('-f', '--file', dest="src_examine", help="Examine a src.rpm FILE and output to stdout", metavar="FILE")
+        dbgroup.add_option('-f', '--file', dest="src_examine", help="Examine a src.rpm FILE and output to stdout", metavar="FILE")
     dbgroup.add_option('-t', '--tag', dest="tag", help="TAG for created database entries or database queries", metavar="TAG")
     dbgroup.add_option('-u', '--update', dest="tagupdate", help="Update TAG entries (new/removed files in directory)", metavar="TAG")
     p.add_option_group(dbgroup)
@@ -794,14 +929,16 @@ if __name__ == '__main__':
         p.print_help()
 
     # setup the options
-    if options.provides and options.query:
-        p.error("--provides and --query are mutually exclusive")
-    if options.provides and options.requires:
-        p.error("--provides and --requires are mutually exclusive")
-    if options.query and options.requires:
-        p.error("--query and --provides are mutually exclusive")
-    if options.provides and options.query and options.requires:
-        p.error("--query, --provides, and --requires are mutually exclusive")
+    if rq_type == 'binary':
+        if options.provides and options.query:
+            p.error("--provides and --query are mutually exclusive")
+        if options.provides and options.requires:
+            p.error("--provides and --requires are mutually exclusive")
+        if options.query and options.requires:
+            p.error("--query and --provides are mutually exclusive")
+        if options.provides and options.query and options.requires:
+            p.error("--query, --provides, and --requires are mutually exclusive")
+
     if options.verbose and options.quiet:
         p.error("--quiet and --verbose are mutually exclusive")
     if options.tag and options.tagdelete:
@@ -827,7 +964,7 @@ if __name__ == '__main__':
         sys.stderr.write('\n\nERROR: No configuration file found!\n')
         sys.exit(1)
 
-    db = db_connect('binary')
+    db = db_connect(rq_type)
 
     # start doing useful things
     if options.list:
@@ -854,13 +991,14 @@ if __name__ == '__main__':
             run_source_query(options.query)
         sys.exit(0)
 
-    if options.provides:
-        run_binary_query(options.provides, 'provides')
-        sys.exit(0)
+    if rq_type == 'binary':
+        if options.provides:
+            run_binary_query(options.provides, 'provides')
+            sys.exit(0)
 
-    if options.requires:
-        run_binary_query(options.requires, 'requires')
-        sys.exit(0)
+        if options.requires:
+            run_binary_query(options.requires, 'requires')
+            sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
     # have a new tag?  or can we add it (despite the path) to an existing tag?
