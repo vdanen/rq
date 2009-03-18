@@ -557,7 +557,7 @@ def rpm_list(file):
 # function to import a directory full of rpms
 #
 def rpm_add_directory(tag, path, type='binary'):
-    print_debug('in rpm_add_directory(%s, %s)' % (tag, path))
+    print_debug('in rpm_add_directory(%s, %s, %s)' % (tag, path, type))
 
     new_tag = tag_add_record(tag, path)
     if new_tag:
@@ -879,13 +879,10 @@ if __name__ == '__main__':
     rq_version = '0.2'
     if os.path.basename(sys.argv[0]) == 'rqs':
         rq_prog    = 'rqs'
+        rq_type    = 'source'
     else:
         rq_prog    = 'rqp'
-
-    if rq_prog == 'rqs':
-        rq_type = 'source'
-    if rq_prog == 'rqp':
-        rq_type = 'binary'
+        rq_type    = 'binary'
 
     sys.stdout.write(rq_prog + " %s ($Id$)\n\n" % rq_version)
 
@@ -952,7 +949,7 @@ if __name__ == '__main__':
         p.error("--tag and --delete are mutually exclusive; you do not need to use --tag")
 
     if options.debug:
-        print_debug("debug mode enabled")
+        print_debug("debug mode enabled; type => " + rq_type)
 
     if options.verbose:
         print_verbose("Verbose mode enabled")
