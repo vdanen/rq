@@ -559,8 +559,8 @@ def rpm_list(file):
 def rpm_add_directory(tag, path, type='binary'):
     print_debug('in rpm_add_directory(%s, %s, %s)' % (tag, path, type))
 
-    new_tag = tag_add_record(tag, path)
-    if new_tag:
+    if not os.path.isdir(path):
+        print 'Path (%s) is not a valid directory!' % path
         sys.exit(1)
 
     if type == 'binary':
@@ -568,6 +568,14 @@ def rpm_add_directory(tag, path, type='binary'):
 
     if type == 'source':
         file_list = glob(path + "/*.src.rpm")
+
+    if not file_list:
+        print 'No files found to import in directory: %s' % path
+        sys.exit(1)
+
+    new_tag = tag_add_record(tag, path)
+    if new_tag:
+        sys.exit(1)
 
     for file in file_list:
         if not os.path.isfile(file):
