@@ -230,7 +230,7 @@ def tag_delete_entries(tag, type='binary'):
                 if type == 'binary':
                     tables = ('packages', 'requires', 'provides', 'files')
                 if type == 'source':
-                    tables = ('packages', 'sources')
+                    tables = ('packages', 'sources', 'files')
                 for table in tables:
                     query = "DELETE FROM %s WHERE p_record = '%d'" % (table, rnum)
                     res   = db_doquery(query)
@@ -306,25 +306,32 @@ def tag_update_entries(tag, type='binary'):
 #
 # function to show database info
 #
-def showdbstats():
-    print_debug("in showdbstats()")
+def showdbstats(type):
+    print_debug("in showdbstats(%s)" % type)
 
     query   = "SELECT count(*) FROM tags"
     c_tags  = db_fetchone(query)
     query   = "SELECT count(*) FROM packages"
     c_pkgs  = db_fetchone(query)
-    query   = "SELECT count(*) FROM requires"
-    c_reqs  = db_fetchone(query)
-    query   = "SELECT count(*) FROM provides"
-    c_provs = db_fetchone(query)
+    if type == 'binary':
+        query   = "SELECT count(*) FROM requires"
+        c_reqs  = db_fetchone(query)
+        query   = "SELECT count(*) FROM provides"
+        c_provs = db_fetchone(query)
+    else:
+        query = "SELECT count(*) FROM sources"
+        c_src = db_fetchone(query)
     query   = "SELECT count(*) FROM files"
     c_files = db_fetchone(query)
 
     print 'Database statistics:\n'
     print '   Database => User: %s, Host: %s, Database: %s\n' % (config['username'], config['hostspec'], config['database'])
     print '   Tag records : %-15d Package records : %-15d' % (c_tags, c_pkgs)
-    print '   File records: %-15d Requires records: %-15d' % (c_files, c_reqs)
-    print '                                 Provides records: %-15d\n' % c_provs
+    if type == 'binary':
+        print '   File records: %-15d Requires records: %-15d' % (c_files, c_reqs)
+        print '                                 Provides records: %-15d\n' % c_provs
+    else:
+        print '   File records: %-15d Source records  : %-15d' % (c_files, c_src)
     sys.exit(0)
 
 
@@ -971,7 +978,7 @@ if __name__ == '__main__':
         tag_list()
 
     if options.stats:
-        showdbstats()
+        showdbstats(rq_type)
 
     if options.tag:
         print_debug('Tag:\t%s\n' % options.tag)
