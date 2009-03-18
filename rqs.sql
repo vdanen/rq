@@ -21,9 +21,9 @@ SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 
 DROP TABLE IF EXISTS `files`;
 CREATE TABLE `files` (
-  `f_id` int(24) NOT NULL auto_increment,
-  `p_record` int(24) NOT NULL,
-  `s_record` int(24) NOT NULL,
+  `f_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
+  `s_record` INT NOT NULL,
   `sfile` TEXT NOT NULL,
   PRIMARY KEY  (`f_id`),
   KEY `rec` USING BTREE (`p_record`),
@@ -38,7 +38,7 @@ CREATE TABLE `files` (
 
 DROP TABLE IF EXISTS `packages`;
 CREATE TABLE IF NOT EXISTS `packages` (
-  `p_record` int(24) NOT NULL auto_increment,
+  `p_record` INT NOT NULL auto_increment,
   `p_tag` text NOT NULL,
   `p_package` text NOT NULL,
   `p_version` text NOT NULL,
@@ -55,8 +55,8 @@ CREATE TABLE IF NOT EXISTS `packages` (
 
 DROP TABLE IF EXISTS `sources`;
 CREATE TABLE IF NOT EXISTS `sources` (
-  `s_id` int(24) NOT NULL auto_increment,
-  `p_record` int(24) NOT NULL,
+  `s_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
   `s_type` varchar(1) NOT NULL,
   `s_file` text NOT NULL,
   PRIMARY KEY  (`s_id`),
