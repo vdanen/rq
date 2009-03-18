@@ -543,12 +543,20 @@ def rpm_list(file):
         is_suid = 0
         is_sgid = 0
         foo = entry.split()
+        if len(foo[2]) == 16:
+            user  = foo[2][:7]
+            group = foo[2][8:]
+            fname = foo[7]
+        else:
+            user  = foo[2]
+            group = foo[3]
+            fname = foo[8]
         if foo[0][3] == 's':
             is_suid = 1
         if foo[0][6] == 's':
             is_sgid = 1
-        rlist[count] = {'file': foo[8], 'user': foo[2], 'group': foo[3], 'is_suid': is_suid, 'is_sgid': is_sgid}
-        count = count + 1
+        rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid}
+        count += 1
 
     return(rlist)
 
