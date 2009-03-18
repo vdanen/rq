@@ -21,8 +21,8 @@ SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 
 DROP TABLE IF EXISTS `files`;
 CREATE TABLE `files` (
-  `f_id` int(24) NOT NULL auto_increment,
-  `p_record` int(24) NOT NULL,
+  `f_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
   `files` text NOT NULL,
   `f_user` varchar(16) NOT NULL,
   `f_group` varchar(16) NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE `files` (
 
 DROP TABLE IF EXISTS `packages`;
 CREATE TABLE IF NOT EXISTS `packages` (
-  `p_record` int(24) NOT NULL auto_increment,
+  `p_record` INT NOT NULL auto_increment,
   `p_tag` text NOT NULL,
   `p_package` text NOT NULL,
   `p_version` text NOT NULL,
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS `packages` (
 
 DROP TABLE IF EXISTS `provides`;
 CREATE TABLE IF NOT EXISTS `provides` (
-  `p_id` int(24) NOT NULL auto_increment,
-  `p_record` int(24) NOT NULL,
+  `p_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
   `provides` text NOT NULL,
   PRIMARY KEY  (`p_id`),
   KEY `rec` USING BTREE (`p_record`)
@@ -73,8 +73,8 @@ CREATE TABLE IF NOT EXISTS `provides` (
 
 DROP TABLE IF EXISTS `requires`;
 CREATE TABLE IF NOT EXISTS `requires` (
-  `r_id` int(24) NOT NULL auto_increment,
-  `p_record` int(24) NOT NULL,
+  `r_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
   `requires` text NOT NULL,
   PRIMARY KEY  (`r_id`),
   KEY `rec` USING BTREE (`p_record`)
