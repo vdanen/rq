@@ -543,8 +543,12 @@ def rpm_list(file):
         is_suid = 0
         is_sgid = 0
         foo = entry.split()
-        if len(foo[2]) == 16:
-            user  = foo[2][:7]
+
+        # this actually really stinks because we are allowed usernames longer
+        # than 8 characters, but rpm -qlv will only display the first 8 characters
+        # of the owner/group name -- not cool at all
+        if len(foo[2]) > 8:
+            user  = foo[2][:8]
             group = foo[2][8:]
             fname = foo[7]
         else:
