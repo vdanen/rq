@@ -268,7 +268,9 @@ def tag_update_entries(tag, type='binary'):
             else:
                 print_verbose('Missing')
                 to_remove.append(result[0])
-        for src_rpm in glob(path + "/*.rpm"):
+        src_list = glob(path + "/*.rpm")
+        src_list.sort()
+        for src_rpm in src_list:
             print_verbose('Checking for %s in database...' % src_rpm)
             rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm)
             tlist   = rtags.split('|')
@@ -577,9 +579,11 @@ def rpm_add_directory(tag, path, type='binary'):
 
     if type == 'binary':
         file_list = glob(path + "/*.rpm")
+        file_list.sort()
 
     if type == 'source':
         file_list = glob(path + "/*.src.rpm")
+        file_list.sort()
 
     if not file_list:
         print 'No files found to import in directory: %s' % path
