@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""
+This program extracts data from RPM and SRPM packages and stores it in
+a database for later querying.
+
+based on the srpm script of similar function copyright (c) 2005 Stew Benedict <sbenedict@mandriva.com>
+copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
+"""
 
 import optparse, os, sys, re, datetime, commands, shutil, tempfile
 import MySQLdb
@@ -15,10 +22,10 @@ re_patchgz = re.compile(r'\.patch\.gz$') # should also handle diff and dif
 re_patchbz = re.compile(r'\.patch\.bz2$')
 
 
-#
-# function to connect to the database
-#
 def db_connect(type):
+    """
+    Function to connect to the database
+    """
     global config
 
     if config['hostspec'] == '':
@@ -59,18 +66,18 @@ def db_connect(type):
     return db
 
 
-#
-# function to close connections to the database
-#
 def db_close():
+    """
+    Function to close connections to the database
+    """
     db.commit()
     db.close()
 
 
-#
-# function to perform database queries
-#
 def db_fetchall(query):
+    """
+    Function to perform database queries
+    """
     print_debug('  in db_fetchall()')
     print_debug('  => query is: %s' % query)
 
@@ -90,10 +97,10 @@ def db_fetchall(query):
         sys.exit(1)
 
 
-#
-# function to perform a single database query
-#
 def db_fetchone(query):
+    """
+    Function to perform a single database query
+    """
     print_debug('  in db_fetchone()')
     print_debug('  => query is: %s' % query)
 
@@ -111,10 +118,10 @@ def db_fetchone(query):
         sys.exit(1)
 
 
-#
-# function to perform an actual query (non-SELECT) from the database
-#
 def db_doquery(query):
+    """
+    Function to perform an actual update (UPDATE/INSERT) query (non-SELECT) from the database
+    """
     print_debug('  in db_doquery()')
     print_debug('  => query is: %s' % query)
 
@@ -127,26 +134,26 @@ def db_doquery(query):
         sys.exit(1)
 
 
-#
-# function to print debug strings
-#
 def print_debug(string):
+    """
+    Function to print debug strings
+    """
     if options.debug:
         sys.stderr.write("=> DEBUG: %s\n" % string)
 
 
-#
-# function to print verbose strings
-#
 def print_verbose(string):
+    """
+    Function to print verbose strings
+    """
     if options.verbose:
         sys.stdout.write("%s\n" % string)
 
 
-#
-# function to read the configuration file
-#
 def read_config(config_file):
+    """
+    Function to read the configuration file
+    """
     config = {}
     configfile = open(config_file, 'r')
     for line in configfile:
@@ -172,10 +179,10 @@ def read_config(config_file):
     return config
 
 
-#
-# function to show database tags
-#
 def tag_list():
+    """
+    Function to show database tags
+    """
     print_debug("in tag_list()")
 
     query = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
@@ -190,10 +197,10 @@ def tag_list():
     sys.exit(0)
 
 
-#
-# function to delete database tags and associated entries
-#
 def tag_delete_entries(tag, type='binary'):
+    """
+    Function to delete database tags and associated entries
+    """
     print_debug('in tag_delete_entries(%s)' % tag)
 
     to_remove = []
@@ -240,10 +247,10 @@ def tag_delete_entries(tag, type='binary'):
             sys.stdout.write('No matching package tags to remove.\n')
 
 
-#
-# function to update entries for a given tag
-#
 def tag_update_entries(tag, type='binary'):
+    """
+    function to update entries for a given tag
+    """
     print_debug('in tag_update_entries(%s)' % tag)
     #
     # this function is designed for src.rpm handling, but we can update it for binary rpm handling too
@@ -305,10 +312,10 @@ def tag_update_entries(tag, type='binary'):
             record_add(tag, rpm, type)
 
 
-#
-# function to show database info
-#
 def showdbstats(type):
+    """
+    Function to show database info
+    """
     print_debug("in showdbstats(%s)" % type)
 
     query   = "SELECT count(*) FROM tags"
@@ -337,10 +344,10 @@ def showdbstats(type):
     sys.exit(0)
 
 
-#
-# function to show progress
-#
 def show_progress(prefix=False):
+    """
+    Function to show progress
+    """
     global pstate
 
     if not options.verbose and not options.debug and options.progress:
@@ -362,10 +369,10 @@ def show_progress(prefix=False):
             return
 
 
-#
-# function to check for existence of tags
-#
 def tag_check(tag, file):
+    """
+    Function to check for the existence of tags
+    """
     print_debug('in tag_check(%s, %s)' % (tag, file))
 
     if os.path.isfile(file):
@@ -392,10 +399,10 @@ def tag_check(tag, file):
 #        return(False)
 
 
-#
-# function to add a tag record
-#
 def tag_add_record(tag, file):
+    """
+    Function to add a tag record
+    """
     print_debug('in tag_add_record(%s, %s)' % (tag, file))
 
     cur_date = datetime.datetime.now()
@@ -418,10 +425,10 @@ def tag_add_record(tag, file):
     return(0)
 
 
-#
-# function to add a record to the database
-#
 def record_add(tag, file, type):
+    """
+    Function to add a record to the database
+    """
     print_debug('in record_add(%s, %s, %s)' % (tag, file, type))
 
     if os.path.isfile(file):
@@ -460,19 +467,19 @@ def record_add(tag, file, type):
         sys.stdout.write('\n')
 
 
-#
-# function to get source and patch files from a srpm
-#
 def source_get_all_files(file):
+    """
+    Function to get the source and patch files from a SRPM
+    """
     print_debug('in source_get_all_files(%s)' % file)
     source_get_tar_files(file)
     source_get_patch_files(file)
 
 
-#
-# function to get tar files from a src.rpm
-#
 def source_get_tar_files(file):
+    """
+    Function to get the tar files from a SRPM
+    """
     print_debug('in source_get_tar_files(%s)' % file)
 
     command = 'rpm2cpio %s | cpio -i --quiet "*.tar.?z*" 2>/dev/null' % file
@@ -482,10 +489,11 @@ def source_get_tar_files(file):
         sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
         sys.exit(1)
 
-#
-# function to get patch files from a src.rpm
-#
+
 def source_get_patch_files(file):
+    """
+    Function to get the patch files from a SRPM
+    """
     print_debug('in source_get_patch_files(%s)' % file)
 
     command = 'rpm2cpio %s | cpio -i --quiet "*patch*" 2>/dev/null' % file
@@ -496,10 +504,10 @@ def source_get_patch_files(file):
         sys.exit(1)
 
 
-#
-# function to add requires to the database
-#
 def add_file_requires(record, file):
+    """
+    Function to add requires to the database
+    """
     print_debug('in add_file_requires(%s, %s)' % (record, file))
 
     list = commands.getoutput("rpm -qp --nosignature --requires " + file + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
@@ -513,10 +521,10 @@ def add_file_requires(record, file):
             result = db_doquery(query)
 
 
-#
-# function to add provides to the database
-#
 def add_file_provides(record, file):
+    """
+    Function to add provides to the database
+    """
     print_debug('in add_file_provides(%s, %s)' % (record, file))
 
     list = commands.getoutput("rpm -qp --nosignature --provides " + file)
@@ -530,10 +538,10 @@ def add_file_provides(record, file):
             result = db_doquery(query)
 
 
-#
-# function to get the list of files in an rpm
-#
 def rpm_list(file):
+    """
+    Function to get the list of files in an RPM
+    """
     print_debug('in rpm_list(%s)' % file)
 
     list  = commands.getoutput("rpm -qlvp --nosignature " + file)
@@ -567,10 +575,10 @@ def rpm_list(file):
     return(rlist)
 
 
-#
-# function to import a directory full of rpms
-#
 def rpm_add_directory(tag, path, type='binary'):
+    """
+    Function to import a directory full of RPMs
+    """
     print_debug('in rpm_add_directory(%s, %s, %s)' % (tag, path, type))
 
     if not os.path.isdir(path):
@@ -611,10 +619,10 @@ def rpm_add_directory(tag, path, type='binary'):
         record_add(tag, file, type)
 
 
-#
-# function to add file records
-#
 def add_file_records(record, file):
+    """
+    Function to add file records
+    """
     print_debug('in add_file_records(%s, %s)' % (record, file))
 
     file_list = rpm_list(file)
@@ -627,10 +635,10 @@ def add_file_records(record, file):
         result = db_doquery(query)
 
 
-#
-# function to add source records
-#
 def add_source_records(record, file):
+    """
+    Function to add source records
+    """
     print_debug('in add_source_records(%s, %s)' % (record, file))
 
     file_list = rpm_list(file)
@@ -655,10 +663,10 @@ def add_source_records(record, file):
         result = db_doquery(query)
 
 
-#
-# function to add all source file records
-#
 def add_source_file_records(record, file):
+    """
+    Function to add all source file records
+    """
     print_debug('in add_source_file_records(%s, %s)' % (record, file))
 
     file_list = rpm_list(file)
@@ -693,10 +701,10 @@ def add_source_file_records(record, file):
                 result = db_doquery(query)
 
 
-#
-# function to get list of files a patch touches
-#
 def patch_list(file):
+    """
+    Function to get a list of files that a patch touches
+    """
     print_debug('in patch_list(%s)' % file)
 
     grep = 'grep'
@@ -712,10 +720,10 @@ def patch_list(file):
     return(list)
 
 
-#
-# function to get a list of files in a tarball
-#
 def tar_list(file):
+    """
+    Function to get a list of files in a tarball
+    """
     print_debug('in tar_list(%s)' % file)
 
     comp = 'tf'
@@ -729,10 +737,10 @@ def tar_list(file):
     return(list)
 
 
-#
-# function to add a package record
-#
 def package_add_record(tag, file, type):
+    """
+    Function to add a package record
+    """
     print_debug('in package_add_record(%s, %s)' % (tag, file))
 
     path    = os.path.basename(file)
@@ -776,11 +784,12 @@ def package_add_record(tag, file, type):
         return(0)
 
 
-#
-# function to check whether the file is a source or binary rpm
-# defaults to binary
-#
 def file_rpm_check(file, type='binary'):
+    """
+    Function to check whether the file is a source or binary RPM
+
+    The default is binary
+    """
     print_debug('in file_rpm_check(%s, %s)' % (file, type))
 
     if not os.path.isfile(file):
@@ -798,10 +807,10 @@ def file_rpm_check(file, type='binary'):
             sys.exit(1)
 
 
-#
-# function to run the query for binary rpms
-#
 def run_binary_query(qstring, type):
+    """
+    Function to run the query for binary RPMs
+    """
     print_debug('in run_binary_query(%s, %s)' % (qstring, type))
 
     if not options.quiet:
@@ -886,18 +895,18 @@ def run_binary_query(qstring, type):
             print 'No matches in database for substring (%s)' % qstring
 
 
-#
-# function to run the query for source rpms
-#
 def run_source_query(qstring, type):
+    """
+    Function to run the query for source RPMs
+    """
     print_debug('in run_source_query(%s, %s)' % qstring)
     # XXX: TODO
 
 
-#
-# the main program
-#
 if __name__ == '__main__':
+    """
+    The main program
+    """
     global options, config
 
     rq_version = '0.2'
