@@ -154,24 +154,17 @@ def read_config(config_file):
     """
     Function to read the configuration file
     """
+    print_debug("in read_config(%s)" % config_file)
+
     config = {}
-    configfile = open(config_file, 'r')
-    for line in configfile:
-        # strip the line return "\n" please note config files made in Windows
-        # may fail since they use "\r\n" or whatever it is
+    for line in open(config_file):
         line = line.rstrip()
-        # Ignore empty lines
-        if not line:
+        if not line:                                        # ignore empties
             continue
-        # Ignore commented lines
-        if line.startswith("#"):
+        if line.startswith("#") or line.startswith(";"):    # and ignore comments
             continue
-        if line.startswith(";"):
-            continue
-        #
-        # Split on the first "=", passwords/etc can have a "=" in them this way
-        # But configuration names cannot have "=" in them
-        #
+
+        # Split on the first "=", this allows for values to have a "=" in them
         (config_name, config_value) = line.split("=", 1)
         config_name         = config_name.strip()
         config[config_name] = config_value
