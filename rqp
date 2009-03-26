@@ -125,8 +125,6 @@ def db_doquery(query):
     print_debug('  in db_doquery()')
     print_debug('  => query is: %s' % query)
 
-    #query = re.sub('''(['"])''', r'\\\1', query)
-
     try:
         cursor = db.cursor()
         cursor.execute(query)
@@ -134,6 +132,16 @@ def db_doquery(query):
     except MySQLdb.Error, e:
         sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
         sys.exit(1)
+
+
+def sanitize_string(string):
+    """
+    String to cleanup a string to remove characters that will cause problems
+    with the database
+    """
+    # escape single and double quotes
+    new_string = re.sub('''(['"])''', r'\\\1', string)
+    return(new_string)
 
 
 def print_debug(string):
@@ -200,7 +208,7 @@ def tag_delete_entries(tag, type='binary'):
 
     to_remove = []
 
-    query  = "SELECT tag FROM tags WHERE tag = '%s' LIMIT 1" % tag
+    query  = "SELECT tag FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
     result = db_fetchone(query)
 
     if not result:
@@ -208,10 +216,10 @@ def tag_delete_entries(tag, type='binary'):
         sys.exit(1)
     else:
         print_verbose('Remove %s from Tags...\n' % tag)
-        query = "DELETE FROM tags WHERE tag = '%s'" % tag
+        query = "DELETE FROM tags WHERE tag = '%s'" % sanitize_string(tag)
         db_doquery(query)
 
-        query  = "SELECT DISTINCT p_record FROM packages WHERE p_tag = '%s'" % tag
+        query  = "SELECT DISTINCT p_record FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
         result = db_fetchall(query)
         if result:
             for row in result:
@@ -255,12 +263,12 @@ def tag_update_entries(tag, type='binary'):
     to_remove = []
     to_add    = []
 
-    query = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % tag
+    query = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
     path  = db_fetchone(query)
     if path:
         print_verbose('Update tag (%s) entries from %s...' % (tag, path))
         # get the existing entries
-        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_vesion, p_release FROM packages WHERE p_tag = '%s'" % tag
+        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_vesion, p_release FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
         result = db_fetchall(query)
         for row in result:
             pname = '%s-%s-%s.src.rpm' % (row[3], row[4], row[5])
@@ -280,7 +288,7 @@ def tag_update_entries(tag, type='binary'):
             version = tlist[1].strip()
             release = tlist[2].strip()
 
-            query   = "SELECT p_package FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag, package, version, release)
+            query   = "SELECT p_package FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (sanitize_string(tag), sanitize_string(package), sanitize_string(version), sanitize_string(release))
             package = db_fetchone(query)
             if package:
                 print_verbose('OK')
@@ -374,7 +382,7 @@ def tag_check(tag, file):
         path = os.path.abspath(os.path.dirname(file))
     else:
         path = os.path.abspath(file)
-    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % tag
+    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
     result = db_fetchone(query)
     if result:
         print_debug('Tag (%s) already exists in the database with path: %s' % (tag, result))
@@ -408,14 +416,14 @@ def tag_add_record(tag, file):
     else:
         path = os.path.abspath(file)
     # we can have multiple similar paths, but not multiple similar tags
-    query  = "SELECT tag FROM tags WHERE tag = '%s'" % tag
+    query  = "SELECT tag FROM tags WHERE tag = '%s'" % sanitize_string(tag)
     result = db_fetchone(query)
     if result:
         print 'Tag (%s) already exists in the database!\n' % tag
         db_close()
         sys.exit(1)
 
-    query = "INSERT INTO tags (tag, path, tdate) VALUES ('%s', '%s', '%s')" % (tag.strip(), path.strip(), cur_date)
+    query = "INSERT INTO tags (tag, path, tdate) VALUES ('%s', '%s', '%s')" % (sanitize_string(tag.strip()), sanitize_string(path.strip()), cur_date)
     db_doquery(query)
     return(0)
 
@@ -512,7 +520,7 @@ def add_file_requires(record, file):
             show_progress()
             if options.verbose:
                 print 'Dependency: %s' % dep
-            query  = "INSERT INTO requires (p_record, requires) VALUES ('%s', '%s')" % (record, dep.strip())
+            query  = "INSERT INTO requires (p_record, requires) VALUES ('%s', '%s')" % (record, sanitize_string(dep.strip()))
             result = db_doquery(query)
 
 
@@ -529,7 +537,7 @@ def add_file_provides(record, file):
             show_progress()
             if options.verbose:
                 print 'Provides: %s' % prov
-            query  = "INSERT INTO provides (p_record, provides) VALUES ('%s', '%s')" % (record, prov.strip())
+            query  = "INSERT INTO provides (p_record, provides) VALUES ('%s', '%s')" % (record, sanitize_string(prov.strip()))
             result = db_doquery(query)
 
 
@@ -626,7 +634,13 @@ def add_file_records(record, file):
         show_progress()
         if options.verbose:
             print 'File: %s' % file_list[x]['file']
-        query  = "INSERT INTO files (p_record, files, f_user, f_group, f_is_suid, f_is_sgid) VALUES ('%s', '%s', '%s', '%s', %d, %d)" % (record, file_list[x]['file'].strip(), file_list[x]['user'], file_list[x]['group'], file_list[x]['is_suid'], file_list[x]['is_sgid'])
+        query  = "INSERT INTO files (p_record, files, f_user, f_group, f_is_suid, f_is_sgid) VALUES ('%s', '%s', '%s', '%s', %d, %d)" % (
+            record,
+            sanitize_string(file_list[x]['file'].strip()),
+            sanitize_string(file_list[x]['user']),
+            sanitize_string(file_list[x]['group']),
+            file_list[x]['is_suid'],
+            file_list[x]['is_sgid'])
         result = db_doquery(query)
 
 
@@ -654,7 +668,7 @@ def add_source_records(record, file):
 
         if options.verbose:
             print 'Source: %s, Type: %s' % (file_list[x]['file'], stype)
-        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, file_list[x]['file'].strip())
+        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(file_list[x]['file'].strip()))
         result = db_doquery(query)
 
 
@@ -683,7 +697,7 @@ def add_source_file_records(record, file):
             files = flist.split()
 
             # get the s_record for this source from the db
-            query  = "SELECT s_id FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, file_list[x]['file'])
+            query  = "SELECT s_id FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file_list[x]['file']))
             db_sid = db_fetchone(query)
             if not db_sid:
                 sys.stderr.write('adding files from %s failed...' % file_list[x]['file'])
@@ -692,7 +706,7 @@ def add_source_file_records(record, file):
             for dfile in files:
                 show_progress()
                 print_verbose('File: %s\n' % dfile)
-                query  = "INSERT INTO files (p_record, s_record, sfile) VALUES ('%s', '%s', '%s')" % (record, db_sid, dfile)
+                query  = "INSERT INTO files (p_record, s_record, sfile) VALUES ('%s', '%s', '%s')" % (record, db_sid, sanitize_string(dfile))
                 result = db_doquery(query)
 
 
@@ -752,9 +766,18 @@ def package_add_record(tag, file, type):
         arch    = tlist[4].strip()
 
     if type == 'binary':
-        query = "SELECT p_tag, p_package, p_version, p_release, p_arch FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (tag, package, version, release, arch)
+        query = "SELECT p_tag, p_package, p_version, p_release, p_arch FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (
+            sanitize_string(tag),
+            sanitize_string(package),
+            sanitize_string(version),
+            sanitize_string(release),
+            sanitize_string(arch))
     else:
-        query = "SELECT p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag, package, version, release)
+        query = "SELECT p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (
+            sanitize_string(tag),
+            sanitize_string(package),
+            sanitize_string(version),
+            sanitize_string(release))
     result = db_fetchall(query)
     if result:
         if type == 'binary':
@@ -764,13 +787,24 @@ def package_add_record(tag, file, type):
         return(0)
 
     if type == 'binary':
-        query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate, arch)
+        query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
+            sanitize_string(tag),
+            sanitize_string(package),
+            sanitize_string(version),
+            sanitize_string(release),
+            sanitize_string(pdate),
+            sanitize_string(arch))
     else:
-        query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s')" % (tag, package, version, release, pdate)
+        query  = "INSERT INTO packages (p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s')" % (
+            sanitize_string(tag),
+            sanitize_string(package),
+            sanitize_string(version),
+            sanitize_string(release),
+            sanitize_string(pdate))
     result = db_doquery(query)
     show_progress(path)
 
-    query  = "SELECT p_record FROM packages WHERE p_tag = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag, package)
+    query  = "SELECT p_record FROM packages WHERE p_tag = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (sanitize_string(tag), sanitize_string(package))
     result = db_fetchone(query)
     if result:
             return(result)
@@ -818,12 +852,12 @@ def run_binary_query(qstring, type):
 
 
     if options.ignorecase:
-        query = query + "LIKE '%" + qstring + "%'"
+        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
     else:
-        query = query + "LIKE '%" + qstring + "%'"
+        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
 
     if options.tag:
-        query = query + " AND p_tag = '" + options.tag + "'"
+        query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
 
     query  = query + " ORDER BY p_tag, p_package, " + type
     result = db_fetchall(query)
