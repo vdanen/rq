@@ -548,6 +548,10 @@ def rpm_list(file):
     print_debug('in rpm_list(%s)' % file)
 
     list  = commands.getoutput("rpm -qlvp --nosignature " + file)
+
+    if list == '(contains no files)' or list == '':
+        return False
+
     list  = list.splitlines()
     rlist = {}
     count = 0
@@ -630,6 +634,9 @@ def add_file_records(record, file):
 
     file_list = rpm_list(file)
 
+    if not file_list:
+        return
+
     for x in file_list.keys():
         show_progress()
         if options.verbose:
@@ -651,6 +658,9 @@ def add_source_records(record, file):
     print_debug('in add_source_records(%s, %s)' % (record, file))
 
     file_list = rpm_list(file)
+
+    if not file_list:
+        return
 
     for x in file_list.keys():
         print_debug('processing source: ' + file_list[x]['file'])
