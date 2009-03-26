@@ -14,12 +14,12 @@ from glob import glob
 
 re_srpm    = re.compile(r'\.src\.rpm$')
 re_brpm    = re.compile(r'\.rpm$')
-re_patch   = re.compile(r'\.(patch.bz2|patch.gz|patch)$') # should handle diff and dif
-re_tar     = re.compile(r'\.(tar.bz2|tar.gz|tar)$')
+re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
+re_tar     = re.compile(r'\.(tar)(\.bz2|\.gz)?$')
 re_targz   = re.compile(r'\.tar\.gz$')
 re_tarbz   = re.compile(r'\.tar\.bz2$')
-re_patchgz = re.compile(r'\.patch\.gz$') # should also handle diff and dif
-re_patchbz = re.compile(r'\.patch\.bz2$')
+re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
+re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
 
 def db_connect(type):
@@ -124,6 +124,8 @@ def db_doquery(query):
     """
     print_debug('  in db_doquery()')
     print_debug('  => query is: %s' % query)
+
+    #query = re.sub('''(['"])''', r'\\\1', query)
 
     try:
         cursor = db.cursor()
@@ -892,7 +894,7 @@ def run_source_query(qstring, type):
     """
     Function to run the query for source RPMs
     """
-    print_debug('in run_source_query(%s, %s)' % qstring)
+    print_debug('in run_source_query(%s, %s)' % (qstring, type))
     # XXX: TODO
 
 
@@ -926,7 +928,7 @@ if __name__ == '__main__':
     if rq_type == 'binary':
         p.add_option('-o', '--ownership', dest="ownership", default=False, action="store_true", help="Display ownership information on files")
     if rq_type == 'source':
-        p.add_option('-p', '--patch', dest="path", default=False, action="store_true", help="List patched files")
+        p.add_option('-p', '--patch', dest="patch", default=False, action="store_true", help="List patched files")
     p.add_option('-P', '--progress', dest="progress", default=False, action="store_true", help="Show processing progress")
     p.add_option('-Q', '--quiet', dest="quiet", default=False, action="store_true", help="Quiet query - show tag and package name only (or numeric count only)")
     if rq_type == 'source':
@@ -1018,7 +1020,10 @@ if __name__ == '__main__':
         if rq_type == 'binary':
             run_binary_query(options.query, 'files')
         elif rq_type == 'source':
-            run_source_query(options.query)
+            if options.sourceonly:
+                run_source_query(options.query, 'source')   # search sources only (no patches)
+            else:
+                run_source_query(options.query, 'files')    # search everything
         sys.exit(0)
 
     if rq_type == 'binary':
