@@ -5,6 +5,8 @@ a database for later querying.
 
 based on the srpm script of similar function copyright (c) 2005 Stew Benedict <sbenedict@mandriva.com>
 copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
+
+$Id$
 """
 
 import optparse, os, sys, re, datetime, commands, shutil, tempfile
@@ -139,8 +141,12 @@ def sanitize_string(string):
     String to cleanup a string to remove characters that will cause problems
     with the database
     """
-    # escape single and double quotes
-    new_string = re.sub('''(['"])''', r'\\\1', string)
+    print_debug('  in sanitize_string(%s)' % string)
+    if string:
+        # escape single and double quotes
+        new_string = re.sub('''(['";])''', r'\\\1', string)
+    else:
+        new_string = None
     return(new_string)
 
 
@@ -372,6 +378,20 @@ def show_progress(prefix=False):
             return
 
 
+def tag_lookup(tag):
+    """
+    Function to see if a tag exists
+    """
+    print_debug('in tag_lookup(%s)' % tag)
+
+    query  = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    result = db_fetchone(query)
+    if result:
+        return True
+    else:
+        return False
+
+
 def tag_check(tag, file):
     """
     Function to check for the existence of tags
@@ -382,9 +402,8 @@ def tag_check(tag, file):
         path = os.path.abspath(os.path.dirname(file))
     else:
         path = os.path.abspath(file)
-    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    result = db_fetchone(query)
-    if result:
+
+    if tag_lookup(tag):
         print_debug('Tag (%s) already exists in the database with path: %s' % (tag, result))
         return True
     else:
@@ -852,6 +871,10 @@ def run_binary_query(qstring, type):
     """
     print_debug('in run_binary_query(%s, %s)' % (qstring, type))
 
+    if options.tag and not tag_lookup(options.tag):
+        print 'Tag %s is not a known tag!\n' % options.tag
+        sys.exit(1)
+
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
 
@@ -939,6 +962,10 @@ def run_source_query(qstring, type):
     Function to run the query for source RPMs
     """
     print_debug('in run_source_query(%s, %s)' % (qstring, type))
+
+    if options.tag and not tag_lookup(options.tag):
+        print 'Tag %s is not a known tag!\n' % options.tag
+        sys.exit(1)
     # XXX: TODO
 
 
