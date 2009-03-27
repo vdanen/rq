@@ -387,7 +387,7 @@ def tag_lookup(tag):
     query  = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
     result = db_fetchone(query)
     if result:
-        return True
+        return(result)
     else:
         return False
 
@@ -403,8 +403,10 @@ def tag_check(tag, file):
     else:
         path = os.path.abspath(file)
 
-    if tag_lookup(tag):
-        print_debug('Tag (%s) already exists in the database with path: %s' % (tag, result))
+    tpath = tag_lookup(tag)
+
+    if tpath:
+        print_debug('Tag (%s) already exists in the database with path: %s' % (tag, tpath))
         return True
     else:
         print_debug('Tag or path does NOT exist in the database')
@@ -1139,12 +1141,9 @@ if __name__ == '__main__':
     if rq_type == 'binary':
         group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
     p.add_option_group(group)
-    (options, arguments) = p.parse_args()
+    (options, arguments) = p.parse_args()       # 'arguments' is a tuple of non-optioned things
 
     if len(sys.argv) == 1:      # no arguments passed
-        p.print_help()
-        sys.exit(0)
-    if len(arguments) == 1:     # not enough arguments
         p.print_help()
         sys.exit(0)
 
@@ -1208,7 +1207,7 @@ if __name__ == '__main__':
         if rq_type == 'binary':
             run_binary_query(options.query, 'files')
         elif rq_type == 'source':
-            run_source_query(options.query)   # search sources only (no patches)
+            run_source_query(options.query)
         sys.exit(0)
 
     if rq_type == 'binary':
@@ -1220,9 +1219,10 @@ if __name__ == '__main__':
             run_binary_query(options.requires, 'requires')
             sys.exit(0)
 
-    if options.src_examine:
-        run_source_examine(options.src_examine)
-        sys.exit(0)
+    if rq_type == 'source':
+        if options.src_examine:
+            run_source_examine(options.src_examine)
+            sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
     # have a new tag?  or can we add it (despite the path) to an existing tag?
@@ -1237,9 +1237,18 @@ if __name__ == '__main__':
         print_debug('havetag is: %s' % havetag)
 
         if not havetag:
-            tag_add_record(options.tag, options.addfile)
+            sys.stderr.write('The --add option requires an existing tag entry!\n')
+            sys.exit(1)
 
-        record_add(options.tag, options.addfile, rq_type)
+        addfiles = []
+        addfiles.append(options.addfile)
+
+        if len(arguments) > 0:
+            addfiles.extend(arguments)
+
+        for afile in addfiles:
+            record_add(options.tag, afile, rq_type)
+
         sys.exit(0)
 
     if options.createpath:
