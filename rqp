@@ -1034,26 +1034,23 @@ def run_source_query(qstring):
             if options.debug:
                 print row
             else:
-                srpm  = '%s-%s-%s.src.rpm' % (fromdb_rpm, fromdb_ver, fromdb_rel)
-
-                if not srpm == lsrc:
-                    if not options.suppresstag:
-                        sys.stdout.write('%-5s%-10s SRPM: ' % ("Tag:", fromdb_tag))
-                    sys.stdout.write('%s\n' % srpm)
-
-                stype = 'Source'
+                srpm  = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
+                stype = 'source'
 
                 if options.quiet:
                     lsrc = srpm
+                    sys.stdout.write('%s\n' % srpm)
                 else:
                     if fromdb_type == 'P':
-                        stype = 'Patch'
+                        stype = 'patch'
                     if options.extrainfo:
                         rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
+                        print '\n%-16s%-30s' % (stype.title() + " File:", fromdb_file)
+                        print '%-16s%-30s' % ("Source Path:", fromdb_sfile)
                         print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                         print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
-                    print '%-16s%-30s' % (stype + " File:", fromdb_file)
-                    print '%-16s%-30s\n' % ("Source Path:", fromdb_sfile)
+                    else:
+                        sys.stdout.write('%s: (%s) %s: %s\n' % (srpm, stype, fromdb_file, fromdb_sfile))
 
     else:
         if options.tag:
