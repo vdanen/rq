@@ -221,7 +221,7 @@ def tag_delete_entries(tag, type='binary'):
         print 'No matching tag found for entry %s!\n' % tag
         sys.exit(1)
     else:
-        print_verbose('Remove %s from Tags...\n' % tag)
+        print 'Removing tag (%s) from Tags...\n' % tag
         query = "DELETE FROM tags WHERE tag = '%s'" % sanitize_string(tag)
         db_doquery(query)
 
@@ -957,16 +957,91 @@ def run_binary_query(qstring, type):
             print 'No matches in database for substring (%s)' % qstring
 
 
-def run_source_query(qstring, type):
+def run_source_query(qstring):
     """
     Function to run the query for source RPMs
     """
-    print_debug('in run_source_query(%s, %s)' % (qstring, type))
+    print_debug('in run_source_query(%s)' % qstring)
 
     if options.tag and not tag_lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
-    # XXX: TODO
+
+    if not options.quiet:
+        print 'Searching database records for substring match (%s)' % qstring
+
+    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, sfile FROM files JOIN sources ON (sources.p_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE sfile "
+
+    if options.ignorecase:
+        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
+    else:
+        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
+
+    if options.sourceonly:
+        query = query + " AND s_type = 'S'"
+
+    if options.tag:
+        query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
+
+    query  = query + " ORDER BY p_tag, p_package, s_type, s_file, sfile"
+    result = db_fetchall(query)
+    if result:
+        if options.count:
+            if options.quiet:
+                print len(result)
+            else:
+                if options.tag:
+                    print '%d match(es) in database for tag (%s) and substring (%s)' % (len(result), options.tag, qstring)
+                else:
+                    print '%d match(es) in database for substring (%s)' % (len(result), qstring)
+            return
+
+        ltag = ''
+        lsrc = ''
+        for row in result:
+            # for readability
+            fromdb_tag   = row[0]
+            fromdb_rpm   = row[1]
+            fromdb_ver   = row[2]
+            fromdb_rel   = row[3]
+            fromdb_date  = row[4]
+            fromdb_type  = row[5]
+            fromdb_file  = row[6]
+            fromdb_sfile = row[7]
+
+            if not ltag == fromdb_tag:
+                print '\nResults in Tag: %s\n' % fromdb_tag
+                ltag = fromdb_tag
+
+            if options.debug:
+                print row
+            else:
+                srpm  = '%s-%s-%s.src.rpm' % (fromdb_rpm, fromdb_ver, fromdb_rel)
+
+                if not srpm == lsrc:
+                    if not options.suppresstag:
+                        sys.stdout.write('%-5s%-10s SRPM: ' % ("Tag:", fromdb_tag))
+                    sys.stdout.write('%s\n' % srpm)
+
+                stype = 'Source'
+
+                if options.quiet:
+                    lsrc = srpm
+                else:
+                    if fromdb_type == 'P':
+                        stype = 'Patch'
+                    if options.extrainfo:
+                        rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
+                        print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
+                        print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
+                    print '%-16s%-30s' % (stype + " File:", fromdb_file)
+                    print '%-16s%-30s\n' % ("Source Path:", fromdb_sfile)
+
+    else:
+        if options.tag:
+            print 'No matches in database for tag (%s) and substring (%s)' % (options.tag, qstring)
+        else:
+            print 'No matches in database for substring (%s)' % qstring
 
 
 if __name__ == '__main__':
@@ -1093,10 +1168,7 @@ if __name__ == '__main__':
         if rq_type == 'binary':
             run_binary_query(options.query, 'files')
         elif rq_type == 'source':
-            if options.sourceonly:
-                run_source_query(options.query, 'source')   # search sources only (no patches)
-            else:
-                run_source_query(options.query, 'files')    # search everything
+            run_source_query(options.query)   # search sources only (no patches)
         sys.exit(0)
 
     if rq_type == 'binary':
