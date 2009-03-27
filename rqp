@@ -1028,8 +1028,10 @@ if __name__ == '__main__':
 
     if len(sys.argv) == 1:      # no arguments passed
         p.print_help()
-    if len(arguments) == 1:
+        sys.exit(0)
+    if len(arguments) == 1:     # not enough arguments
         p.print_help()
+        sys.exit(0)
 
     # setup the options
     if rq_type == 'binary':
@@ -1134,3 +1136,7 @@ if __name__ == '__main__':
         sys.stdout.write('Searching for rpms to import...\n\n')
         rpm_add_directory(options.tag, createpath, rq_type)
         sys.exit(0)
+
+    # if we get here, we have completely invalid arguments
+    p.print_help()
+    sys.exit(0)
