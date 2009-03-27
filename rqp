@@ -697,7 +697,7 @@ def add_source_records(record, file):
 
         if options.verbose:
             print 'Source: %s, Type: %s' % (file_list[x]['file'], stype)
-        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(file_list[x]['file'].strip()))
+        query  = "INSERT INTO sources (s_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(file_list[x]['file'].strip()))
         result = db_doquery(query)
 
 
@@ -726,7 +726,7 @@ def add_source_file_records(record, file):
             files = flist.split()
 
             # get the s_record for this source from the db
-            query  = "SELECT s_id FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file_list[x]['file']))
+            query  = "SELECT s_id FROM sources WHERE s_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file_list[x]['file']))
             db_sid = db_fetchone(query)
             if not db_sid:
                 sys.stderr.write('adding files from %s failed...' % file_list[x]['file'])
@@ -735,7 +735,7 @@ def add_source_file_records(record, file):
             for dfile in files:
                 show_progress()
                 print_verbose('File: %s\n' % dfile)
-                query  = "INSERT INTO files (p_record, s_record, sfile) VALUES ('%s', '%s', '%s')" % (record, db_sid, sanitize_string(dfile))
+                query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_sid, sanitize_string(dfile))
                 result = db_doquery(query)
 
 
@@ -970,7 +970,7 @@ def run_source_query(qstring):
     if not options.quiet:
         print 'Searching database records for substring match (%s)' % qstring
 
-    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, sfile FROM files JOIN sources ON (sources.p_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE sfile "
+    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.p_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
 
     if options.ignorecase:
         query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
@@ -983,7 +983,7 @@ def run_source_query(qstring):
     if options.tag:
         query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
 
-    query  = query + " ORDER BY p_tag, p_package, s_type, s_file, sfile"
+    query  = query + " ORDER BY p_tag, p_package, s_type, s_file, f_file"
     result = db_fetchall(query)
     if result:
         if options.count:
