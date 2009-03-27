@@ -342,8 +342,29 @@ def showdbstats(type):
     query   = "SELECT count(*) FROM files"
     c_files = db_fetchone(query)
 
+    # get the size of the database as well
+    size   = 0.00
+    query  = "SHOW TABLE STATUS"
+    tbsize = db_fetchall(query)
+
+    for x in tbsize:
+        size += x[6]    #['Data_length']
+    count = 0
+
+    while size > 1024:
+        size = size / 1024
+        count += 1
+        if count == 1:
+            bytes = 'KB'
+        if count == 2:
+            bytes = 'MB'
+        if count == 3:
+            bytes = 'GB'
+            break
+
     print 'Database statistics:\n'
-    print '   Database => User: %s, Host: %s, Database: %s\n' % (config['username'], config['hostspec'], config['database'])
+    print '   Database  => User: %s, Host: %s, Database: %s' % (config['username'], config['hostspec'], config['database'])
+    print '   Data size => %2.2f %s\n' % (size, bytes)
     print '   Tag records : %-15d Package records : %-15d' % (c_tags, c_pkgs)
     if type == 'binary':
         print '   File records: %-15d Requires records: %-15d' % (c_files, c_reqs)
