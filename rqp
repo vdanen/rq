@@ -762,7 +762,7 @@ def tar_list(file):
     if re_tarbz.search(file):
         comp = 'tjf'
 
-    list = commands.getoutput("tar -%s %s 2>/dev/null" % (comp, file))
+    list = commands.getoutput("tar -%s %s --exclude-vcs --exclude=.svn 2>/dev/null" % (comp, file))
 
     return(list)
 
