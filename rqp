@@ -141,7 +141,7 @@ def sanitize_string(string):
     String to cleanup a string to remove characters that will cause problems
     with the database
     """
-    print_debug('  in sanitize_string(%s)' % string)
+    #print_debug('  in sanitize_string(%s)' % string)
     if string:
         # escape single and double quotes
         new_string = re.sub('''(['";])''', r'\\\1', string)
@@ -465,21 +465,25 @@ def record_add(tag, file, type):
     if not record:
         return
 
+    file_list = rpm_list(file)
+    if not file_list:
+        return
+
     if type == 'binary':
         print_debug('Add file records for package record: %s' % record)
-        add_file_records(record, file)
+        add_file_records(record, file_list)
         add_file_requires(record, file)
         add_file_provides(record, file)
 
     if type == 'source':
         print_debug('Add source records for package record: %s' % record)
-        add_source_records(record, file)
+        add_source_records(record, file_list)
         cpio_dir = tempfile.mkdtemp()
         try:
             current_dir = os.getcwd()
             os.chdir(cpio_dir)
             source_get_all_files(file)
-            add_source_file_records(record, file)
+            add_source_file_records(record, file_list)
             os.chdir(current_dir)
         finally:
             print_debug('Removing temporary directory: %s...' % cpio_dir)
@@ -645,16 +649,11 @@ def rpm_add_directory(tag, path, type='binary'):
         record_add(tag, file, type)
 
 
-def add_file_records(record, file):
+def add_file_records(record, file_list):
     """
     Function to add file records
     """
-    print_debug('in add_file_records(%s, %s)' % (record, file))
-
-    file_list = rpm_list(file)
-
-    if not file_list:
-        return
+    print_debug('in add_file_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
         show_progress()
@@ -670,16 +669,11 @@ def add_file_records(record, file):
         result = db_doquery(query)
 
 
-def add_source_records(record, file):
+def add_source_records(record, file_list):
     """
     Function to add source records
     """
-    print_debug('in add_source_records(%s, %s)' % (record, file))
-
-    file_list = rpm_list(file)
-
-    if not file_list:
-        return
+    print_debug('in add_source_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
         print_debug('processing source: ' + file_list[x]['file'])
@@ -697,17 +691,15 @@ def add_source_records(record, file):
 
         if options.verbose:
             print 'Source: %s, Type: %s' % (file_list[x]['file'], stype)
-        query  = "INSERT INTO sources (s_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(file_list[x]['file'].strip()))
+        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(file_list[x]['file'].strip()))
         result = db_doquery(query)
 
 
-def add_source_file_records(record, file):
+def add_source_file_records(record, file_list):
     """
     Function to add all source file records
     """
-    print_debug('in add_source_file_records(%s, %s)' % (record, file))
-
-    file_list = rpm_list(file)
+    print_debug('in add_source_file_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
         good_src = False
@@ -726,16 +718,16 @@ def add_source_file_records(record, file):
             files = flist.split()
 
             # get the s_record for this source from the db
-            query  = "SELECT s_id FROM sources WHERE s_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file_list[x]['file']))
-            db_sid = db_fetchone(query)
-            if not db_sid:
+            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file_list[x]['file']))
+            db_srec = db_fetchone(query)
+            if not db_srec:
                 sys.stderr.write('adding files from %s failed...' % file_list[x]['file'])
                 sys.exit(1)
 
             for dfile in files:
                 show_progress()
                 print_verbose('File: %s\n' % dfile)
-                query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_sid, sanitize_string(dfile))
+                query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
                 result = db_doquery(query)
 
 
@@ -970,7 +962,7 @@ def run_source_query(qstring):
     if not options.quiet:
         print 'Searching database records for substring match (%s)' % qstring
 
-    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.p_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
+    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
 
     if options.ignorecase:
         query = query + "LIKE '%" + sanitize_string(qstring) + "%'"

@@ -21,11 +21,11 @@ SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 
 DROP TABLE IF EXISTS `files`;
 CREATE TABLE `files` (
-  `f_id` INT NOT NULL auto_increment,
+  `f_record` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `s_record` INT NOT NULL,
   `f_file` TEXT NOT NULL,
-  PRIMARY KEY  (`f_id`),
+  PRIMARY KEY  (`f_record`),
   KEY `rec` USING BTREE (`p_record`),
   KEY `source` USING BTREE (`s_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1 ;
@@ -55,11 +55,11 @@ CREATE TABLE IF NOT EXISTS `packages` (
 
 DROP TABLE IF EXISTS `sources`;
 CREATE TABLE IF NOT EXISTS `sources` (
-  `s_id` INT NOT NULL auto_increment,
-  `s_record` INT NOT NULL,
+  `s_record` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
   `s_type` varchar(1) NOT NULL,
   `s_file` text NOT NULL,
-  PRIMARY KEY  (`s_id`),
+  PRIMARY KEY  (`s_record`),
   KEY `rec` USING BTREE (`s_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
