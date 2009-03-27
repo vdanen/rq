@@ -564,7 +564,7 @@ def add_file_provides(record, file):
             result = db_doquery(query)
 
 
-def rpm_list(file):
+def rpm_list(file, raw=False):
     """
     Function to get the list of files in an RPM
     """
@@ -574,6 +574,9 @@ def rpm_list(file):
 
     if list == '(contains no files)' or list == '':
         return False
+
+    if raw:
+        return(list)
 
     list  = list.splitlines()
     rlist = {}
@@ -1036,6 +1039,51 @@ def run_source_query(qstring):
             print 'No matches in database for substring (%s)' % qstring
 
 
+def run_source_examine(file):
+    """
+    Examine a src.rpm and output the details
+    """
+    print_debug('in run_source_examine(%s)' % file)
+
+    file_rpm_check(file, 'source')
+
+    file = path = os.path.abspath(file)
+
+    print 'Examining %s...\n' % file
+
+    # stage 1, list the rpm content
+    src_list = rpm_list(file, raw=True)
+    print 'SRPM Contents:\n%s\n' % src_list
+
+    file_list = rpm_list(file)
+
+    cpio_dir = tempfile.mkdtemp()
+    try:
+        current_dir = os.getcwd()
+        os.chdir(cpio_dir)
+
+        # stage 2, list patched files
+        if options.patch:
+            source_get_patch_files(file)
+            for x in file_list.keys():
+                if re_patch.search(file_list[x]['file']):
+                    plist = patch_list(file_list[x]['file'])
+                    print 'Patch file %s modifies:\n%s\n' % (file_list[x]['file'], plist)
+
+        # stage 3, list the tarball contents
+        if not options.skiptar:
+            source_get_tar_files(file)
+            for y in file_list.keys():
+                if re_tar.search(file_list[y]['file']):
+                    tlist = tar_list(file_list[y]['file'])
+                    print 'Tarfile %s contents:\n%s\n' % (file_list[y]['file'], tlist)
+
+        os.chdir(current_dir)
+    finally:
+        print_debug('Removing temporary directory: %s...' % cpio_dir)
+        shutil.rmtree(cpio_dir)
+
+
 if __name__ == '__main__':
     """
     The main program
@@ -1066,11 +1114,11 @@ if __name__ == '__main__':
     if rq_type == 'binary':
         p.add_option('-o', '--ownership', dest="ownership", default=False, action="store_true", help="Display ownership information on files")
     if rq_type == 'source':
-        p.add_option('-p', '--patch', dest="patch", default=False, action="store_true", help="List patched files")
+        p.add_option('-p', '--patch', dest="patch", default=False, action="store_true", help="List patched files when examining a src.rpm")
     p.add_option('-P', '--progress', dest="progress", default=False, action="store_true", help="Show processing progress")
     p.add_option('-Q', '--quiet', dest="quiet", default=False, action="store_true", help="Quiet query - show tag and package name only (or numeric count only)")
     if rq_type == 'source':
-        p.add_option('-s', '--skip-tar', dest="skiptar", default=False, action="store_true", help="Skip tarfile extract")
+        p.add_option('-s', '--skip-tar', dest="skiptar", default=False, action="store_true", help="Skip tarfile extract when examining a src.rpm")
         p.add_option('-S', '--source-only', dest="sourceonly", default=False, action="store_true", help="Limit query to source files (no patches)")
     p.add_option('-T', '--suppresstag', dest="suppresstag", default=False, action="store_true", help="Suppress Tag and Path label output for queries") # was only in rqs -- why?
     p.add_option('-x', '--statistics', dest="stats", default=False, action="store_true", help="Show database statistics")
@@ -1171,6 +1219,10 @@ if __name__ == '__main__':
         if options.requires:
             run_binary_query(options.requires, 'requires')
             sys.exit(0)
+
+    if options.src_examine:
+        run_source_examine(options.src_examine)
+        sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
     # have a new tag?  or can we add it (despite the path) to an existing tag?
