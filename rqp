@@ -531,8 +531,9 @@ def source_get_tar_files(file):
     """
     print_debug('in source_get_tar_files(%s)' % file)
 
-    command = 'rpm2cpio %s | cpio -i --quiet "*.tar.?z*" 2>/dev/null' % file
+    command = 'rpm2cpio "%s" | cpio -i --quiet "*.tar.?z*" 2>/dev/null' % file
     (rc, output) = commands.getstatusoutput(command)
+    print_debug('called cpio (rc=%s): %s' % (rc, command))
 
     if not rc == 0:
         sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
@@ -547,6 +548,7 @@ def source_get_patch_files(file):
 
     command = 'rpm2cpio %s | cpio -i --quiet "*patch*" 2>/dev/null' % file
     (rc, output) = commands.getstatusoutput(command)
+    print_debug('called cpio (rc=%s): %s' % (rc, output))
 
     if not rc == 0:
         sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
@@ -751,10 +753,13 @@ def add_source_file_records(record, file_list):
                 sys.exit(1)
 
             for dfile in files:
-                show_progress()
-                print_verbose('File: %s\n' % dfile)
-                query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
-                result = db_doquery(query)
+                if dfile.endswith('/'):     # skip directories
+                    pass
+                else:
+                    show_progress()
+                    print_verbose('File: %s\n' % dfile)
+                    query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
+                    result = db_doquery(query)
 
 
 def patch_list(file):
@@ -788,7 +793,10 @@ def tar_list(file):
     if re_tarbz.search(file):
         comp = 'tjf'
 
-    list = commands.getoutput("tar -%s %s --exclude-vcs --exclude=.svn 2>/dev/null" % (comp, file))
+    command = 'tar -%s "%s" --exclude=.svn --exclude=CVS --exclude=AUTHORS --exclude=Makefile --exclude=ChangeLog --exclude=COPYING --exclude=TODO 2>/dev/null' % (comp, file)
+
+    (rc, list) = commands.getstatusoutput(command)
+    print_debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
 
     return(list)
 
