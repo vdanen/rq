@@ -10,7 +10,7 @@ $Id$
 """
 
 import optparse, os, sys, re, datetime, commands, shutil, tempfile
-import MySQLdb
+import MySQLdb, MySQLdb.cursors
 from glob import glob
 #import MySQLdb.connect
 
@@ -24,11 +24,17 @@ re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
 re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
 
-def db_connect(type):
+def db_connect(type, config):
     """
-    Function to connect to the database
+    function db_connect(type, config)
+
+    Function to connect to the database.  It requires two arguments: type is
+    'source' or 'binary' to know which database we are working with and config
+    is the database configuration information.  It returns two objects: the db
+    object for connecting to the database and a modified config list that has
+    the appropriate database name (for whether it is called with type 'source'
+    or type 'binary').
     """
-    global config
 
     if config['hostspec'] == '':
         sys.stderr.write('Missing hostspec in the configuration!\n')
@@ -60,16 +66,19 @@ def db_connect(type):
         db = MySQLdb.connect(host=config['hostspec'],
                              user=config['username'],
                              passwd=config['password'],
-                             db=config['database'])
+                             db=config['database'],
+                             cursorclass=MySQLdb.cursors.DictCursor)
     except MySQLdb.Error, e:
         sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
         sys.exit(1)
 
-    return db
+    return (db, config)
 
 
 def db_close():
     """
+    function db_close()
+
     Function to close connections to the database
     """
     db.commit()
@@ -78,7 +87,12 @@ def db_close():
 
 def db_fetchall(query):
     """
-    Function to perform database queries
+    function db_fetchall(query)
+
+    Function to perform database queries.  It takes one argument, the query to
+    execute (a SELECT statement), and returns the results of the query if the
+    query was successful, returns False if not.  This function is meant to be
+    used with multi-result queries.
     """
     print_debug('  in db_fetchall()')
     print_debug('  => query is: %s' % query)
@@ -101,7 +115,12 @@ def db_fetchall(query):
 
 def db_fetchone(query):
     """
-    Function to perform a single database query
+    function db_fetchone(query)
+
+    Function to perform database queries.  It takes one argument, the query to
+    execute (a SELECT statement), and returns the results of the query if the
+    query was successful, returns False if not.  This function is meant to be
+    used with single-result queries.
     """
     print_debug('  in db_fetchone()')
     print_debug('  => query is: %s' % query)
@@ -112,7 +131,8 @@ def db_fetchone(query):
         results = cursor.fetchone()
         cursor.close()
         if results:
-            return results[0]
+            key = results.keys()
+            return(results[key[0]])
         else:
             return False
     except MySQLdb.Error, e:
@@ -198,7 +218,7 @@ def tag_list():
     results = db_fetchall(query)
     if results:
         for row in results:
-            print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row[0], row[2], row[1])
+            print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row['tag'], row['tdate'], row['path'])
     else:
         print 'No tags exist in the database!\n'
 
@@ -229,7 +249,7 @@ def tag_delete_entries(tag, type='binary'):
         result = db_fetchall(query)
         if result:
             for row in result:
-                to_remove.append(row[0])
+                to_remove.append(row['p_record'])
 
         nrecs = len(to_remove)
         if nrecs > 0:
@@ -274,16 +294,16 @@ def tag_update_entries(tag, type='binary'):
     if path:
         print_verbose('Update tag (%s) entries from %s...' % (tag, path))
         # get the existing entries
-        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_vesion, p_release FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
+        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
         result = db_fetchall(query)
         for row in result:
-            pname = '%s-%s-%s.src.rpm' % (row[3], row[4], row[5])
+            pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
             print_verbose('Checking for %s in %s...' % (pname, path))
             if os.path.isfile(pname):
                 print_verbose('OK')
             else:
                 print_verbose('Missing')
-                to_remove.append(result[0])
+                to_remove.append(result['p_record'])
         src_list = glob(path + "/*.rpm")
         src_list.sort()
         for src_rpm in src_list:
@@ -348,7 +368,7 @@ def showdbstats(type):
     tbsize = db_fetchall(query)
 
     for x in tbsize:
-        size += x[6]    #['Data_length']
+        size += x['Data_length']    #['Data_length']
     count = 0
 
     while size > 1024:
@@ -405,10 +425,10 @@ def tag_lookup(tag):
     """
     print_debug('in tag_lookup(%s)' % tag)
 
-    query  = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    result = db_fetchone(query)
-    if result:
-        return(result)
+    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    path  = db_fetchone(query)
+    if path:
+        return(path)
     else:
         return False
 
@@ -458,9 +478,9 @@ def tag_add_record(tag, file):
     else:
         path = os.path.abspath(file)
     # we can have multiple similar paths, but not multiple similar tags
-    query  = "SELECT tag FROM tags WHERE tag = '%s'" % sanitize_string(tag)
-    result = db_fetchone(query)
-    if result:
+    query = "SELECT tag FROM tags WHERE tag = '%s'" % sanitize_string(tag)
+    dbtag = db_fetchone(query)
+    if dbtag:
         print 'Tag (%s) already exists in the database!\n' % tag
         db_close()
         sys.exit(1)
@@ -859,10 +879,10 @@ def package_add_record(tag, file, type):
     result = db_doquery(query)
     show_progress(path)
 
-    query  = "SELECT p_record FROM packages WHERE p_tag = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (sanitize_string(tag), sanitize_string(package))
-    result = db_fetchone(query)
-    if result:
-            return(result)
+    query    = "SELECT p_record FROM packages WHERE p_tag = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (sanitize_string(tag), sanitize_string(package))
+    p_record = db_fetchone(query)
+    if p_record:
+            return(p_record)
     else:
         print 'Adding file %s failed!\n' % file
         return(0)
@@ -935,17 +955,17 @@ def run_binary_query(qstring, type):
         lsrc = ''
         for row in result:
             # for readability
-            fromdb_tag  = row[0]
-            fromdb_rpm  = row[1]
-            fromdb_ver  = row[2]
-            fromdb_rel  = row[3]
-            fromdb_date = row[4]
-            fromdb_file = row[5]
+            fromdb_tag  = row['p_tag']
+            fromdb_rpm  = row['p_package']
+            fromdb_ver  = row['p_version']
+            fromdb_rel  = row['p_release']
+            fromdb_date = row['p_date']
+            fromdb_file = row[type]
             if type == 'files' and options.ownership:
-                fromdb_user = row[6]
-                fromdb_group = row[7]
-                fromdb_is_suid = row[8]
-                fromdb_is_sgid = row[9]
+                fromdb_user = row['f_user']
+                fromdb_group = row['f_group']
+                fromdb_is_suid = row['f_is_suid']
+                fromdb_is_sgid = row['f_is_sgid']
 
             if not ltag == fromdb_tag:
                 print '\nResults in Tag: %s\n' % fromdb_tag
@@ -1026,14 +1046,14 @@ def run_source_query(qstring):
         lsrc = ''
         for row in result:
             # for readability
-            fromdb_tag   = row[0]
-            fromdb_rpm   = row[1]
-            fromdb_ver   = row[2]
-            fromdb_rel   = row[3]
-            fromdb_date  = row[4]
-            fromdb_type  = row[5]
-            fromdb_file  = row[6]
-            fromdb_sfile = row[7]
+            fromdb_tag   = row['p_tag']
+            fromdb_rpm   = row['p_package']
+            fromdb_ver   = row['p_version']
+            fromdb_rel   = row['p_release']
+            fromdb_date  = row['p_date']
+            fromdb_type  = row['s_type']
+            fromdb_file  = row['s_file']
+            fromdb_sfile = row['f_file']
 
             if not ltag == fromdb_tag:
                 print '\nResults in Tag: %s\n' % fromdb_tag
@@ -1209,7 +1229,7 @@ if __name__ == '__main__':
         sys.stderr.write('\n\nERROR: No configuration file found!\n')
         sys.exit(1)
 
-    db = db_connect(rq_type)
+    (db, config) = db_connect(rq_type, config)
 
     # start doing useful things
     if options.list:
