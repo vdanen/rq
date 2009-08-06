@@ -364,6 +364,7 @@ def showdbstats(type):
 
     # get the size of the database as well
     size   = 0.00
+    bytes  = ''
     query  = "SHOW TABLE STATUS"
     tbsize = db_fetchall(query)
 
