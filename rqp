@@ -308,7 +308,7 @@ def tag_update_entries(tag, type='binary'):
         src_list.sort()
         for src_rpm in src_list:
             print_verbose('Checking for %s in database...' % src_rpm)
-            rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm)
+            rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm.replace(' ', '\ '))
             tlist   = rtags.split('|')
             package = tlist[0].strip()
             version = tlist[1].strip()
@@ -549,16 +549,20 @@ def source_get_all_files(file):
 def source_get_tar_files(file):
     """
     Function to get the tar files from a SRPM
+
+    cpio --quiet is a GNU-ism and isn't portable
     """
     print_debug('in source_get_tar_files(%s)' % file)
 
-    command = 'rpm2cpio "%s" | cpio -i --quiet "*.tar.?z*" 2>/dev/null' % file
-    (rc, output) = commands.getstatusoutput(command)
-    print_debug('called cpio (rc=%s): %s' % (rc, command))
+    exts = ['*.tar.?z*', '*.tgz', '*.tbz', '*.zip']
+    for search in exts:
+        command = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
+        (rc, output) = commands.getstatusoutput(command)
+        print_debug('called cpio (rc=%s): %s' % (rc, command))
 
-    if not rc == 0:
-        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
-        sys.exit(1)
+#    if not rc == 0:
+#        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
+#        sys.exit(1)
 
 
 def source_get_patch_files(file):
@@ -567,13 +571,15 @@ def source_get_patch_files(file):
     """
     print_debug('in source_get_patch_files(%s)' % file)
 
-    command = 'rpm2cpio %s | cpio -i --quiet "*patch*" 2>/dev/null' % file
-    (rc, output) = commands.getstatusoutput(command)
-    print_debug('called cpio (rc=%s): %s' % (rc, output))
+    exts = ['*patch*', '*diff*']
+    for search in exts:
+        command = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
+        (rc, output) = commands.getstatusoutput(command)
+        print_debug('called cpio (rc=%s): %s' % (rc, output))
 
-    if not rc == 0:
-        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
-        sys.exit(1)
+#    if not rc == 0:
+#        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
+#        sys.exit(1)
 
 
 def add_file_requires(record, file):
@@ -582,7 +588,7 @@ def add_file_requires(record, file):
     """
     print_debug('in add_file_requires(%s, %s)' % (record, file))
 
-    list = commands.getoutput("rpm -qp --nosignature --requires " + file + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
+    list = commands.getoutput("rpm -qp --nosignature --requires " + file.replace(' ', '\ ') + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
     list = list.splitlines()
     for dep in list:
         if dep:
@@ -599,7 +605,7 @@ def add_file_provides(record, file):
     """
     print_debug('in add_file_provides(%s, %s)' % (record, file))
 
-    list = commands.getoutput("rpm -qp --nosignature --provides " + file)
+    list = commands.getoutput("rpm -qp --nosignature --provides " + file.replace(' ', '\ '))
     list = list.splitlines()
     for prov in list:
         if prov:
@@ -616,7 +622,7 @@ def rpm_list(file, raw=False):
     """
     print_debug('in rpm_list(%s)' % file)
 
-    list  = commands.getoutput("rpm -qlvp --nosignature " + file)
+    list  = commands.getoutput("rpm -qlvp --nosignature " + file.replace(' ', '\ '))
 
     if list == '(contains no files)' or list == '':
         return False
@@ -797,7 +803,7 @@ def patch_list(file):
     if re_patchbz.search(file):
         grep = 'bzgrep'
 
-    list = commands.getoutput(grep + " '^+++' " + file + " 2>/dev/null | awk '{print $2}'")
+    list = commands.getoutput(grep + " '^+++' " + file.replace(' ', '\ ') + " 2>/dev/null | awk '{print $2}'")
 
     return(list)
 
@@ -814,7 +820,7 @@ def tar_list(file):
     if re_tarbz.search(file):
         comp = 'tjf'
 
-    command = 'tar -%s "%s" --exclude=.svn --exclude=CVS --exclude=AUTHORS --exclude=Makefile --exclude=ChangeLog --exclude=COPYING --exclude=TODO 2>/dev/null' % (comp, file)
+    command = 'tar -%s "%s" --exclude=.svn --exclude=CVS --exclude=AUTHORS --exclude=Makefile --exclude=ChangeLog --exclude=COPYING --exclude=TODO 2>/dev/null' % (comp, file.replace(' ', '\ '))
 
     (rc, list) = commands.getstatusoutput(command)
     print_debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
@@ -830,10 +836,11 @@ def package_add_record(tag, file, type):
 
     path    = os.path.basename(file)
     if type == 'binary':
-        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file)
+        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file.replace(' ', '\ '))
     else:
-        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file)
+        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file.replace(' ', '\ '))
     tlist   = rtags.split('|')
+    print_debug("tlist is %s " % tlist)
     package = tlist[0].strip()
     version = tlist[1].strip()
     release = tlist[2].strip()
