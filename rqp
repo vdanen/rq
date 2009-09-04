@@ -17,9 +17,9 @@ from glob import glob
 re_srpm    = re.compile(r'\.src\.rpm$')
 re_brpm    = re.compile(r'\.rpm$')
 re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
-re_tar     = re.compile(r'\.(tar)(\.bz2|\.gz)?$')
-re_targz   = re.compile(r'\.tar\.gz$')
-re_tarbz   = re.compile(r'\.tar\.bz2$')
+re_tar     = re.compile(r'\.((tar)(\.bz2|\.gz)?|t(gz|bz2?))$')
+re_targz   = re.compile(r'\.(tgz|tar\.gz)$')
+re_tarbz   = re.compile(r'\.(tbz2?|tar\.bz2)$')
 re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
 re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
@@ -731,13 +731,15 @@ def add_source_records(record, file_list):
     print_debug('in add_source_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
-        print_debug('processing source: ' + file_list[x]['file'])
+        # remove any possible paths from source files; may be due to rpm5
+        sfile = file_list[x]['file'].split('/')[-1]
+        print_debug('processing source: ' + sfile)
         show_progress()
         stype = ''
 
-        if re_patch.search(file_list[x]['file']):
+        if re_patch.search(sfile):
             stype = 'P'
-        if re_tar.search(file_list[x]['file']):
+        if re_tar.search(sfile):
             stype = 'S'
 
         # we only care about source and patch files, nothing else
@@ -745,8 +747,8 @@ def add_source_records(record, file_list):
             continue
 
         if options.verbose:
-            print 'Source: %s, Type: %s' % (file_list[x]['file'], stype)
-        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(file_list[x]['file'].strip()))
+            print 'Source: %s, Type: %s' % (sfile, stype)
+        query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(sfile.strip()))
         result = db_doquery(query)
 
 
@@ -758,25 +760,28 @@ def add_source_file_records(record, file_list):
 
     for x in file_list.keys():
         good_src = False
-        print_debug('processing file: ' + file_list[x]['file']) ### DEBUG
+        # file_list may contain paths, so strip them; may be due to rpm5
+        sfile    = file_list[x]['file'].split('/')[-1]
+        print_debug('processing file: ' + sfile) ### DEBUG
 
-        if re_patch.search(file_list[x]['file']):
-            flist = patch_list(file_list[x]['file'])
+        if re_patch.search(sfile):
+            flist = patch_list(sfile)
             good_src = True
 
-        if re_tar.search(file_list[x]['file']):
-            flist = tar_list(file_list[x]['file'])
+        if re_tar.search(sfile):
+            flist = tar_list(sfile)
             good_src = True
 
         # only proceed for tarballs and patches
         if good_src:
+            print_debug('found good file to process: ' + sfile)
             files = flist.split()
 
             # get the s_record for this source from the db
-            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file_list[x]['file']))
+            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(sfile))
             db_srec = db_fetchone(query)
             if not db_srec:
-                sys.stderr.write('adding files from %s failed...' % file_list[x]['file'])
+                sys.stderr.write('adding files from %s failed...' % sfile)
                 sys.exit(1)
 
             for dfile in files:
@@ -787,6 +792,8 @@ def add_source_file_records(record, file_list):
                     print_verbose('File: %s\n' % dfile)
                     query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
                     result = db_doquery(query)
+        else:
+            print_debug('unwilling to process: ' + sfile)
 
 
 def patch_list(file):
