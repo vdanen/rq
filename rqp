@@ -126,7 +126,7 @@ def db_fetchone(query):
     print_debug('  => query is: %s' % query)
 
     try:
-        cursor = db.cursor()
+        cursor  = db.cursor()
         cursor.execute(query)
         results = cursor.fetchone()
         cursor.close()
@@ -202,8 +202,8 @@ def read_config(config_file):
 
         # Split on the first "=", this allows for values to have a "=" in them
         (config_name, config_value) = line.split("=", 1)
-        config_name         = config_name.strip()
-        config[config_name] = config_value
+        config_name                 = config_name.strip()
+        config[config_name]         = config_value
 
     return config
 
@@ -214,7 +214,7 @@ def tag_list():
     """
     print_debug("in tag_list()")
 
-    query = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
+    query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
     results = db_fetchall(query)
     if results:
         for row in results:
@@ -304,8 +304,10 @@ def tag_update_entries(tag, type='binary'):
             else:
                 print_verbose('Missing')
                 to_remove.append(result['p_record'])
+
         src_list = glob(path + "/*.rpm")
         src_list.sort()
+
         for src_rpm in src_list:
             print_verbose('Checking for %s in database...' % src_rpm)
             rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm.replace(' ', '\ '))
@@ -373,7 +375,7 @@ def showdbstats(type):
     count = 0
 
     while size > 1024:
-        size = size / 1024
+        size   = size / 1024
         count += 1
         if count == 1:
             bytes = 'KB'
@@ -523,6 +525,7 @@ def record_add(tag, file, type):
         print_debug('Add source records for package record: %s' % record)
         add_source_records(record, file_list)
         cpio_dir = tempfile.mkdtemp()
+
         try:
             current_dir = os.getcwd()
             os.chdir(cpio_dir)
@@ -556,7 +559,7 @@ def source_get_tar_files(file):
 
     exts = ['*.tar.?z*', '*.tgz', '*.tbz', '*.zip']
     for search in exts:
-        command = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
+        command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
         (rc, output) = commands.getstatusoutput(command)
         print_debug('called cpio (rc=%s): %s' % (rc, command))
 
@@ -573,7 +576,7 @@ def source_get_patch_files(file):
 
     exts = ['*patch*', '*diff*']
     for search in exts:
-        command = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
+        command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
         (rc, output) = commands.getstatusoutput(command)
         print_debug('called cpio (rc=%s): %s' % (rc, output))
 
@@ -634,10 +637,10 @@ def rpm_list(file, raw=False):
     rlist = {}
     count = 0
     for entry in list:
-        print_debug('processing: ' + entry) ### DEBUG
+        print_debug('processing: %s' % entry) ### DEBUG
         is_suid = 0
         is_sgid = 0
-        foo = entry.split()
+        foo     = entry.split()
 
         # this actually really stinks because we are allowed usernames longer
         # than 8 characters, but rpm -qlv will only display the first 8 characters
@@ -654,8 +657,9 @@ def rpm_list(file, raw=False):
             is_suid = 1
         if foo[0][6] == 's':
             is_sgid = 1
+
         rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid}
-        count += 1
+        count       += 1
 
     return(rlist)
 
@@ -762,14 +766,14 @@ def add_source_file_records(record, file_list):
         good_src = False
         # file_list may contain paths, so strip them; may be due to rpm5
         sfile    = file_list[x]['file'].split('/')[-1]
-        print_debug('processing file: ' + sfile) ### DEBUG
+        print_debug('processing file: %s' % sfile) ### DEBUG
 
         if re_patch.search(sfile):
-            flist = patch_list(sfile)
+            flist    = patch_list(sfile)
             good_src = True
 
         if re_tar.search(sfile):
-            flist = tar_list(sfile)
+            flist    = tar_list(sfile)
             good_src = True
 
         # only proceed for tarballs and patches
@@ -793,7 +797,7 @@ def add_source_file_records(record, file_list):
                     query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
                     result = db_doquery(query)
         else:
-            print_debug('unwilling to process: ' + sfile)
+            print_debug('unwilling to process: %s' % sfile)
 
 
 def patch_list(file):
@@ -976,9 +980,10 @@ def run_binary_query(qstring, type):
             fromdb_rel  = row['p_release']
             fromdb_date = row['p_date']
             fromdb_file = row[type]
+
             if type == 'files' and options.ownership:
-                fromdb_user = row['f_user']
-                fromdb_group = row['f_group']
+                fromdb_user    = row['f_user']
+                fromdb_group   = row['f_group']
                 fromdb_is_suid = row['f_is_suid']
                 fromdb_is_sgid = row['f_is_sgid']
 
