@@ -9,7 +9,7 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 $Id$
 """
 
-import optparse, os, sys, re, datetime, commands, shutil, tempfile
+import optparse, os, sys, re, datetime, commands, shutil, tempfile, logging
 import MySQLdb, MySQLdb.cursors
 from glob import glob
 #import MySQLdb.connect
@@ -37,30 +37,30 @@ def db_connect(type, config):
     """
 
     if config['hostspec'] == '':
-        sys.stderr.write('Missing hostspec in the configuration!\n')
+        logging.critical('Missing hostspec in the configuration!')
         sys.exit(1)
     if config['username'] == '':
-        sys.stderr.write('Missing username in the configuration!\n')
+        logging.critical('Missing username in the configuration!')
         sys.exit(1)
     if config['password'] == '':
-        sys.stderr.write('Missing password in the configuration!\n')
+        logging.critical('Missing password in the configuration!')
         sys.exit(1)
 
     if type == 'binary':
         if (config['rpm_database'] == ''):
-            sys.stderr.write('Missing rpm_database in the configuration!\n')
+            logging.critical('Missing rpm_database in the configuration!')
             sys.exit(1)
         else:
             config['database'] = config['rpm_database']
 
     if type == 'source':
         if (config['srpm_database'] == ''):
-            sys.stderr.write('Missing srpm_database in the configuration!\n')
+            logging.critical('Missing srpm_database in the configuration!')
             sys.exit(1)
         else:
             config['database'] = config['srpm_database']
 
-    print_debug('Using host=>%s, user=>%s, db=>%s' % (config['hostspec'], config['username'], config['database']))
+    logging.debug('Using host=>%s, user=>%s, db=>%s' % (config['hostspec'], config['username'], config['database']))
 
     try:
         db = MySQLdb.connect(host=config['hostspec'],
@@ -69,7 +69,7 @@ def db_connect(type, config):
                              db=config['database'],
                              cursorclass=MySQLdb.cursors.DictCursor)
     except MySQLdb.Error, e:
-        sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
+        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
         sys.exit(1)
 
     return (db, config)
@@ -94,8 +94,8 @@ def db_fetchall(query):
     query was successful, returns False if not.  This function is meant to be
     used with multi-result queries.
     """
-    print_debug('  in db_fetchall()')
-    print_debug('  => query is: %s' % query)
+    logging.debug('  in db_fetchall()')
+    logging.debug('  => query is: %s' % query)
 
     try:
         cursor = db.cursor()
@@ -109,7 +109,7 @@ def db_fetchall(query):
         else:
             return False
     except MySQLdb.Error, e:
-        sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
+        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
         sys.exit(1)
 
 
@@ -122,8 +122,8 @@ def db_fetchone(query):
     query was successful, returns False if not.  This function is meant to be
     used with single-result queries.
     """
-    print_debug('  in db_fetchone()')
-    print_debug('  => query is: %s' % query)
+    logging.debug('  in db_fetchone()')
+    logging.debug('  => query is: %s' % query)
 
     try:
         cursor  = db.cursor()
@@ -136,7 +136,7 @@ def db_fetchone(query):
         else:
             return False
     except MySQLdb.Error, e:
-        sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
+        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
         sys.exit(1)
 
 
@@ -144,15 +144,15 @@ def db_doquery(query):
     """
     Function to perform an actual update (UPDATE/INSERT) query (non-SELECT) from the database
     """
-    print_debug('  in db_doquery()')
-    print_debug('  => query is: %s' % query)
+    logging.debug('  in db_doquery()')
+    logging.debug('  => query is: %s' % query)
 
     try:
         cursor = db.cursor()
         cursor.execute(query)
         cursor.close()
     except MySQLdb.Error, e:
-        sys.stderr.write('MySQL error %d: %s\n' % (e.args[0], e.args[1]))
+        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
         sys.exit(1)
 
 
@@ -161,7 +161,7 @@ def sanitize_string(string):
     String to cleanup a string to remove characters that will cause problems
     with the database
     """
-    #print_debug('  in sanitize_string(%s)' % string)
+    #logging.debug('  in sanitize_string(%s)' % string)
     if string:
         # escape single and double quotes
         new_string = re.sub('''(['";])''', r'\\\1', string)
@@ -170,27 +170,11 @@ def sanitize_string(string):
     return(new_string)
 
 
-def print_debug(string):
-    """
-    Function to print debug strings
-    """
-    if options.debug:
-        sys.stderr.write("=> DEBUG: %s\n" % string)
-
-
-def print_verbose(string):
-    """
-    Function to print verbose strings
-    """
-    if options.verbose:
-        sys.stdout.write("%s\n" % string)
-
-
 def read_config(config_file):
     """
     Function to read the configuration file
     """
-    print_debug("in read_config(%s)" % config_file)
+    logging.debug("in read_config(%s)" % config_file)
 
     config = {}
     for line in open(config_file):
@@ -212,7 +196,7 @@ def tag_list():
     """
     Function to show database tags
     """
-    print_debug("in tag_list()")
+    logging.debug("in tag_list()")
 
     query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
     results = db_fetchall(query)
@@ -230,7 +214,7 @@ def tag_delete_entries(tag, type='binary'):
     """
     Function to delete database tags and associated entries
     """
-    print_debug('in tag_delete_entries(%s)' % tag)
+    logging.debug('in tag_delete_entries(%s)' % tag)
 
     to_remove = []
 
@@ -280,7 +264,7 @@ def tag_update_entries(tag, type='binary'):
     """
     function to update entries for a given tag
     """
-    print_debug('in tag_update_entries(%s)' % tag)
+    logging.debug('in tag_update_entries(%s)' % tag)
     #
     # this function is designed for src.rpm handling, but we can update it for binary rpm handling too
     # XXX: TODO
@@ -292,24 +276,24 @@ def tag_update_entries(tag, type='binary'):
     query = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
     path  = db_fetchone(query)
     if path:
-        print_verbose('Update tag (%s) entries from %s...' % (tag, path))
+        logging.info('Update tag (%s) entries from %s...' % (tag, path))
         # get the existing entries
         query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
         result = db_fetchall(query)
         for row in result:
             pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
-            print_verbose('Checking for %s in %s...' % (pname, path))
+            logging.info('Checking for %s in %s...' % (pname, path))
             if os.path.isfile(pname):
-                print_verbose('OK')
+                logging.info('OK')
             else:
-                print_verbose('Missing')
+                logging.info('Missing')
                 to_remove.append(result['p_record'])
 
         src_list = glob(path + "/*.rpm")
         src_list.sort()
 
         for src_rpm in src_list:
-            print_verbose('Checking for %s in database...' % src_rpm)
+            logging.info('Checking for %s in database...' % src_rpm)
             rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm.replace(' ', '\ '))
             tlist   = rtags.split('|')
             package = tlist[0].strip()
@@ -319,15 +303,15 @@ def tag_update_entries(tag, type='binary'):
             query   = "SELECT p_package FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (sanitize_string(tag), sanitize_string(package), sanitize_string(version), sanitize_string(release))
             package = db_fetchone(query)
             if package:
-                print_verbose('OK')
+                logging.info('OK')
             else:
-                print_verbose('Adding')
+                logging.info('Adding')
                 to_add.append(src_rpm)
     else:
         sys.stdout.write('No Tag entry found for tag: %s\n' % tag)
 
     if to_remove:
-        print_verbose('Removing tagged entries for tag: %s...' % tag)
+        logging.info('Removing tagged entries for tag: %s...' % tag)
         if type == 'binary':
             tables = ('packages', 'requires', 'provides', 'files')
         if type == 'source':
@@ -338,7 +322,7 @@ def tag_update_entries(tag, type='binary'):
                 result = db_doquery(query)
 
     if to_add:
-        print_verbose('Adding tagged entries for tag: %s...' % tag)
+        logging.info('Adding tagged entries for tag: %s...' % tag)
         for rpm in to_add:
             record_add(tag, rpm, type)
 
@@ -347,7 +331,7 @@ def showdbstats(type):
     """
     Function to show database info
     """
-    print_debug("in showdbstats(%s)" % type)
+    logging.debug("in showdbstats(%s)" % type)
 
     query   = "SELECT count(*) FROM tags"
     c_tags  = db_fetchone(query)
@@ -426,7 +410,7 @@ def tag_lookup(tag):
     """
     Function to see if a tag exists
     """
-    print_debug('in tag_lookup(%s)' % tag)
+    logging.debug('in tag_lookup(%s)' % tag)
 
     query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
     path  = db_fetchone(query)
@@ -440,7 +424,7 @@ def tag_check(tag, file):
     """
     Function to check for the existence of tags
     """
-    print_debug('in tag_check(%s, %s)' % (tag, file))
+    logging.debug('in tag_check(%s, %s)' % (tag, file))
 
     if os.path.isfile(file):
         path = os.path.abspath(os.path.dirname(file))
@@ -450,10 +434,10 @@ def tag_check(tag, file):
     tpath = tag_lookup(tag)
 
     if tpath:
-        print_debug('Tag (%s) already exists in the database with path: %s' % (tag, tpath))
+        logging.debug('Tag (%s) already exists in the database with path: %s' % (tag, tpath))
         return True
     else:
-        print_debug('Tag or path does NOT exist in the database')
+        logging.debug('Tag or path does NOT exist in the database')
         return False
 
 #        if len(result) > 0:
@@ -471,7 +455,7 @@ def tag_add_record(tag, file):
     """
     Function to add a tag record
     """
-    print_debug('in tag_add_record(%s, %s)' % (tag, file))
+    logging.debug('in tag_add_record(%s, %s)' % (tag, file))
 
     cur_date = datetime.datetime.now()
     cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
@@ -497,13 +481,13 @@ def record_add(tag, file, type):
     """
     Function to add a record to the database
     """
-    print_debug('in record_add(%s, %s, %s)' % (tag, file, type))
+    logging.debug('in record_add(%s, %s, %s)' % (tag, file, type))
 
     if os.path.isfile(file):
         path = os.path.abspath(os.path.dirname(file))
     else:
         path = os.path.abspath(file)
-    print_debug('Path:\t%s' % path)
+    logging.debug('Path:\t%s' % path)
 
     file_rpm_check(file, type)
 
@@ -516,13 +500,13 @@ def record_add(tag, file, type):
         return
 
     if type == 'binary':
-        print_debug('Add file records for package record: %s' % record)
+        logging.debug('Add file records for package record: %s' % record)
         add_file_records(record, file_list)
         add_file_requires(record, file)
         add_file_provides(record, file)
 
     if type == 'source':
-        print_debug('Add source records for package record: %s' % record)
+        logging.debug('Add source records for package record: %s' % record)
         add_source_records(record, file_list)
         cpio_dir = tempfile.mkdtemp()
 
@@ -533,7 +517,7 @@ def record_add(tag, file, type):
             add_source_file_records(record, file_list)
             os.chdir(current_dir)
         finally:
-            print_debug('Removing temporary directory: %s...' % cpio_dir)
+            logging.debug('Removing temporary directory: %s...' % cpio_dir)
             shutil.rmtree(cpio_dir)
 
     if options.progress:
@@ -544,7 +528,7 @@ def source_get_all_files(file):
     """
     Function to get the source and patch files from a SRPM
     """
-    print_debug('in source_get_all_files(%s)' % file)
+    logging.debug('in source_get_all_files(%s)' % file)
     source_get_tar_files(file)
     source_get_patch_files(file)
 
@@ -555,16 +539,16 @@ def source_get_tar_files(file):
 
     cpio --quiet is a GNU-ism and isn't portable
     """
-    print_debug('in source_get_tar_files(%s)' % file)
+    logging.debug('in source_get_tar_files(%s)' % file)
 
     exts = ['*.tar.?z*', '*.tgz', '*.tbz', '*.zip']
     for search in exts:
         command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
         (rc, output) = commands.getstatusoutput(command)
-        print_debug('called cpio (rc=%s): %s' % (rc, command))
+        logging.debug('called cpio (rc=%s): %s' % (rc, command))
 
 #    if not rc == 0:
-#        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
+#        logging.critical('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
 #        sys.exit(1)
 
 
@@ -572,16 +556,16 @@ def source_get_patch_files(file):
     """
     Function to get the patch files from a SRPM
     """
-    print_debug('in source_get_patch_files(%s)' % file)
+    logging.debug('in source_get_patch_files(%s)' % file)
 
     exts = ['*patch*', '*diff*']
     for search in exts:
         command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
         (rc, output) = commands.getstatusoutput(command)
-        print_debug('called cpio (rc=%s): %s' % (rc, output))
+        logging.debug('called cpio (rc=%s): %s' % (rc, output))
 
 #    if not rc == 0:
-#        sys.stderr.write('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
+#        logging.critical('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
 #        sys.exit(1)
 
 
@@ -589,7 +573,7 @@ def add_file_requires(record, file):
     """
     Function to add requires to the database
     """
-    print_debug('in add_file_requires(%s, %s)' % (record, file))
+    logging.debug('in add_file_requires(%s, %s)' % (record, file))
 
     list = commands.getoutput("rpm -qp --nosignature --requires " + file.replace(' ', '\ ') + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
     list = list.splitlines()
@@ -606,7 +590,7 @@ def add_file_provides(record, file):
     """
     Function to add provides to the database
     """
-    print_debug('in add_file_provides(%s, %s)' % (record, file))
+    logging.debug('in add_file_provides(%s, %s)' % (record, file))
 
     list = commands.getoutput("rpm -qp --nosignature --provides " + file.replace(' ', '\ '))
     list = list.splitlines()
@@ -623,7 +607,7 @@ def rpm_list(file, raw=False):
     """
     Function to get the list of files in an RPM
     """
-    print_debug('in rpm_list(%s)' % file)
+    logging.debug('in rpm_list(%s)' % file)
 
     list  = commands.getoutput("rpm -qlvp --nosignature " + file.replace(' ', '\ '))
 
@@ -637,7 +621,7 @@ def rpm_list(file, raw=False):
     rlist = {}
     count = 0
     for entry in list:
-        print_debug('processing: %s' % entry) ### DEBUG
+        logging.debug('processing: %s' % entry) ### DEBUG
         is_suid = 0
         is_sgid = 0
         foo     = entry.split()
@@ -668,7 +652,7 @@ def rpm_add_directory(tag, path, type='binary'):
     """
     Function to import a directory full of RPMs
     """
-    print_debug('in rpm_add_directory(%s, %s, %s)' % (tag, path, type))
+    logging.debug('in rpm_add_directory(%s, %s, %s)' % (tag, path, type))
 
     if not os.path.isdir(path):
         print 'Path (%s) is not a valid directory!' % path
@@ -712,7 +696,7 @@ def add_file_records(record, file_list):
     """
     Function to add file records
     """
-    print_debug('in add_file_records(%s, %s)' % (record, file_list))
+    logging.debug('in add_file_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
         show_progress()
@@ -732,12 +716,12 @@ def add_source_records(record, file_list):
     """
     Function to add source records
     """
-    print_debug('in add_source_records(%s, %s)' % (record, file_list))
+    logging.debug('in add_source_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
         # remove any possible paths from source files; may be due to rpm5
         sfile = file_list[x]['file'].split('/')[-1]
-        print_debug('processing source: ' + sfile)
+        logging.debug('processing source: %s ' % sfile)
         show_progress()
         stype = ''
 
@@ -760,13 +744,13 @@ def add_source_file_records(record, file_list):
     """
     Function to add all source file records
     """
-    print_debug('in add_source_file_records(%s, %s)' % (record, file_list))
+    logging.debug('in add_source_file_records(%s, %s)' % (record, file_list))
 
     for x in file_list.keys():
         good_src = False
         # file_list may contain paths, so strip them; may be due to rpm5
         sfile    = file_list[x]['file'].split('/')[-1]
-        print_debug('processing file: %s' % sfile) ### DEBUG
+        logging.debug('processing file: %s' % sfile) ### DEBUG
 
         if re_patch.search(sfile):
             flist    = patch_list(sfile)
@@ -778,14 +762,14 @@ def add_source_file_records(record, file_list):
 
         # only proceed for tarballs and patches
         if good_src:
-            print_debug('found good file to process: ' + sfile)
+            logging.debug('found good file to process: %s' % sfile)
             files = flist.split()
 
             # get the s_record for this source from the db
             query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(sfile))
             db_srec = db_fetchone(query)
             if not db_srec:
-                sys.stderr.write('adding files from %s failed...' % sfile)
+                logging.critical('adding files from %s failed...' % sfile)
                 sys.exit(1)
 
             for dfile in files:
@@ -793,18 +777,18 @@ def add_source_file_records(record, file_list):
                     pass
                 else:
                     show_progress()
-                    print_verbose('File: %s\n' % dfile)
+                    logging.info('File: %s\n' % dfile)
                     query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
                     result = db_doquery(query)
         else:
-            print_debug('unwilling to process: %s' % sfile)
+            logging.debug('unwilling to process: %s' % sfile)
 
 
 def patch_list(file):
     """
     Function to get a list of files that a patch touches
     """
-    print_debug('in patch_list(%s)' % file)
+    logging.debug('in patch_list(%s)' % file)
 
     grep = 'grep'
 
@@ -823,7 +807,7 @@ def tar_list(file):
     """
     Function to get a list of files in a tarball
     """
-    print_debug('in tar_list(%s)' % file)
+    logging.debug('in tar_list(%s)' % file)
 
     comp = 'tf'
     if re_targz.search(file):
@@ -834,7 +818,7 @@ def tar_list(file):
     command = 'tar -%s "%s" --exclude=.svn --exclude=CVS --exclude=AUTHORS --exclude=Makefile --exclude=ChangeLog --exclude=COPYING --exclude=TODO 2>/dev/null' % (comp, file.replace(' ', '\ '))
 
     (rc, list) = commands.getstatusoutput(command)
-    print_debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
+    logging.debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
 
     return(list)
 
@@ -843,7 +827,7 @@ def package_add_record(tag, file, type):
     """
     Function to add a package record
     """
-    print_debug('in package_add_record(%s, %s)' % (tag, file))
+    logging.debug('in package_add_record(%s, %s)' % (tag, file))
 
     path    = os.path.basename(file)
     if type == 'binary':
@@ -851,7 +835,7 @@ def package_add_record(tag, file, type):
     else:
         rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file.replace(' ', '\ '))
     tlist   = rtags.split('|')
-    print_debug("tlist is %s " % tlist)
+    logging.debug("tlist is %s " % tlist)
     package = tlist[0].strip()
     version = tlist[1].strip()
     release = tlist[2].strip()
@@ -913,7 +897,7 @@ def file_rpm_check(file, type='binary'):
 
     The default is binary
     """
-    print_debug('in file_rpm_check(%s, %s)' % (file, type))
+    logging.debug('in file_rpm_check(%s, %s)' % (file, type))
 
     if not os.path.isfile(file):
         print 'File %s not found!\n' % file
@@ -934,7 +918,7 @@ def run_binary_query(qstring, type):
     """
     Function to run the query for binary RPMs
     """
-    print_debug('in run_binary_query(%s, %s)' % (qstring, type))
+    logging.debug('in run_binary_query(%s, %s)' % (qstring, type))
 
     if options.tag and not tag_lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
@@ -1027,7 +1011,7 @@ def run_source_query(qstring):
     """
     Function to run the query for source RPMs
     """
-    print_debug('in run_source_query(%s)' % qstring)
+    logging.debug('in run_source_query(%s)' % qstring)
 
     if options.tag and not tag_lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
@@ -1111,7 +1095,7 @@ def run_source_examine(file):
     """
     Examine a src.rpm and output the details
     """
-    print_debug('in run_source_examine(%s)' % file)
+    logging.debug('in run_source_examine(%s)' % file)
 
     file_rpm_check(file, 'source')
 
@@ -1148,7 +1132,7 @@ def run_source_examine(file):
 
         os.chdir(current_dir)
     finally:
-        print_debug('Removing temporary directory: %s...' % cpio_dir)
+        logging.debug('Removing temporary directory: %s...' % cpio_dir)
         shutil.rmtree(cpio_dir)
 
 
@@ -1166,8 +1150,7 @@ if __name__ == '__main__':
         rq_prog    = 'rqp'
         rq_type    = 'binary'
 
-    sys.stdout.write(rq_prog + " %s ($Id$)\n\n" % rq_version)
-
+    sys.stdout.write("%s %s ($Id$)\n\n" % (rq_prog, rq_version))
     # XXX: TODO add options to search files by ownership and sgid/suid status
 
     p = optparse.OptionParser(description="RPM package query tool",
@@ -1229,11 +1212,17 @@ if __name__ == '__main__':
     if options.tag and options.tagdelete:
         p.error("--tag and --delete are mutually exclusive; you do not need to use --tag")
 
+    # setup logging; default is WARNING, debug is DEBUG and verbose is INFO
     if options.debug:
-        print_debug("debug mode enabled; type => " + rq_type)
+        logging.basicConfig(level=logging.DEBUG, format='%(levelname)-8s: %(message)s')
 
     if options.verbose:
-        print_verbose("Verbose mode enabled")
+        logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
+
+    if not options.verbose and not options.debug:
+        logging.basicConfig(level=logging.WARNING, format='%(levelname)-8s: %(message)s')
+
+    logging.debug("debug mode enabled; type => %s" % rq_type)
 
     config = {}
 
@@ -1246,7 +1235,7 @@ if __name__ == '__main__':
         config = read_config(config_file)
 
     if not config:
-        sys.stderr.write('\n\nERROR: No configuration file found!\n')
+        logging.critical('No configuration file found!')
         sys.exit(1)
 
     (db, config) = db_connect(rq_type, config)
@@ -1259,7 +1248,7 @@ if __name__ == '__main__':
         showdbstats(rq_type)
 
     if options.tag:
-        print_debug('Tag:\t%s\n' % options.tag)
+        logging.debug('Tag:\t%s\n' % options.tag)
 
     if options.tagdelete:
         tag_delete_entries(options.tagdelete, rq_type)
@@ -1296,14 +1285,14 @@ if __name__ == '__main__':
     # XXX: TODO
     if options.addfile:
         if not options.tag:
-            sys.stdout.write('The --add option requires a tag entry!\n')
+            logging.critical('The --add option requires a tag entry!')
             sys.exit(1)
 
         havetag = tag_check(options.tag, options.addfile)
-        print_debug('havetag is: %s' % havetag)
+        logging.debug('havetag is: %s' % havetag)
 
         if not havetag:
-            sys.stderr.write('The --add option requires an existing tag entry!\n')
+            logging.critical('The --add option requires an existing tag entry!')
             sys.exit(1)
 
         addfiles = []
@@ -1319,7 +1308,7 @@ if __name__ == '__main__':
 
     if options.createpath:
         createpath = os.path.abspath(options.createpath)
-        print_debug('Dir:\t%s' % createpath)
+        logging.debug('Dir:\t%s' % createpath)
         if not options.tag:
             sys.stdout.write('The --create option requires a tag entry!\n')
             sys.exit(1)
