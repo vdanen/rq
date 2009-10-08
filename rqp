@@ -10,7 +10,8 @@ $Id$
 """
 
 import optparse, os, sys, re, datetime, commands, shutil, tempfile, logging
-import MySQLdb, MySQLdb.cursors
+#import MySQLdb, MySQLdb.cursors
+import rqdb
 from glob import glob
 #import MySQLdb.connect
 
@@ -22,138 +23,6 @@ re_targz   = re.compile(r'\.(tgz|tar\.gz)$')
 re_tarbz   = re.compile(r'\.(tbz2?|tar\.bz2)$')
 re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
 re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
-
-
-def db_connect(type, config):
-    """
-    function db_connect(type, config)
-
-    Function to connect to the database.  It requires two arguments: type is
-    'source' or 'binary' to know which database we are working with and config
-    is the database configuration information.  It returns two objects: the db
-    object for connecting to the database and a modified config list that has
-    the appropriate database name (for whether it is called with type 'source'
-    or type 'binary').
-    """
-
-    if config['hostspec'] == '':
-        logging.critical('Missing hostspec in the configuration!')
-        sys.exit(1)
-    if config['username'] == '':
-        logging.critical('Missing username in the configuration!')
-        sys.exit(1)
-    if config['password'] == '':
-        logging.critical('Missing password in the configuration!')
-        sys.exit(1)
-
-    if type == 'binary':
-        if (config['rpm_database'] == ''):
-            logging.critical('Missing rpm_database in the configuration!')
-            sys.exit(1)
-        else:
-            config['database'] = config['rpm_database']
-
-    if type == 'source':
-        if (config['srpm_database'] == ''):
-            logging.critical('Missing srpm_database in the configuration!')
-            sys.exit(1)
-        else:
-            config['database'] = config['srpm_database']
-
-    logging.debug('Using host=>%s, user=>%s, db=>%s' % (config['hostspec'], config['username'], config['database']))
-
-    try:
-        db = MySQLdb.connect(host=config['hostspec'],
-                             user=config['username'],
-                             passwd=config['password'],
-                             db=config['database'],
-                             cursorclass=MySQLdb.cursors.DictCursor)
-    except MySQLdb.Error, e:
-        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
-        sys.exit(1)
-
-    return (db, config)
-
-
-def db_close():
-    """
-    function db_close()
-
-    Function to close connections to the database
-    """
-    db.commit()
-    db.close()
-
-
-def db_fetchall(query):
-    """
-    function db_fetchall(query)
-
-    Function to perform database queries.  It takes one argument, the query to
-    execute (a SELECT statement), and returns the results of the query if the
-    query was successful, returns False if not.  This function is meant to be
-    used with multi-result queries.
-    """
-    logging.debug('  in db_fetchall()')
-    logging.debug('  => query is: %s' % query)
-
-    try:
-        cursor = db.cursor()
-        cursor.execute("set autocommit=0")
-        cursor.execute(query)
-        results = cursor.fetchall()
-        cursor.close()
-
-        if results:
-            return results
-        else:
-            return False
-    except MySQLdb.Error, e:
-        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
-        sys.exit(1)
-
-
-def db_fetchone(query):
-    """
-    function db_fetchone(query)
-
-    Function to perform database queries.  It takes one argument, the query to
-    execute (a SELECT statement), and returns the results of the query if the
-    query was successful, returns False if not.  This function is meant to be
-    used with single-result queries.
-    """
-    logging.debug('  in db_fetchone()')
-    logging.debug('  => query is: %s' % query)
-
-    try:
-        cursor  = db.cursor()
-        cursor.execute(query)
-        results = cursor.fetchone()
-        cursor.close()
-        if results:
-            key = results.keys()
-            return(results[key[0]])
-        else:
-            return False
-    except MySQLdb.Error, e:
-        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
-        sys.exit(1)
-
-
-def db_doquery(query):
-    """
-    Function to perform an actual update (UPDATE/INSERT) query (non-SELECT) from the database
-    """
-    logging.debug('  in db_doquery()')
-    logging.debug('  => query is: %s' % query)
-
-    try:
-        cursor = db.cursor()
-        cursor.execute(query)
-        cursor.close()
-    except MySQLdb.Error, e:
-        logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
-        sys.exit(1)
 
 
 def sanitize_string(string):
@@ -199,14 +68,14 @@ def tag_list():
     logging.debug("in tag_list()")
 
     query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
-    results = db_fetchall(query)
+    results = rqdb.fetch_all(db, query)
     if results:
         for row in results:
             print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row['tag'], row['tdate'], row['path'])
     else:
         print 'No tags exist in the database!\n'
 
-    db_close()
+    rqdb.close(db)
     sys.exit(0)
 
 
@@ -219,7 +88,7 @@ def tag_delete_entries(tag, type='binary'):
     to_remove = []
 
     query  = "SELECT tag FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    result = db_fetchone(query)
+    result = rqdb.fetch_one(db, query)
 
     if not result:
         print 'No matching tag found for entry %s!\n' % tag
@@ -227,10 +96,10 @@ def tag_delete_entries(tag, type='binary'):
     else:
         print 'Removing tag (%s) from Tags...\n' % tag
         query = "DELETE FROM tags WHERE tag = '%s'" % sanitize_string(tag)
-        db_doquery(query)
+        rqdb.do_query(db, query)
 
         query  = "SELECT DISTINCT p_record FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
-        result = db_fetchall(query)
+        result = rqdb.fetch_all(db, query)
         if result:
             for row in result:
                 to_remove.append(row['p_record'])
@@ -253,7 +122,7 @@ def tag_delete_entries(tag, type='binary'):
                     tables = ('packages', 'sources', 'files')
                 for table in tables:
                     query = "DELETE FROM %s WHERE p_record = '%d'" % (table, rnum)
-                    res   = db_doquery(query)
+                    res   = rqdb.do_query(db, query)
 
             sys.stdout.write(' done\n')
         else:
@@ -274,12 +143,12 @@ def tag_update_entries(tag, type='binary'):
     to_add    = []
 
     query = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    path  = db_fetchone(query)
+    path  = rqdb.fetch_one(db, query)
     if path:
         logging.info('Update tag (%s) entries from %s...' % (tag, path))
         # get the existing entries
         query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
-        result = db_fetchall(query)
+        result = rqdb.fetch_all(db, query)
         for row in result:
             pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
             logging.info('Checking for %s in %s...' % (pname, path))
@@ -301,7 +170,7 @@ def tag_update_entries(tag, type='binary'):
             release = tlist[2].strip()
 
             query   = "SELECT p_package FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (sanitize_string(tag), sanitize_string(package), sanitize_string(version), sanitize_string(release))
-            package = db_fetchone(query)
+            package = rqdb.fetch_one(db, query)
             if package:
                 logging.info('OK')
             else:
@@ -319,7 +188,7 @@ def tag_update_entries(tag, type='binary'):
         for rnum in to_remove:
             for table in tables:
                 query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                result = db_doquery(query)
+                result = rqdb.do_query(db, query)
 
     if to_add:
         logging.info('Adding tagged entries for tag: %s...' % tag)
@@ -334,25 +203,25 @@ def showdbstats(type):
     logging.debug("in showdbstats(%s)" % type)
 
     query   = "SELECT count(*) FROM tags"
-    c_tags  = db_fetchone(query)
+    c_tags  = rqdb.fetch_one(db, query)
     query   = "SELECT count(*) FROM packages"
-    c_pkgs  = db_fetchone(query)
+    c_pkgs  = rqdb.fetch_one(db, query)
     if type == 'binary':
         query   = "SELECT count(*) FROM requires"
-        c_reqs  = db_fetchone(query)
+        c_reqs  = rqdb.fetch_one(db, query)
         query   = "SELECT count(*) FROM provides"
-        c_provs = db_fetchone(query)
+        c_provs = rqdb.fetch_one(db, query)
     else:
         query = "SELECT count(*) FROM sources"
-        c_src = db_fetchone(query)
+        c_src = rqdb.fetch_one(db, query)
     query   = "SELECT count(*) FROM files"
-    c_files = db_fetchone(query)
+    c_files = rqdb.fetch_one(db, query)
 
     # get the size of the database as well
     size   = 0.00
     bytes  = ''
     query  = "SHOW TABLE STATUS"
-    tbsize = db_fetchall(query)
+    tbsize = rqdb.fetch_all(db, query)
 
     for x in tbsize:
         size += x['Data_length']    #['Data_length']
@@ -413,7 +282,7 @@ def tag_lookup(tag):
     logging.debug('in tag_lookup(%s)' % tag)
 
     query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    path  = db_fetchone(query)
+    path  = rqdb.fetch_one(db, query)
     if path:
         return(path)
     else:
@@ -466,14 +335,14 @@ def tag_add_record(tag, file):
         path = os.path.abspath(file)
     # we can have multiple similar paths, but not multiple similar tags
     query = "SELECT tag FROM tags WHERE tag = '%s'" % sanitize_string(tag)
-    dbtag = db_fetchone(query)
+    dbtag = rqdb.fetch_one(db, query)
     if dbtag:
         print 'Tag (%s) already exists in the database!\n' % tag
-        db_close()
+        db_close(db)
         sys.exit(1)
 
     query = "INSERT INTO tags (tag, path, tdate) VALUES ('%s', '%s', '%s')" % (sanitize_string(tag.strip()), sanitize_string(path.strip()), cur_date)
-    db_doquery(query)
+    rqdb.do_query(db, query)
     return(0)
 
 
@@ -583,7 +452,7 @@ def add_file_requires(record, file):
             if options.verbose:
                 print 'Dependency: %s' % dep
             query  = "INSERT INTO requires (p_record, requires) VALUES ('%s', '%s')" % (record, sanitize_string(dep.strip()))
-            result = db_doquery(query)
+            result = rqdb.do_query(db, query)
 
 
 def add_file_provides(record, file):
@@ -600,7 +469,7 @@ def add_file_provides(record, file):
             if options.verbose:
                 print 'Provides: %s' % prov
             query  = "INSERT INTO provides (p_record, provides) VALUES ('%s', '%s')" % (record, sanitize_string(prov.strip()))
-            result = db_doquery(query)
+            result = rqdb.do_query(db, query)
 
 
 def rpm_list(file, raw=False):
@@ -709,7 +578,7 @@ def add_file_records(record, file_list):
             sanitize_string(file_list[x]['group']),
             file_list[x]['is_suid'],
             file_list[x]['is_sgid'])
-        result = db_doquery(query)
+        result = rqdb.do_query(db, query)
 
 
 def add_source_records(record, file_list):
@@ -737,7 +606,7 @@ def add_source_records(record, file_list):
         if options.verbose:
             print 'Source: %s, Type: %s' % (sfile, stype)
         query  = "INSERT INTO sources (p_record, s_type, s_file) VALUES ('%s', '%s', '%s')" % (record, stype, sanitize_string(sfile.strip()))
-        result = db_doquery(query)
+        result = rqdb.do_query(db, query)
 
 
 def add_source_file_records(record, file_list):
@@ -767,7 +636,7 @@ def add_source_file_records(record, file_list):
 
             # get the s_record for this source from the db
             query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(sfile))
-            db_srec = db_fetchone(query)
+            db_srec = rqdb.fetch_one(db, query)
             if not db_srec:
                 logging.critical('adding files from %s failed...' % sfile)
                 sys.exit(1)
@@ -779,7 +648,7 @@ def add_source_file_records(record, file_list):
                     show_progress()
                     logging.info('File: %s\n' % dfile)
                     query  = "INSERT INTO files (p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (record, db_srec, sanitize_string(dfile))
-                    result = db_doquery(query)
+                    result = rqdb.do_query(db, query)
         else:
             logging.debug('unwilling to process: %s' % sfile)
 
@@ -856,7 +725,7 @@ def package_add_record(tag, file, type):
             sanitize_string(package),
             sanitize_string(version),
             sanitize_string(release))
-    result = db_fetchall(query)
+    result = rqdb.fetch_all(db, query)
     if result:
         if type == 'binary':
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
@@ -879,11 +748,11 @@ def package_add_record(tag, file, type):
             sanitize_string(version),
             sanitize_string(release),
             sanitize_string(pdate))
-    result = db_doquery(query)
+    result = rqdb.do_query(db, query)
     show_progress(path)
 
     query    = "SELECT p_record FROM packages WHERE p_tag = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (sanitize_string(tag), sanitize_string(package))
-    p_record = db_fetchone(query)
+    p_record = rqdb.fetch_one(db, query)
     if p_record:
             return(p_record)
     else:
@@ -942,7 +811,7 @@ def run_binary_query(qstring, type):
         query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
 
     query  = query + " ORDER BY p_tag, p_package, " + type
-    result = db_fetchall(query)
+    result = rqdb.fetch_all(db, query)
     if result:
         if options.count:
             if options.quiet:
@@ -1034,7 +903,7 @@ def run_source_query(qstring):
         query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
 
     query  = query + " ORDER BY p_tag, p_package, s_type, s_file, f_file"
-    result = db_fetchall(query)
+    result = rqdb.fetch_all(db, query)
     if result:
         if options.count:
             if options.quiet:
@@ -1238,7 +1107,7 @@ if __name__ == '__main__':
         logging.critical('No configuration file found!')
         sys.exit(1)
 
-    (db, config) = db_connect(rq_type, config)
+    (db, config) = rqdb.connect(rq_type, config)
 
     # start doing useful things
     if options.list:
