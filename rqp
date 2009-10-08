@@ -24,6 +24,7 @@ re_tarbz   = re.compile(r'\.(tbz2?|tar\.bz2)$')
 re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
 re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
+file_excludes = ('.svn', 'CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
 
 def sanitize_string(string):
     """
@@ -474,7 +475,8 @@ def add_file_provides(record, file):
 
 def rpm_list(file, raw=False):
     """
-    Function to get the list of files in an RPM
+    Function to get the list of files in an RPM, excluding those files defined
+    by files_exclude
     """
     logging.debug('in rpm_list(%s)' % file)
 
@@ -489,8 +491,19 @@ def rpm_list(file, raw=False):
     list  = list.splitlines()
     rlist = {}
     count = 0
+
     for entry in list:
+        break_loop = False
         logging.debug('processing: %s' % entry) ### DEBUG
+        for exclude in file_excludes:
+            # make sure we don't include any files in our exclude list
+            if re.search(exclude, entry):
+                logging.debug('found unwanted entry: %s' % entry)
+                break_loop = True
+
+        if break_loop:
+            continue
+
         is_suid = 0
         is_sgid = 0
         foo     = entry.split()
@@ -684,7 +697,11 @@ def tar_list(file):
     if re_tarbz.search(file):
         comp = 'tjf'
 
-    command = 'tar -%s "%s" --exclude=.svn --exclude=CVS --exclude=AUTHORS --exclude=Makefile --exclude=ChangeLog --exclude=COPYING --exclude=TODO 2>/dev/null' % (comp, file.replace(' ', '\ '))
+    excludes = ''
+    for f in file_excludes:
+        excludes = '%s --exclude=%s' % (excludes, f)
+
+    command = 'tar -%s "%s" %s 2>/dev/null' % (comp, file.replace(' ', '\ '), excludes)
 
     (rc, list) = commands.getstatusoutput(command)
     logging.debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
