@@ -6,7 +6,7 @@ a database for later querying.
 based on the srpm script of similar function copyright (c) 2005 Stew Benedict <sbenedict@mandriva.com>
 copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 
-$Id: rqp 314 2009-09-04 21:31:39Z vdanen@ANNVIX.CA $
+$Id$
 """
 import MySQLdb, MySQLdb.cursors
 import logging
