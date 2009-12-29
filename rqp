@@ -1043,6 +1043,7 @@ if __name__ == '__main__':
                               prog=rq_prog,
                               version="%prog " + rq_version,
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p] <substring>] [-t <tag>]")
+    p.add_option('-n', '--config', dest="conffile", help="Optional configuration file", metavar="FILE")
     p.add_option('-C', '--count', dest="count", default=False, action="store_true", help="Only output the count of query matches")
     p.add_option('-d', '--debug', dest="debug", default=False, action="store_true", help="Enable debugging output")
     p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true", help="Show extra info (version, release, date)")
@@ -1112,13 +1113,20 @@ if __name__ == '__main__':
 
     config = {}
 
-    config_file = '/etc/rqrc'
-    if os.path.isfile(config_file):             # look for a system-wide one first
-        config = read_config(config_file)
+    if options.conffile:
+        if os.path.isfile(options.conffile):
+            config = read_config(options.conffile)
+        else:
+            logging.critical('Specified configuration file does not exist: %s' % options.conffile)
+            sys.exit(1)
+    else:
+        config_file = '/etc/rqrc'
+        if os.path.isfile(config_file):             # look for a system-wide one first
+            config = read_config(config_file)
 
-    config_file = os.getenv('HOME') + '/.rqrc'
-    if os.path.isfile(config_file):             # if we find a local one, overwrite anything defined
-        config = read_config(config_file)
+        config_file = os.getenv('HOME') + '/.rqrc'
+        if os.path.isfile(config_file):             # if we find a local one, overwrite anything defined
+            config = read_config(config_file)
 
     if not config:
         logging.critical('No configuration file found!')
