@@ -76,3 +76,22 @@ CREATE TABLE IF NOT EXISTS `tags` (
   `tdate` text NOT NULL,
   PRIMARY KEY  (`tag`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sources`
+--
+
+DROP TABLE IF EXISTS `ctags`;
+CREATE TABLE IF NOT EXISTS `ctags` (
+  `c_record` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
+  `c_name` varchar(256) NOT NULL,
+  `c_type` varchar(64) NOT NULL,
+  `c_line` INT NOT NULL,
+  `c_file` text NOT NULL,
+  PRIMARY KEY  (`c_record`),
+  KEY `rec` USING BTREE (`c_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;

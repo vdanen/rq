@@ -385,6 +385,7 @@ def record_add(tag, file, type):
             os.chdir(cpio_dir)
             source_get_all_files(file)
             add_source_file_records(record, file_list)
+            add_source_ctag_records(record, cpio_dir)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -665,6 +666,29 @@ def add_source_file_records(record, file_list):
         else:
             logging.debug('unwilling to process: %s' % sfile)
 
+
+def add_source_ctag_records(record, cpio_dir):
+    """
+    Function to run ctags against an unpacked source directory
+    and insert records into the database
+    """
+    logging.debug('in add_source_ctag_records(%s, %s)' % (record, cpio_dir))
+
+    # this is likely a double chdir, but let's make sure we're in the right place
+    # so we don't have to strip out the path from the ctags output
+    os.chdir(cpio_dir)
+
+    command = "ctags -x -R -f - ."
+    (rc, output) = commands.getstatusoutput(command)
+    logging.debug('called ctags (rc=%s): %s' % (rc, command))
+
+    for tag in output:
+        (name, type, line, path) = tag.split()
+        show_progress()
+        logging.info('Ctag: %s\n' % tag)
+        query = "INSERT INTO ctags (p_record, c_name, c_type, c_line, c_file) VALUES ('%s', '%s', '%s', '%d', '%s')" % (record, sanitize_string(name), sanitize_string(type), line, sanitize_string(path))
+        #result = rqdb.do_query(db, query)
+        print '%s\n' % query
 
 def patch_list(file):
     """
