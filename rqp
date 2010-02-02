@@ -34,7 +34,7 @@ def sanitize_string(string):
     #logging.debug('  in sanitize_string(%s)' % string)
     if string:
         # escape single and double quotes
-        new_string = re.sub('''(['";\])''', r'\\\1', string)
+        new_string = re.sub('''(['";\\\])''', r'\\\1', string)
     else:
         new_string = None
     return(new_string)
@@ -213,8 +213,10 @@ def showdbstats(type):
         query   = "SELECT count(*) FROM provides"
         c_provs = rqdb.fetch_one(db, query)
     else:
-        query = "SELECT count(*) FROM sources"
-        c_src = rqdb.fetch_one(db, query)
+        query   = "SELECT count(*) FROM sources"
+        c_src   = rqdb.fetch_one(db, query)
+        query   = "SELECT count(*) FROM ctags"
+        c_ctags = rqdb.fetch_one(db, query)
     query   = "SELECT count(*) FROM files"
     c_files = rqdb.fetch_one(db, query)
 
@@ -242,12 +244,13 @@ def showdbstats(type):
     print 'Database statistics:\n'
     print '   Database  => User: %s, Host: %s, Database: %s' % (config['username'], config['hostspec'], config['database'])
     print '   Data size => %2.2f %s\n' % (size, bytes)
-    print '   Tag records : %-15d Package records : %-15d' % (c_tags, c_pkgs)
+    print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
     if type == 'binary':
-        print '   File records: %-15d Requires records: %-15d' % (c_files, c_reqs)
+        print '   File records : %-15d Requires records: %-15d' % (c_files, c_reqs)
         print '                                 Provides records: %-15d\n' % c_provs
     else:
-        print '   File records: %-15d Source records  : %-15d' % (c_files, c_src)
+        print '   File records : %-15d  Source records  : %-15d' % (c_files, c_src)
+        print '   Ctags records: %-15d' % (c_ctags)
     sys.exit(0)
 
 
@@ -712,11 +715,11 @@ def add_source_ctag_records(record, cpio_dir):
 
             for tag in output.split('\n'):
                 try:
-                    (name, type, line, path) = tag.split(None, 3)
+                    (name, type, line, path, extra) = tag.split(None, 4)
                 except:
                     continue
                 show_progress()
-                query = "INSERT INTO ctags (p_record, s_record, c_name, c_type, c_line, c_file) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (record, db_srec, sanitize_string(name), sanitize_string(type), line, sanitize_string(path))
+                query = "INSERT INTO ctags (p_record, s_record, c_name, c_type, c_line, c_file, c_extra) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (record, db_srec, sanitize_string(name), sanitize_string(type), line, sanitize_string(path), sanitize_string(extra))
                 result = rqdb.do_query(db, query)
                 #print '%s\n' % query
             shutil.rmtree(tmpdir)
@@ -949,7 +952,7 @@ def run_binary_query(qstring, type):
             print 'No matches in database for substring (%s)' % qstring
 
 
-def run_source_query(qstring):
+def run_source_query(qstring, type):
     """
     Function to run the query for source RPMs
     """
@@ -962,7 +965,12 @@ def run_source_query(qstring):
     if not options.quiet:
         print 'Searching database records for substring match (%s)' % qstring
 
-    query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
+    if type == 'files':
+        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
+        orderby = "f_file"
+    else:
+        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE c_name "
+        orderby = "c_file"
 
     if options.ignorecase:
         query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
@@ -975,7 +983,7 @@ def run_source_query(qstring):
     if options.tag:
         query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
 
-    query  = query + " ORDER BY p_tag, p_package, s_type, s_file, f_file"
+    query  = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
     result = rqdb.fetch_all(db, query)
     if result:
         if options.count:
@@ -999,7 +1007,11 @@ def run_source_query(qstring):
             fromdb_date  = row['p_date']
             fromdb_type  = row['s_type']
             fromdb_file  = row['s_file']
-            fromdb_sfile = row['f_file']
+            fromdb_sfile = row[orderby]
+            if type == 'ctags':
+                fromdb_ctype  = row['c_type']
+                fromdb_cline  = row['c_line']
+                fromdb_cextra = row['c_extra']
 
             if not ltag == fromdb_tag:
                 print '\nResults in Tag: %s\n' % fromdb_tag
@@ -1024,7 +1036,10 @@ def run_source_query(qstring):
                         print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                         print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
                     else:
-                        sys.stdout.write('%s: (%s) %s: %s\n' % (srpm, stype, fromdb_file, fromdb_sfile))
+                        if type == 'ctags':
+                            sys.stdout.write('%s: (%s) %s\n\tFound matching %s in %s:%s: %s\n' % (srpm, stype, fromdb_file, fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
+                        else:
+                            sys.stdout.write('%s: (%s) %s: %s\n' % (srpm, stype, fromdb_file, fromdb_sfile))
 
     else:
         if options.tag:
@@ -1132,6 +1147,8 @@ if __name__ == '__main__':
     group.add_option('-q', '--query', dest="query", help="Query database for substring match on files", metavar="STRING")
     if rq_type == 'binary':
         group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
+    if rq_type == 'source':
+        group.add_option('-z', '--ctags', dest="ctags", help="Query database for substring match on ctags data (functions, etc.)", metavar="STRING")
     p.add_option_group(group)
     (options, arguments) = p.parse_args()       # 'arguments' is a tuple of non-optioned things
 
@@ -1212,7 +1229,7 @@ if __name__ == '__main__':
         if rq_type == 'binary':
             run_binary_query(options.query, 'files')
         elif rq_type == 'source':
-            run_source_query(options.query)
+            run_source_query(options.query, 'files')
         sys.exit(0)
 
     if rq_type == 'binary':
@@ -1225,6 +1242,10 @@ if __name__ == '__main__':
             sys.exit(0)
 
     if rq_type == 'source':
+        if options.ctags:
+            run_source_query(options.ctags, 'ctags')
+            sys.exit(0)
+
         if options.src_examine:
             run_source_examine(options.src_examine)
             sys.exit(0)
