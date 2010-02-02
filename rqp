@@ -34,7 +34,7 @@ def sanitize_string(string):
     #logging.debug('  in sanitize_string(%s)' % string)
     if string:
         # escape single and double quotes
-        new_string = re.sub('''(['";])''', r'\\\1', string)
+        new_string = re.sub('''(['";\])''', r'\\\1', string)
     else:
         new_string = None
     return(new_string)
@@ -120,7 +120,7 @@ def tag_delete_entries(tag, type='binary'):
                 if type == 'binary':
                     tables = ('packages', 'requires', 'provides', 'files')
                 if type == 'source':
-                    tables = ('packages', 'sources', 'files')
+                    tables = ('packages', 'sources', 'files', 'ctags')
                 for table in tables:
                     query = "DELETE FROM %s WHERE p_record = '%d'" % (table, rnum)
                     res   = rqdb.do_query(db, query)
@@ -678,17 +678,49 @@ def add_source_ctag_records(record, cpio_dir):
     # so we don't have to strip out the path from the ctags output
     os.chdir(cpio_dir)
 
-    command = "ctags -x -R -f - ."
-    (rc, output) = commands.getstatusoutput(command)
-    logging.debug('called ctags (rc=%s): %s' % (rc, command))
+    # first, identify and expand any tarballs found:
+    for file in os.listdir(cpio_dir):
+        if re_tar.search(file):
+            # get the s_record for this source from the db
+            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file))
+            db_srec = rqdb.fetch_one(db, query)
+            if not db_srec:
+                logging.critical('adding files from %s failed...' % sfile)
+                sys.exit(1)
 
-    for tag in output:
-        (name, type, line, path) = tag.split()
-        show_progress()
-        logging.info('Ctag: %s\n' % tag)
-        query = "INSERT INTO ctags (p_record, c_name, c_type, c_line, c_file) VALUES ('%s', '%s', '%s', '%d', '%s')" % (record, sanitize_string(name), sanitize_string(type), line, sanitize_string(path))
-        #result = rqdb.do_query(db, query)
-        print '%s\n' % query
+            comp = 'xf'
+            if re_targz.search(file):
+                comp = 'xzf'
+            if re_tarbz.search(file):
+                comp = 'xjf'
+
+            excludes = ''
+            for f in file_excludes:
+                excludes = '%s --exclude=%s' % (excludes, f)
+
+            tmpdir  = tempfile.mkdtemp()
+            command = 'tar -%s "%s" -C %s %s 2>/dev/null' % (comp, file.replace(' ', '\ '), tmpdir, excludes)
+
+            (rc, list) = commands.getstatusoutput(command)
+            logging.debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
+
+            os.chdir(tmpdir)
+
+            command = "ctags -x -R -f - ."
+            (rc, output) = commands.getstatusoutput(command)
+            logging.debug('called ctags (rc=%s): %s' % (rc, command))
+
+            for tag in output.split('\n'):
+                try:
+                    (name, type, line, path) = tag.split(None, 3)
+                except:
+                    continue
+                show_progress()
+                query = "INSERT INTO ctags (p_record, s_record, c_name, c_type, c_line, c_file) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (record, db_srec, sanitize_string(name), sanitize_string(type), line, sanitize_string(path))
+                result = rqdb.do_query(db, query)
+                #print '%s\n' % query
+            shutil.rmtree(tmpdir)
+
 
 def patch_list(file):
     """

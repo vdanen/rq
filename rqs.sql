@@ -88,6 +88,7 @@ DROP TABLE IF EXISTS `ctags`;
 CREATE TABLE IF NOT EXISTS `ctags` (
   `c_record` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
+  `s_record` INT NOT NULL,
   `c_name` varchar(256) NOT NULL,
   `c_type` varchar(64) NOT NULL,
   `c_line` INT NOT NULL,
