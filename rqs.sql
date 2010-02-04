@@ -24,10 +24,12 @@ CREATE TABLE `files` (
   `f_record` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `s_record` INT NOT NULL,
+  `t_record` INT NOT NULL,
   `f_file` TEXT NOT NULL,
   PRIMARY KEY  (`f_record`),
   KEY `rec` USING BTREE (`p_record`),
-  KEY `source` USING BTREE (`s_record`)
+  KEY `source` USING BTREE (`s_record`),
+  KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1 ;
 
 -- --------------------------------------------------------
@@ -39,12 +41,14 @@ CREATE TABLE `files` (
 DROP TABLE IF EXISTS `packages`;
 CREATE TABLE IF NOT EXISTS `packages` (
   `p_record` INT NOT NULL auto_increment,
+  `t_record` INT NOT NULL,
   `p_tag` text NOT NULL,
   `p_package` text NOT NULL,
   `p_version` text NOT NULL,
   `p_release` text NOT NULL,
   `p_date` text NOT NULL,
-  PRIMARY KEY  (`p_record`)
+  PRIMARY KEY  (`p_record`),
+  KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
 
 -- --------------------------------------------------------
@@ -57,10 +61,12 @@ DROP TABLE IF EXISTS `sources`;
 CREATE TABLE IF NOT EXISTS `sources` (
   `s_record` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
+  `t_record` INT NOT NULL,
   `s_type` varchar(1) NOT NULL,
   `s_file` text NOT NULL,
   PRIMARY KEY  (`s_record`),
-  KEY `rec` USING BTREE (`s_record`)
+  KEY `rec` USING BTREE (`s_record`),
+  KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -71,10 +77,11 @@ CREATE TABLE IF NOT EXISTS `sources` (
 
 DROP TABLE IF EXISTS `tags`;
 CREATE TABLE IF NOT EXISTS `tags` (
+  `t_record` INT NOT NULL auto_increment,
   `tag` varchar(128) NOT NULL,
   `path` varchar(256) NOT NULL,
   `tdate` text NOT NULL,
-  PRIMARY KEY  (`tag`)
+  PRIMARY KEY  (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 
@@ -89,11 +96,13 @@ CREATE TABLE IF NOT EXISTS `ctags` (
   `c_record` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `s_record` INT NOT NULL,
+  `t_record` INT NOT NULL,
   `c_name` varchar(256) NOT NULL,
   `c_extra` text NOT NULL,
   `c_type` varchar(64) NOT NULL,
   `c_line` varchar(64) NOT NULL,
   `c_file` text NOT NULL,
   PRIMARY KEY  (`c_record`),
-  KEY `rec` USING BTREE (`c_record`)
+  KEY `rec` USING BTREE (`c_record`),
+  KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
