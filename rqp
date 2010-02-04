@@ -239,8 +239,8 @@ def showdbstats(type):
     print '   Data size => %2.2f %s\n' % (size, bytes)
     print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
     if type == 'binary':
-        print '   File records : %-15d Requires records: %-15d' % (c_files, c_reqs)
-        print '                                 Provides records: %-15d\n' % c_provs
+        print '   File records : %-15d  Requires records: %-15d' % (c_files, c_reqs)
+        print '                                   Provides records: %-15d\n' % c_provs
     else:
         print '   File records : %-15d  Source records  : %-15d' % (c_files, c_src)
         print '   Ctags records: %-15d' % (c_ctags)
