@@ -90,9 +90,9 @@ CREATE TABLE IF NOT EXISTS `ctags` (
   `p_record` INT NOT NULL,
   `s_record` INT NOT NULL,
   `c_name` varchar(256) NOT NULL,
-  `c_extra` varchar(256) NOT NULL,
+  `c_extra` text NOT NULL,
   `c_type` varchar(64) NOT NULL,
-  `c_line` INT NOT NULL,
+  `c_line` varchar(64) NOT NULL,
   `c_file` text NOT NULL,
   PRIMARY KEY  (`c_record`),
   KEY `rec` USING BTREE (`c_record`)

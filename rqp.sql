@@ -83,6 +83,21 @@ CREATE TABLE IF NOT EXISTS `requires` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `symbols`
+--
+
+DROP TABLE IF EXISTS `symbols`;
+CREATE TABLE IF NOT EXISTS `symbols` (
+  `s_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
+  `symbols` text NOT NULL,
+  PRIMARY KEY  (`s_id`),
+  KEY `rec` USING BTREE (`p_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `tags`
 --
 

@@ -265,7 +265,7 @@ def show_progress(prefix=False):
             if pstate == 1:
                 sys.stdout.write('.')
             pstate = pstate + 1
-            if pstate > 20:
+            if pstate > 100:
                 pstate = 1
             return
 
@@ -688,8 +688,10 @@ def add_source_ctag_records(record, cpio_dir):
             query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file))
             db_srec = rqdb.fetch_one(db, query)
             if not db_srec:
-                logging.critical('adding files from %s failed...' % sfile)
-                sys.exit(1)
+                logging.critical('adding files from %s failed...' % file)
+                # don't bail, it's logged, continue
+                #sys.exit(1)
+                continue
 
             comp = 'xf'
             if re_targz.search(file):
@@ -718,10 +720,15 @@ def add_source_ctag_records(record, cpio_dir):
                     (name, type, line, path, extra) = tag.split(None, 4)
                 except:
                     continue
-                show_progress()
-                query = "INSERT INTO ctags (p_record, s_record, c_name, c_type, c_line, c_file, c_extra) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (record, db_srec, sanitize_string(name), sanitize_string(type), line, sanitize_string(path), sanitize_string(extra))
-                result = rqdb.do_query(db, query)
-                #print '%s\n' % query
+
+                # only store some ctags info, not all of it
+                wanted = ['function', 'macro', 'subroutine', 'class', 'method']
+                if type in wanted:
+                    show_progress()
+                    query = "INSERT INTO ctags (p_record, s_record, c_name, c_type, c_line, c_file, c_extra) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (record, db_srec, sanitize_string(name), sanitize_string(type), sanitize_string(line), sanitize_string(path), sanitize_string(extra))
+                    result = rqdb.do_query(db, query)
+                    #print '%s\n' % query
+            os.chdir(cpio_dir)
             shutil.rmtree(tmpdir)
 
 
@@ -875,6 +882,7 @@ def run_binary_query(qstring, type):
     if type == 'files' and options.ownership:
         query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
     else:
+        # query on type: provides, requires, symbols
         query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
 
 
@@ -965,12 +973,12 @@ def run_source_query(qstring, type):
     if not options.quiet:
         print 'Searching database records for substring match (%s)' % qstring
 
-    if type == 'files':
-        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
-        orderby = "f_file"
-    else:
+    if type == 'ctags':
         query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE c_name "
         orderby = "c_file"
+    else:
+        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
+        orderby = "f_file"
 
     if options.ignorecase:
         query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
@@ -1113,7 +1121,7 @@ if __name__ == '__main__':
     p = optparse.OptionParser(description="RPM package query tool",
                               prog=rq_prog,
                               version="%prog " + rq_version,
-                              usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p] <substring>] [-t <tag>]")
+                              usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p|z] <substring>] [-t <tag>]")
     p.add_option('-n', '--config', dest="conffile", help="Optional configuration file", metavar="FILE")
     p.add_option('-C', '--count', dest="count", default=False, action="store_true", help="Only output the count of query matches")
     p.add_option('-d', '--debug', dest="debug", default=False, action="store_true", help="Enable debugging output")
@@ -1147,6 +1155,7 @@ if __name__ == '__main__':
     group.add_option('-q', '--query', dest="query", help="Query database for substring match on files", metavar="STRING")
     if rq_type == 'binary':
         group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
+        group.add_option('-z', '--symbols', dest="symbols", help="Query database for substring match on symbols in binary files", metavar="STRING")
     if rq_type == 'source':
         group.add_option('-z', '--ctags', dest="ctags", help="Query database for substring match on ctags data (functions, etc.)", metavar="STRING")
     p.add_option_group(group)
@@ -1240,6 +1249,9 @@ if __name__ == '__main__':
         if options.requires:
             run_binary_query(options.requires, 'requires')
             sys.exit(0)
+
+        if options.symbols:
+            run_binary_query(options.symbols, 'symbols')
 
     if rq_type == 'source':
         if options.ctags:
