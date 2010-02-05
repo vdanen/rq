@@ -98,7 +98,7 @@ def tag_delete_entries(tag, type='binary'):
         rqdb.do_query(db, query)
 
         query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id
-        result = rqdb.fetch_all(db, query)
+        result = rqdb.fetch_one(db, query)
         if result:
             if result == 1:
                 word_package = 'Package'
@@ -107,7 +107,7 @@ def tag_delete_entries(tag, type='binary'):
                 word_package = 'Packages'
                 word_entry   = 'entries'
 
-            sys.stdout.write('Removing %d tagged %s %s for %s... ' % (result, word_package, word_entry, tag))
+            sys.stdout.write('Removing %s tagged %s %s for %s... ' % (result, word_package, word_entry, tag))
 
             if type == 'binary':
                 tables = ('packages', 'requires', 'provides', 'files')
@@ -136,12 +136,15 @@ def tag_update_entries(tag, type='binary'):
     to_remove = []
     to_add    = []
 
-    query = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    path  = rqdb.fetch_one(db, query)
+    query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    path   = rqdb.fetch_one(db, query)
+    query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    tag_id = rqdb.fetch_one(db, query)
+
     if path:
         logging.info('Update tag (%s) entries from %s...' % (tag, path))
         # get the existing entries
-        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE p_tag = '%s'" % sanitize_string(tag)
+        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE t_record = '%s'" % tag_id
         result = rqdb.fetch_all(db, query)
         for row in result:
             pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
@@ -163,7 +166,7 @@ def tag_update_entries(tag, type='binary'):
             version = tlist[1].strip()
             release = tlist[2].strip()
 
-            query   = "SELECT p_package FROM packages WHERE p_tag = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (sanitize_string(tag), sanitize_string(package), sanitize_string(version), sanitize_string(release))
+            query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, sanitize_string(package), sanitize_string(version), sanitize_string(release))
             package = rqdb.fetch_one(db, query)
             if package:
                 logging.info('OK')
@@ -187,7 +190,7 @@ def tag_update_entries(tag, type='binary'):
     if to_add:
         logging.info('Adding tagged entries for tag: %s...' % tag)
         for rpm in to_add:
-            record_add(tag, rpm, type)
+            record_add(tag_id, rpm, type)
 
 
 def showdbstats(type):
@@ -258,7 +261,7 @@ def show_progress(prefix=False):
             if pstate == 1:
                 sys.stdout.write('.')
             pstate = pstate + 1
-            if pstate > 100:
+            if pstate > 150:
                 pstate = 1
             return
 
@@ -335,7 +338,6 @@ def tag_add_record(tag, file):
     dbtag = rqdb.fetch_one(db, query)
     if dbtag:
         print 'Tag (%s) already exists in the database!\n' % tag
-        db_close(db)
         sys.exit(1)
 
     query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (sanitize_string(tag.strip()), sanitize_string(path.strip()), cur_date)
@@ -665,7 +667,7 @@ def add_source_file_records(tag_id, record, file_list):
                 else:
                     show_progress()
                     logging.info('File: %s\n' % dfile)
-                    query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
+                    query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
                     result = rqdb.do_query(db, query)
         else:
             logging.debug('unwilling to process: %s' % sfile)
@@ -828,17 +830,22 @@ def package_add_record(tag_id, file, type):
             print 'File %s-%s-%s is already in the database under tag %s' % (package, version, release, tag)
         return(0)
 
+    ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
+    ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
+
     if type == 'binary':
-        query  = "INSERT INTO packages (t_record, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
             tag_id,
+            sanitize_string(tag),
             sanitize_string(package),
             sanitize_string(version),
             sanitize_string(release),
             sanitize_string(pdate),
             sanitize_string(arch))
     else:
-        query  = "INSERT INTO packages (t_record, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s')" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
             tag_id,
+            sanitize_string(tag),
             sanitize_string(package),
             sanitize_string(version),
             sanitize_string(release),
@@ -888,14 +895,17 @@ def run_binary_query(qstring, type):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
 
+    query  = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(options.tag)
+    tag_id = rqdb.fetch_one(db, query)
+
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
 
     if type == 'files' and options.ownership:
-        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+        query = "SELECT DISTINCT t_record, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
     else:
         # query on type: provides, requires, symbols
-        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+        query = "SELECT DISTINCT t_record, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
 
 
     if options.ignorecase:
@@ -904,7 +914,7 @@ def run_binary_query(qstring, type):
         query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
 
     if options.tag:
-        query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
+        query = query + " AND t_record = '" + tag_id + "'"
 
     query  = query + " ORDER BY p_tag, p_package, " + type
     result = rqdb.fetch_all(db, query)
