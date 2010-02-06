@@ -901,20 +901,23 @@ def run_binary_query(qstring, type):
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
 
+    if options.ignorecase:
+        ignorecase = ''
+    else:
+        ignorecase = 'BINARY'
+
     if type == 'files' and options.ownership:
-        query = "SELECT DISTINCT t_record, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+            type, type, type, ignorecase, type)
     else:
         # query on type: provides, requires, symbols
-        query = "SELECT DISTINCT t_record, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s " % (type, type, type, type)
+        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+            type, type, type, ignorecase, type)
 
-
-    if options.ignorecase:
-        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
-    else:
-        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
+    query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
 
     if options.tag:
-        query = query + " AND t_record = '" + tag_id + "'"
+        query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
 
     query  = query + " ORDER BY p_tag, p_package, " + type
     result = rqdb.fetch_all(db, query)
@@ -995,17 +998,19 @@ def run_source_query(qstring, type):
     if not options.quiet:
         print 'Searching database records for substring match (%s)' % qstring
 
+    if options.ignorecase:
+        ignorecase = ''
+    else:
+        ignorecase = 'BINARY'
+
     if type == 'ctags':
-        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE c_name "
+        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
         orderby = "c_file"
     else:
-        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE f_file "
+        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE %s f_file " % ignorecase
         orderby = "f_file"
 
-    if options.ignorecase:
-        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
-    else:
-        query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
+    query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
 
     if options.sourceonly:
         query = query + " AND s_type = 'S'"
