@@ -207,7 +207,12 @@ def showdbstats(type, tag):
     if tag == 'all':
         extra_opts = ''
     else:
-        extra_opts = "WHERE t_record = '%d'" % tag_lookup_id(tag)
+        tag_id = tag_lookup_id(tag)
+        if tag_id:
+            extra_opts = "WHERE t_record = '%d'" % tag_id
+        else:
+            print 'No such tag: "%s" does not exist in the database!\n' % tag
+            sys.exit(1)
 
     query   = "SELECT count(*) FROM tags %s" % extra_opts
     c_tags  = rqdb.fetch_one(db, query)
