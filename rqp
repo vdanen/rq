@@ -86,8 +86,7 @@ def tag_delete_entries(tag, type='binary'):
     """
     logging.debug('in tag_delete_entries(%s)' % tag)
 
-    query  = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    tag_id = rqdb.fetch_one(db, query)
+    tag_id =  tag_lookup_id(tag)
 
     if not tag_id:
         print 'No matching tag found for entry %s!\n' % tag
@@ -118,6 +117,12 @@ def tag_delete_entries(tag, type='binary'):
                 query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id)
                 res   = rqdb.do_query(db, query)
 
+            sys.stdout.write(' done\n')
+
+            sys.stdout.write('Optimizing database... ')
+            for table in tables:
+                query = 'OPTIMIZE TABLE %s' % table
+                res   = rqdb.do_query(db, query)
             sys.stdout.write(' done\n')
         else:
             sys.stdout.write('No matching package tags to remove.\n')
@@ -193,27 +198,32 @@ def tag_update_entries(tag, type='binary'):
             record_add(tag_id, rpm, type)
 
 
-def showdbstats(type):
+def showdbstats(type, tag):
     """
     Function to show database info
     """
-    logging.debug("in showdbstats(%s)" % type)
+    logging.debug("in showdbstats(%s, %s)" % (type, tag))
 
-    query   = "SELECT count(*) FROM tags"
+    if tag == 'all':
+        extra_opts = ''
+    else:
+        extra_opts = "WHERE t_record = '%d'" % tag_lookup_id(tag)
+
+    query   = "SELECT count(*) FROM tags %s" % extra_opts
     c_tags  = rqdb.fetch_one(db, query)
-    query   = "SELECT count(*) FROM packages"
+    query   = "SELECT count(*) FROM packages %s" % extra_opts
     c_pkgs  = rqdb.fetch_one(db, query)
     if type == 'binary':
-        query   = "SELECT count(*) FROM requires"
+        query   = "SELECT count(*) FROM requires %s" % extra_opts
         c_reqs  = rqdb.fetch_one(db, query)
-        query   = "SELECT count(*) FROM provides"
+        query   = "SELECT count(*) FROM provides %s" % extra_opts
         c_provs = rqdb.fetch_one(db, query)
     else:
-        query   = "SELECT count(*) FROM sources"
+        query   = "SELECT count(*) FROM sources %s" % extra_opts
         c_src   = rqdb.fetch_one(db, query)
-        query   = "SELECT count(*) FROM ctags"
+        query   = "SELECT count(*) FROM ctags %s" % extra_opts
         c_ctags = rqdb.fetch_one(db, query)
-    query   = "SELECT count(*) FROM files"
+    query   = "SELECT count(*) FROM files %s" % extra_opts
     c_files = rqdb.fetch_one(db, query)
 
     # get the size of the database as well
@@ -223,7 +233,7 @@ def showdbstats(type):
     tbsize = rqdb.fetch_all(db, query)
 
     for x in tbsize:
-        size += x['Data_length']    #['Data_length']
+        size += x['Data_length']
     count = 0
 
     while size > 1024:
@@ -238,6 +248,8 @@ def showdbstats(type):
             break
 
     print 'Database statistics:\n'
+    if tag != 'all':
+        print 'Printing statistics for tag: %s\n' % tag
     print '   Database  => User: %s, Host: %s, Database: %s' % (config['username'], config['hostspec'], config['database'])
     print '   Data size => %2.2f %s\n' % (size, bytes)
     print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
@@ -285,6 +297,20 @@ def tag_lookup(tag):
     path  = rqdb.fetch_one(db, query)
     if path:
         return(path)
+    else:
+        return False
+
+
+def tag_lookup_id(tag):
+    """
+    Function to return the t_record ID of a tag
+    """
+    logging.debug('in tag_lookup_id(%s)' % tag)
+
+    query     = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    t_record  = rqdb.fetch_one(db, query)
+    if t_record:
+        return(t_record)
     else:
         return False
 
@@ -895,8 +921,7 @@ def run_binary_query(qstring, type):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
 
-    query  = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(options.tag)
-    tag_id = rqdb.fetch_one(db, query)
+    tag_id =  tag_lookup_id(options.tag)
 
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
@@ -1248,7 +1273,10 @@ if __name__ == '__main__':
         tag_list()
 
     if options.stats:
-        showdbstats(rq_type)
+        if options.tag:
+            showdbstats(rq_type, options.tag)
+        else:
+            showdbstats(rq_type, 'all')
 
     if options.tag:
         logging.debug('Tag:\t%s\n' % options.tag)
