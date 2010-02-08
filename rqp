@@ -120,7 +120,7 @@ def tag_delete_entries(tag, type='binary'):
 
             sys.stdout.write(' done\n')
 
-            sys.stdout.write('Optimizing database... ')
+            sys.stdout.write('Optimizing database (this may take some time)... ')
             sys.stdout.flush()
             for table in tables:
                 query = 'OPTIMIZE TABLE %s' % table
