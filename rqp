@@ -1239,14 +1239,15 @@ if __name__ == '__main__':
         p.error("--tag and --delete are mutually exclusive; you do not need to use --tag")
 
     # setup logging; default is WARNING, debug is DEBUG and verbose is INFO
+    LOG_FILENAME = '%s/%s.log' % (os.getcwd(), rq_prog)
     if options.debug:
-        logging.basicConfig(level=logging.DEBUG, format='%(levelname)-8s: %(message)s')
+        logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG, format='%(levelname)-8s: %(message)s')
 
     if options.verbose:
-        logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
+        logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO, format='%(levelname)-8s: %(message)s')
 
     if not options.verbose and not options.debug:
-        logging.basicConfig(level=logging.WARNING, format='%(levelname)-8s: %(message)s')
+        logging.basicConfig(filename=LOG_FILENAME,level=logging.WARNING, format='%(levelname)-8s: %(message)s')
 
     logging.debug("debug mode enabled; type => %s" % rq_type)
 
