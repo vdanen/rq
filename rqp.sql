@@ -29,6 +29,7 @@ CREATE TABLE `files` (
   `f_group` varchar(16) NOT NULL,
   `f_is_suid` tinyint DEFAULT 0,
   `f_is_sgid` tinyint DEFAULT 0,
+  `f_perms` varchar(4) NOT NULL,
   PRIMARY KEY  (`f_id`),
   KEY `rec` USING BTREE (`p_record`),
   KEY `trec` USING BTREE (`t_record`)

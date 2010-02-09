@@ -297,6 +297,55 @@ def show_progress(prefix=False):
             return
 
 
+def get_file_mode(mode):
+    """
+    Function to return the numeric file mode given the r--r--r-- string as input
+    """
+    user  = mode[1:4]
+    group = mode[4:7]
+    other = mode[7:]
+    perms = {'user': user, 'group': group, 'other': other}
+
+    num   = 0
+    for type in perms.keys():
+
+        read    = perms[type][0]
+        write   = perms[type][1]
+        execute = perms[type][2]
+
+        if type == 'user':
+            if read == 'r':
+                num = num + 400
+            if write == 'w':
+                num = num + 200
+            if execute == 'x':
+                num = num + 100
+            elif execute == 'S':
+                num = num + 4000
+            elif execute == 's':
+                num = num + 4100
+        if type == 'group':
+            if read == 'r':
+                num = num + 40
+            if write == 'w':
+                num = num + 20
+            if execute == 'x':
+                num = num + 10
+            elif execute == 'S':
+                num = num + 2000
+            elif execute == 's':
+                num = num + 2010
+        if type == 'other':
+            if read == 'r':
+                num = num + 4
+            if write == 'w':
+                num = num + 2
+            if execute == 'x':
+                num = num + 1
+    num = '%04d' % num
+    return(num)
+
+
 def tag_lookup(tag):
     """
     Function to see if a tag exists
@@ -560,12 +609,14 @@ def rpm_list(file, raw=False):
             user  = foo[2]
             group = foo[3]
             fname = foo[8]
-        if foo[0][3] == 's':
+        if foo[0][3].lower() == 's':
             is_suid = 1
-        if foo[0][6] == 's':
+        if foo[0][6].lower() == 's':
             is_sgid = 1
 
-        rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid}
+        perms = get_file_mode(foo[0])
+
+        rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid, 'perms': perms}
         count       += 1
 
     return(rlist)
@@ -626,14 +677,15 @@ def add_file_records(tag_id, record, file_list):
         show_progress()
         if options.verbose:
             print 'File: %s' % file_list[x]['file']
-        query  = "INSERT INTO files (t_record, p_record, files, f_user, f_group, f_is_suid, f_is_sgid) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d)" % (
+        query  = "INSERT INTO files (t_record, p_record, files, f_user, f_group, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
             tag_id,
             record,
             sanitize_string(file_list[x]['file'].strip()),
             sanitize_string(file_list[x]['user']),
             sanitize_string(file_list[x]['group']),
             file_list[x]['is_suid'],
-            file_list[x]['is_sgid'])
+            file_list[x]['is_sgid'],
+            file_list[x]['perms'])
         result = rqdb.do_query(db, query)
 
 
@@ -727,7 +779,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
             query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file))
             db_srec = rqdb.fetch_one(db, query)
             if not db_srec:
-                logging.critical('\n!!!!! adding files from %s failed...' % file)
+                logging.critical('!!!!! adding files from %s failed...' % file)
                 # don't bail, it's logged, continue
                 #sys.exit(1)
                 continue
