@@ -840,7 +840,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
             try:
                 shutil.rmtree(tmpdir)
             except:
-                logging.critical('Unable to remove directory: %s, most likely because the tarball has idiotic permissions')
+                logging.critical('Unable to remove directory: %s, most likely because the tarball has idiotic permissions' % tmpdir)
 
 
 def patch_list(file):
