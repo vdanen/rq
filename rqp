@@ -805,7 +805,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
             # some packages contain files that are r--r--r-- which prevents
             # us from cleanly removing the directory, so do a recursive
             # chmod first
-            command = "chmod -R u+w ."
+            command = "chmod -R u+rw ."
             (rc, output) = commands.getstatusoutput(command)
             logging.debug('called chmod (rc=%s): %s' % (rc, command))
 
@@ -835,7 +835,12 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
                     result = rqdb.do_query(db, query)
                     #print '%s\n' % query
             os.chdir(cpio_dir)
-            shutil.rmtree(tmpdir)
+
+            # have to put this in a try statement; who puts files and directories in a tarball all mode 0200?!?
+            try:
+                shutil.rmtree(tmpdir)
+            except:
+                logging.critical('Unable to remove directory: %s, most likely because the tarball has idiotic permissions')
 
 
 def patch_list(file):
