@@ -1318,18 +1318,20 @@ if __name__ == '__main__':
     if options.debug:
         filelevel = LEVELS.get('debug', logging.NOTSET)
         conslevel = LEVELS.get('debug', logging.NOTSET)
+        filefmt   = '%(asctime)s %(filename)s(%(funcName)s[%(lineno)d]): %(levelname)s: %(message)s'
 
     if options.verbose:
         filelevel = LEVELS.get('info', logging.NOTSET)
         conslevel = LEVELS.get('info', logging.NOTSET)
+        filefmt   = '%(asctime)s %(message)s'
 
     if not options.verbose and not options.debug:
         filelevel = LEVELS.get('info', logging.NOTSET)
         conslevel = LEVELS.get('warning', logging.NOTSET)
+        filefmt   = '%(asctime)s %(message)s'
 
     logging.basicConfig(level=filelevel,
-                        name=rq_prog,
-                        format='%(asctime)s %(name)s: %(message)s',
+                        format=filefmt,
                         datefmt='%b %d %H:%M:%S',
                         filename=LOG_FILENAME,
                         filemode='a')
