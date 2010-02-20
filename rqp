@@ -1005,8 +1005,8 @@ def run_binary_query(qstring, type):
     else:
         ignorecase = 'BINARY'
 
-    if type == 'files' and options.ownership:
-        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+    if type == 'files':
+        query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
             type, type, type, ignorecase, type)
     else:
         # query on type: provides, requires, symbols
@@ -1042,11 +1042,12 @@ def run_binary_query(qstring, type):
             fromdb_date = row['p_date']
             fromdb_file = row[type]
 
-            if type == 'files' and options.ownership:
+            if type == 'files':
                 fromdb_user    = row['f_user']
                 fromdb_group   = row['f_group']
                 fromdb_is_suid = row['f_is_suid']
                 fromdb_is_sgid = row['f_is_sgid']
+                fromdb_perms   = row['f_perms']
 
             if not ltag == fromdb_tag:
                 print '\nResults in Tag: %s\n' % fromdb_tag
@@ -1065,7 +1066,7 @@ def run_binary_query(qstring, type):
                             is_suid = '*'
                         if fromdb_is_sgid == 1:
                             is_sgid = '*'
-                        print '%s: %s (%s%s, %s%s)' % (rpm, fromdb_file, is_suid, fromdb_user, is_sgid, fromdb_group)
+                        print '%s: %s (%04d,%s%s,%s%s)' % (rpm, fromdb_file, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
                     else:
                         print '%s: %s' % (rpm, fromdb_file)
 
@@ -1308,18 +1309,37 @@ if __name__ == '__main__':
     if options.tag and options.tagdelete:
         p.error("--tag and --delete are mutually exclusive; you do not need to use --tag")
 
-    # setup logging; default is WARNING, debug is DEBUG and verbose is INFO
+    # setup logging facilities
     LOG_FILENAME = '%s/%s.log' % (os.getcwd(), rq_prog)
+    LEVELS = {'debug'  : logging.DEBUG,
+              'info'   : logging.INFO,
+              'warning': logging.WARNING}
+
     if options.debug:
-        logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG, format='%(levelname)-8s: %(message)s')
+        filelevel = LEVELS.get('debug', logging.NOTSET)
+        conslevel = LEVELS.get('debug', logging.NOTSET)
 
     if options.verbose:
-        logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO, format='%(levelname)-8s: %(message)s')
+        filelevel = LEVELS.get('info', logging.NOTSET)
+        conslevel = LEVELS.get('info', logging.NOTSET)
 
     if not options.verbose and not options.debug:
-        logging.basicConfig(filename=LOG_FILENAME,level=logging.WARNING, format='%(levelname)-8s: %(message)s')
+        filelevel = LEVELS.get('info', logging.NOTSET)
+        conslevel = LEVELS.get('warning', logging.NOTSET)
 
-    logging.debug("debug mode enabled; type => %s" % rq_type)
+    logging.basicConfig(level=filelevel,
+                        name=rq_prog,
+                        format='%(asctime)s %(name)s: %(message)s',
+                        datefmt='%b %d %H:%M:%S',
+                        filename=LOG_FILENAME,
+                        filemode='a')
+    console = logging.StreamHandler()
+    console.setLevel(conslevel)
+    consfmt = logging.Formatter('%(message)s')
+    console.setFormatter(consfmt)
+    logging.getLogger('').addHandler(console)
+
+    logging.debug("%s starting, debug mode enabled; type => %s" % (rq_prog, rq_type))
 
     config = {}
 
