@@ -1245,7 +1245,7 @@ if __name__ == '__main__':
     """
     global options, config
 
-    rq_version = '0.2'
+    rq_version = '0.3'
     if os.path.basename(sys.argv[0]) == 'rqs':
         rq_prog    = 'rqs'
         rq_type    = 'source'
