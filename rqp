@@ -120,12 +120,15 @@ def tag_delete_entries(tag, type='binary'):
 
             sys.stdout.write(' done\n')
 
-            sys.stdout.write('Optimizing database (this may take some time)... ')
-            sys.stdout.flush()
-            for table in tables:
-                query = 'OPTIMIZE TABLE %s' % table
-                res   = rqdb.do_query(db, query)
-            sys.stdout.write(' done\n')
+            if result > 500:
+                sys.stdout.write('Optimizing database (this may take some time)... ')
+                sys.stdout.flush()
+                for table in tables:
+                    query = 'OPTIMIZE TABLE %s' % table
+                    res   = rqdb.do_query(db, query)
+                sys.stdout.write(' done\n')
+            else:
+                sys.stdout.write('Skipping database optimization, less than 500 package records removed.\n')
         else:
             sys.stdout.write('No matching package tags to remove.\n')
 
