@@ -24,7 +24,7 @@ re_tarbz   = re.compile(r'\.(tbz2?|tar\.bz2)$')
 re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
 re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
-file_excludes = ('.svn', 'CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
+file_excludes = ('/.svn/', '/CVS/', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
 
 def sanitize_string(string):
     """
@@ -754,7 +754,7 @@ def add_source_file_records(tag_id, record, file_list):
                     pass
                 else:
                     show_progress()
-                    logging.info('File: %s\n' % dfile)
+                    logging.info('File: %s' % dfile)
                     query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
                     result = rqdb.do_query(db, query)
         else:
