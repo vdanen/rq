@@ -515,7 +515,8 @@ def source_get_tar_files(file):
     """
     logging.debug('in source_get_tar_files(%s)' % file)
 
-    exts = ['*.tar.?z*', '*.tgz', '*.tbz', '*.zip']
+    # include the .spec file here; we need it later
+    exts = ['*.tar.?z*', '*.tgz', '*.tbz', '*.zip', '*.spec']
     for search in exts:
         command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
         (rc, output) = commands.getstatusoutput(command)
@@ -873,16 +874,22 @@ def add_source_buildreq_records(tag_id, record, cpio_dir):
     """
     Get the build requirements for this package from the spec file
     """
+    logging.debug('in add_source_buildreq_records(%s, %s, %s)' % (tag_id, record, cpio_dir))
+
+    specfile = ''
+    r        = []
+
     # this is likely a double chdir, but let's make sure we're in the right place
     # so we don't have to strip out the path from the ctags output
     os.chdir(cpio_dir)
 
-    # first, identify and expand any tarballs found:
     for file in os.listdir(cpio_dir):
         if re.search('.spec', file):
             specfile = file
 
-    r = []
+    if specfile == '':
+        logging.critical('No specfile found, unable to process buildrequirements')
+        sys.exit(1)
 
     for line in open(specfile):
         reqs  = {}
