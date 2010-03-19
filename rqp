@@ -488,6 +488,7 @@ def record_add(tag_id, file, type):
             source_get_all_files(file)
             add_source_file_records(tag_id, record, file_list)
             add_source_ctag_records(tag_id, record, cpio_dir)
+            add_source_buildreq_records(tag_id, record, cpio_dir)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -866,6 +867,87 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
                 shutil.rmtree(tmpdir)
             except:
                 logging.critical('Unable to remove directory: %s, most likely because the tarball has idiotic permissions' % tmpdir)
+
+
+def add_source_buildreq_records(tag_id, record, cpio_dir):
+    """
+    Get the build requirements for this package from the spec file
+    """
+    # this is likely a double chdir, but let's make sure we're in the right place
+    # so we don't have to strip out the path from the ctags output
+    os.chdir(cpio_dir)
+
+    # first, identify and expand any tarballs found:
+    for file in os.listdir(cpio_dir):
+        if re.search('.spec', file):
+            specfile = file
+
+    r = []
+
+    for line in open(specfile):
+        reqs  = {}
+        count = 0
+        if re.search('^buildrequire', line.lower()):
+            words = line.split()
+            for c in words:
+                if not c.startswith('Build'):
+                    reqs[count] = c.strip()
+                    count += 1
+
+        # if there is more than one item on this line
+        if len(reqs) > 1:
+            skip = 0
+            for x in reqs.keys():
+                # iterate through each item on the line, if this item includes
+                # the >, <, or = characters, create our requirement string
+                # based on the N+1 and N+2 words
+                new = ''
+
+                if skip == 0 and re.search('(>|<|=)', reqs[x+1]):
+                    # construct the new string based on N+1 (equality) and N+2 (nvr)
+                    new = '%s %s %s' % (reqs[x], reqs[x+1], reqs[x+2])
+                    # tell it to skip the next item since we grabbed it
+                    skip += 1
+
+                elif skip == 0:
+                    # there is no following equality string, so take it as it is
+                    new = reqs[x]
+
+                else:
+                    if skip == 1:
+                        # skipped the equality, so skip one more (nvr)
+                        skip += 1
+                    else:
+                        # skip would be 2, so reset the counter
+                        skip = 0
+
+                if new.endswith(','):
+                    # multi-item dependencies, uses ',' as a delimiter so remove it
+                    new = new[:-1]
+
+                # we want to make sure we don't list the same thing twice, we also don't want blank items
+                if not new in r:
+                    if new != '':
+                        r.append(new)
+
+        elif len(reqs) == 1:
+            # exactly one item on this line, put it in as-is
+            if reqs[0].endswith(','):
+                new = reqs[0][:-1]
+            else:
+                new = reqs[0]
+            r.append(new)
+
+    for require in r:
+        # now iterate through each item and add them to the database
+        show_progress()
+        # record == p_record
+        query = "INSERT INTO buildreqs (t_record, p_record, b_req) VALUES ('%s', '%s', '%s')" % (
+                        tag_id,
+                        record,
+                        sanitize_string(require))
+        result = rqdb.do_query(db, query)
+        #print '%s\n' % query
 
 
 def patch_list(file):

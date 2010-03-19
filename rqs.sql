@@ -106,3 +106,21 @@ CREATE TABLE IF NOT EXISTS `ctags` (
   KEY `rec` USING BTREE (`c_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `buildreqs`
+--
+
+DROP TABLE IF EXISTS `buildreqs`;
+CREATE TABLE IF NOT EXISTS `buildreqs` (
+  `b_record` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
+  `t_record` INT NOT NULL,
+  `b_req` text NOT NULL,
+  PRIMARY KEY  (`b_record`),
+  KEY `rec` USING BTREE (`b_record`),
+  KEY `trec` USING BTREE (`t_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
