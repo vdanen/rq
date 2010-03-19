@@ -1205,14 +1205,11 @@ def run_source_query(qstring, type):
     """
     Function to run the query for source RPMs
     """
-    logging.debug('in run_source_query(%s)' % qstring)
+    logging.debug('in run_source_query(%s, %s)' % (qstring, type))
 
     if options.tag and not tag_lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
-
-    if not options.quiet:
-        print 'Searching database records for substring match (%s)' % qstring
 
     if options.ignorecase:
         ignorecase = ''
@@ -1222,9 +1219,14 @@ def run_source_query(qstring, type):
     if type == 'ctags':
         query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
         orderby = "c_file"
+        match_t = 'Ctags data'
+    elif type == 'buildreqs':
+        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req " % ignorecase
+        match_t = '.spec BuildRequires'
     else:
         query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE %s f_file " % ignorecase
         orderby = "f_file"
+        match_t = 'files'
 
     query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
 
@@ -1234,7 +1236,14 @@ def run_source_query(qstring, type):
     if options.tag:
         query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
 
-    query  = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
+    if type == 'buildreqs':
+        query   = '%s ORDER BY p_tag, p_package' % query
+    else:
+        query   = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
+
+    if not options.quiet:
+        print 'Searching database records for substring match on %s ("%s")' % (match_t, qstring)
+
     result = rqdb.fetch_all(db, query)
     if result:
         if options.count:
@@ -1256,9 +1265,13 @@ def run_source_query(qstring, type):
             fromdb_ver   = row['p_version']
             fromdb_rel   = row['p_release']
             fromdb_date  = row['p_date']
-            fromdb_type  = row['s_type']
-            fromdb_file  = row['s_file']
-            fromdb_sfile = row[orderby]
+            if type == 'buildreqs':
+                fromdb_type  = 'S'
+                fromdb_breq  = row['b_req']
+            else:
+                fromdb_type  = row['s_type']
+                fromdb_file  = row['s_file']
+                fromdb_sfile = row[orderby]
             if type == 'ctags':
                 fromdb_ctype  = row['c_type']
                 fromdb_cline  = row['c_line']
@@ -1290,6 +1303,8 @@ def run_source_query(qstring, type):
                     else:
                         if type == 'ctags':
                             sys.stdout.write('%s: (%s) %s\n\tFound matching %s in %s:%s: %s\n' % (srpm, stype, fromdb_file, fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
+                        elif type == 'buildreqs':
+                            sys.stdout.write('%s: %s\n' % (srpm, fromdb_breq))
                         else:
                             sys.stdout.write('%s: (%s) %s: %s\n' % (srpm, stype, fromdb_file, fromdb_sfile))
 
@@ -1401,6 +1416,7 @@ if __name__ == '__main__':
         group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
         group.add_option('-z', '--symbols', dest="symbols", help="Query database for substring match on symbols in binary files", metavar="STRING")
     if rq_type == 'source':
+        group.add_option('-b', '--buildreqs', dest="buildreqs", help="Query database for substring match on BuildRequires", metavar="STRING")
         group.add_option('-z', '--ctags', dest="ctags", help="Query database for substring match on ctags data (functions, etc.)", metavar="STRING")
     p.add_option_group(group)
     (options, arguments) = p.parse_args()       # 'arguments' is a tuple of non-optioned things
@@ -1525,6 +1541,10 @@ if __name__ == '__main__':
     if rq_type == 'source':
         if options.ctags:
             run_source_query(options.ctags, 'ctags')
+            sys.exit(0)
+
+        if options.buildreqs:
+            run_source_query(options.buildreqs, 'buildreqs')
             sys.exit(0)
 
         if options.src_examine:
