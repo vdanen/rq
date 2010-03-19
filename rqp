@@ -1251,9 +1251,9 @@ def run_source_query(qstring, type):
                 print len(result)
             else:
                 if options.tag:
-                    print '%d match(es) in database for tag (%s) and substring (%s)' % (len(result), options.tag, qstring)
+                    print '%d match(es) in database for tag (%s) and substring ("%s")' % (len(result), options.tag, qstring)
                 else:
-                    print '%d match(es) in database for substring (%s)' % (len(result), qstring)
+                    print '%d match(es) in database for substring ("%s")' % (len(result), qstring)
             return
 
         ltag = ''
@@ -1310,9 +1310,9 @@ def run_source_query(qstring, type):
 
     else:
         if options.tag:
-            print 'No matches in database for tag (%s) and substring (%s)' % (options.tag, qstring)
+            print 'No matches in database for tag (%s) and substring ("%s")' % (options.tag, qstring)
         else:
-            print 'No matches in database for substring (%s)' % qstring
+            print 'No matches in database for substring ("%s")' % qstring
 
 
 def run_source_examine(file):
@@ -1358,6 +1358,52 @@ def run_source_examine(file):
     finally:
         logging.debug('Removing temporary directory: %s...' % cpio_dir)
         shutil.rmtree(cpio_dir)
+
+
+def run_source_showinfo(srpm):
+    """
+    Display all known information on a srpm
+    """
+    logging.debug('in run_source_showinfo(%s)' % srpm)
+
+    if options.tag and not tag_lookup(options.tag):
+        print 'Tag %s is not a known tag!\n' % options.tag
+        sys.exit(1)
+
+    print 'Displaying all known information on srpm "%s"\n' % srpm
+
+    if options.tag:
+        qtag = " AND p_tag = '%s'" % sanitize_string(options.tag)
+
+    query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (sanitize_string(srpm), qtag)
+
+    result = rqdb.fetch_all(db, query)
+    if not result:
+        print 'No matches found for package %s' % srpm
+        sys.exit(0)
+
+    for row in result:
+        print 'Results for package %s-%s-%s' % (row['p_package'], row['p_version'], row['p_release'])
+        print '  Tag: %-20s Source path: %s' % (row['p_tag'], row['path'])
+
+        query   = "SELECT s_file FROM sources WHERE p_record = '%s' ORDER BY s_type, s_file ASC" % row['p_record']
+        results = rqdb.fetch_all(db, query)
+        if results:
+            print ''
+            print '  Source RPM contains the following source files:'
+            for xrow in results:
+                print '  %s' % xrow['s_file']
+
+        query   = "SELECT b_req FROM buildreqs WHERE p_record = '%s' ORDER BY b_req ASC" % row['p_record']
+        results = rqdb.fetch_all(db, query)
+        if results:
+            print ''
+            print '  Source RPM has the following BuildRequires:'
+            for xrow in results:
+                print '  %s' % xrow['b_req']
+        print ''
+
+
 
 
 if __name__ == '__main__':
@@ -1417,6 +1463,7 @@ if __name__ == '__main__':
         group.add_option('-z', '--symbols', dest="symbols", help="Query database for substring match on symbols in binary files", metavar="STRING")
     if rq_type == 'source':
         group.add_option('-b', '--buildreqs', dest="buildreqs", help="Query database for substring match on BuildRequires", metavar="STRING")
+        group.add_option('-o', '--info', dest="showinfo", help="Show all info on specified srpm", metavar="STRING")
         group.add_option('-z', '--ctags', dest="ctags", help="Query database for substring match on ctags data (functions, etc.)", metavar="STRING")
     p.add_option_group(group)
     (options, arguments) = p.parse_args()       # 'arguments' is a tuple of non-optioned things
@@ -1545,6 +1592,10 @@ if __name__ == '__main__':
 
         if options.buildreqs:
             run_source_query(options.buildreqs, 'buildreqs')
+            sys.exit(0)
+
+        if options.showinfo:
+            run_source_showinfo(options.showinfo)
             sys.exit(0)
 
         if options.src_examine:
