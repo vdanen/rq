@@ -62,6 +62,16 @@ def read_config(config_file):
     return config
 
 
+def fix_excludes(file):
+    """
+    if this is a directory exclude, remove the leading '/' for the tar extract
+    """
+    if file[0] == '/':
+        file = file[1:]
+
+    return file
+
+
 def tag_list():
     """
     Function to show database tags
@@ -753,14 +763,23 @@ def add_source_file_records(tag_id, record, file_list):
                 sys.exit(1)
 
             for dfile in files:
+                break_loop = False
                 if dfile.endswith('/'):     # skip directories
                     pass
                 else:
-                    show_progress()
-                    if options.verbose:
-                        print 'File: %s' % dfile
-                    query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
-                    result = rqdb.do_query(db, query)
+                    for exclude in file_excludes:
+                        # make sure we don't include any files in our exclude list
+                        if re.search(exclude, dfile):
+                            logging.debug('found unwanted entry: %s' % dfile)
+                            break_loop = True
+                    if break_loop == True:
+                        pass
+                    else:
+                        show_progress()
+                        if options.verbose:
+                            print 'File: %s' % dfile
+                        query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
+                        result = rqdb.do_query(db, query)
         else:
             logging.debug('unwilling to process: %s' % sfile)
 
@@ -796,9 +815,8 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
 
             excludes = ''
             for f in file_excludes:
-                # if this is a directory exclude, remove the leading '/' for the tar extract
-                if f[0] == '/':
-                    f = f[1:]
+                f = fix_excludes(f)
+
                 excludes = '%s --exclude=%s' % (excludes, f)
 
             tmpdir  = tempfile.mkdtemp()
@@ -883,9 +901,8 @@ def tar_list(file):
 
     excludes = ''
     for f in file_excludes:
-        # if this is a directory exclude, remove the leading '/' for the tar extract
-        if f[0] == '/':
-            f = f[1:]
+        f = fix_excludes(f)
+
         excludes = '%s --exclude=%s' % (excludes, f)
 
     command = 'tar -%s "%s" %s 2>/dev/null' % (comp, file.replace(' ', '\ '), excludes)
