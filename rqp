@@ -243,6 +243,8 @@ def showdbstats(type, tag):
         c_src   = rqdb.fetch_one(db, query)
         query   = "SELECT count(*) FROM ctags %s" % extra_opts
         c_ctags = rqdb.fetch_one(db, query)
+        query   = "SELECT count(*) FROM buildreqs %s" % extra_opts
+        c_breqs = rqdb.fetch_one(db, query)
     query   = "SELECT count(*) FROM files %s" % extra_opts
     c_files = rqdb.fetch_one(db, query)
 
@@ -278,7 +280,7 @@ def showdbstats(type, tag):
         print '                                   Provides records: %-15d\n' % c_provs
     else:
         print '   File records : %-15d  Source records  : %-15d' % (c_files, c_src)
-        print '   Ctags records: %-15d' % (c_ctags)
+        print '   Ctags records: %-15d  Requires records: %-15d '% (c_ctags, c_breqs)
     sys.exit(0)
 
 
@@ -910,11 +912,14 @@ def add_source_buildreq_records(tag_id, record, cpio_dir):
                 # based on the N+1 and N+2 words
                 new = ''
 
-                if skip == 0 and re.search('(>|<|=)', reqs[x+1]):
-                    # construct the new string based on N+1 (equality) and N+2 (nvr)
-                    new = '%s %s %s' % (reqs[x], reqs[x+1], reqs[x+2])
-                    # tell it to skip the next item since we grabbed it
-                    skip += 1
+                if skip == 0 and x+1 in reqs.keys():
+                    if re.search('(>|<|=)', reqs[x+1]):
+                        # construct the new string based on N+1 (equality) and N+2 (nvr)
+                        new = '%s %s %s' % (reqs[x], reqs[x+1], reqs[x+2])
+                        # tell it to skip the next item since we grabbed it
+                        skip += 1
+                    else:
+                        new = reqs[x]
 
                 elif skip == 0:
                     # there is no following equality string, so take it as it is
@@ -1374,6 +1379,8 @@ def run_source_showinfo(srpm):
 
     if options.tag:
         qtag = " AND p_tag = '%s'" % sanitize_string(options.tag)
+    else:
+        qtag = ''
 
     query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (sanitize_string(srpm), qtag)
 
