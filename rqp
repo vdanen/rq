@@ -834,7 +834,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
             # some packages contain files that are r--r--r-- which prevents
             # us from cleanly removing the directory, so do a recursive
             # chmod first
-            command = "chmod -R u+rw ."
+            command = "chmod -R u+rwx ."
             (rc, output) = commands.getstatusoutput(command)
             logging.debug('called chmod (rc=%s): %s' % (rc, command))
 
