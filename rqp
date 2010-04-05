@@ -6,8 +6,6 @@ a database for later querying.
 based on the srpm script of similar function copyright (c) 2005 Stew Benedict <sbenedict@mandriva.com>
 copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 
-Some example text
-
 $Id$
 """
 
