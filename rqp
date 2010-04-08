@@ -12,6 +12,7 @@ $Id$
 import optparse, os, sys, re, datetime, commands, shutil, tempfile, logging
 #import MySQLdb, MySQLdb.cursors
 import rq.db
+import rq.basics
 from glob import glob
 #import MySQLdb.connect
 
@@ -38,28 +39,6 @@ def sanitize_string(string):
     else:
         new_string = None
     return(new_string)
-
-
-def read_config(config_file):
-    """
-    Function to read the configuration file
-    """
-    logging.debug("in read_config(%s)" % config_file)
-
-    config = {}
-    for line in open(config_file):
-        line = line.rstrip()
-        if not line:                                        # ignore empties
-            continue
-        if line.startswith("#") or line.startswith(";"):    # and ignore comments
-            continue
-
-        # Split on the first "=", this allows for values to have a "=" in them
-        (config_name, config_value) = line.split("=", 1)
-        config_name                 = config_name.strip()
-        config[config_name]         = config_value
-
-    return config
 
 
 def fix_excludes(file):
@@ -1529,26 +1508,7 @@ if __name__ == '__main__':
 
     logging.debug("%s starting, debug mode enabled; type => %s" % (rq_prog, rq_type))
 
-    config = {}
-
-    if options.conffile:
-        if os.path.isfile(options.conffile):
-            config = read_config(options.conffile)
-        else:
-            logging.critical('Specified configuration file does not exist: %s' % options.conffile)
-            sys.exit(1)
-    else:
-        config_file = '/etc/rqrc'
-        if os.path.isfile(config_file):             # look for a system-wide one first
-            config = read_config(config_file)
-
-        config_file = os.getenv('HOME') + '/.rqrc'
-        if os.path.isfile(config_file):             # if we find a local one, overwrite anything defined
-            config = read_config(config_file)
-
-    if not config:
-        logging.critical('No configuration file found!')
-        sys.exit(1)
+    config = rq.basics.get_config(options.conffile)
 
     (db, config) = rq.db.connect(rq_type, config)
 
