@@ -11,7 +11,7 @@ $Id$
 
 import optparse, os, sys, re, datetime, commands, shutil, tempfile, logging
 #import MySQLdb, MySQLdb.cursors
-import rqdb
+import rq.db
 from glob import glob
 #import MySQLdb.connect
 
@@ -79,14 +79,14 @@ def tag_list():
     logging.debug("in tag_list()")
 
     query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
-    results = rqdb.fetch_all(db, query)
+    results = rq.db.fetch_all(db, query)
     if results:
         for row in results:
             print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row['tag'], row['tdate'], row['path'])
     else:
         print 'No tags exist in the database!\n'
 
-    rqdb.close(db)
+    rq.db.close(db)
     sys.exit(0)
 
 
@@ -104,10 +104,10 @@ def tag_delete_entries(tag, type='binary'):
     else:
         print 'Removing tag (%s) from Tags...\n' % tag
         query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id
-        rqdb.do_query(db, query)
+        rq.db.do_query(db, query)
 
         query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id
-        result = rqdb.fetch_one(db, query)
+        result = rq.db.fetch_one(db, query)
         if result:
             if result == 1:
                 word_package = 'Package'
@@ -126,7 +126,7 @@ def tag_delete_entries(tag, type='binary'):
 
             for table in tables:
                 query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id)
-                res   = rqdb.do_query(db, query)
+                res   = rq.db.do_query(db, query)
 
             sys.stdout.write(' done\n')
 
@@ -135,7 +135,7 @@ def tag_delete_entries(tag, type='binary'):
                 sys.stdout.flush()
                 for table in tables:
                     query = 'OPTIMIZE TABLE %s' % table
-                    res   = rqdb.do_query(db, query)
+                    res   = rq.db.do_query(db, query)
                 sys.stdout.write(' done\n')
             else:
                 sys.stdout.write('Skipping database optimization, less than 500 package records removed.\n')
@@ -157,15 +157,15 @@ def tag_update_entries(tag, type='binary'):
     to_add    = []
 
     query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    path   = rqdb.fetch_one(db, query)
+    path   = rq.db.fetch_one(db, query)
     query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    tag_id = rqdb.fetch_one(db, query)
+    tag_id = rq.db.fetch_one(db, query)
 
     if path:
         logging.info('Update tag (%s) entries from %s...' % (tag, path))
         # get the existing entries
         query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE t_record = '%s'" % tag_id
-        result = rqdb.fetch_all(db, query)
+        result = rq.db.fetch_all(db, query)
         for row in result:
             pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
             logging.info('Checking for %s in %s...' % (pname, path))
@@ -187,7 +187,7 @@ def tag_update_entries(tag, type='binary'):
             release = tlist[2].strip()
 
             query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, sanitize_string(package), sanitize_string(version), sanitize_string(release))
-            package = rqdb.fetch_one(db, query)
+            package = rq.db.fetch_one(db, query)
             if package:
                 logging.info('OK')
             else:
@@ -205,7 +205,7 @@ def tag_update_entries(tag, type='binary'):
         for rnum in to_remove:
             for table in tables:
                 query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                result = rqdb.do_query(db, query)
+                result = rq.db.do_query(db, query)
 
     if to_add:
         logging.info('Adding tagged entries for tag: %s...' % tag)
@@ -230,29 +230,29 @@ def showdbstats(type, tag):
             sys.exit(1)
 
     query   = "SELECT count(*) FROM tags %s" % extra_opts
-    c_tags  = rqdb.fetch_one(db, query)
+    c_tags  = rq.db.fetch_one(db, query)
     query   = "SELECT count(*) FROM packages %s" % extra_opts
-    c_pkgs  = rqdb.fetch_one(db, query)
+    c_pkgs  = rq.db.fetch_one(db, query)
     if type == 'binary':
         query   = "SELECT count(*) FROM requires %s" % extra_opts
-        c_reqs  = rqdb.fetch_one(db, query)
+        c_reqs  = rq.db.fetch_one(db, query)
         query   = "SELECT count(*) FROM provides %s" % extra_opts
-        c_provs = rqdb.fetch_one(db, query)
+        c_provs = rq.db.fetch_one(db, query)
     else:
         query   = "SELECT count(*) FROM sources %s" % extra_opts
-        c_src   = rqdb.fetch_one(db, query)
+        c_src   = rq.db.fetch_one(db, query)
         query   = "SELECT count(*) FROM ctags %s" % extra_opts
-        c_ctags = rqdb.fetch_one(db, query)
+        c_ctags = rq.db.fetch_one(db, query)
         query   = "SELECT count(*) FROM buildreqs %s" % extra_opts
-        c_breqs = rqdb.fetch_one(db, query)
+        c_breqs = rq.db.fetch_one(db, query)
     query   = "SELECT count(*) FROM files %s" % extra_opts
-    c_files = rqdb.fetch_one(db, query)
+    c_files = rq.db.fetch_one(db, query)
 
     # get the size of the database as well
     size   = 0.00
     bytes  = ''
     query  = "SHOW TABLE STATUS"
-    tbsize = rqdb.fetch_all(db, query)
+    tbsize = rq.db.fetch_all(db, query)
 
     for x in tbsize:
         size += x['Data_length']
@@ -368,7 +368,7 @@ def tag_lookup(tag):
     logging.debug('in tag_lookup(%s)' % tag)
 
     query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    path  = rqdb.fetch_one(db, query)
+    path  = rq.db.fetch_one(db, query)
     if path:
         return(path)
     else:
@@ -382,7 +382,7 @@ def tag_lookup_id(tag):
     logging.debug('in tag_lookup_id(%s)' % tag)
 
     query     = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    t_record  = rqdb.fetch_one(db, query)
+    t_record  = rq.db.fetch_one(db, query)
     if t_record:
         return(t_record)
     else:
@@ -435,16 +435,16 @@ def tag_add_record(tag, file):
         path = os.path.abspath(file)
     # we can have multiple similar paths, but not multiple similar tags
     query = "SELECT tag FROM tags WHERE tag = '%s'" % sanitize_string(tag)
-    dbtag = rqdb.fetch_one(db, query)
+    dbtag = rq.db.fetch_one(db, query)
     if dbtag:
         print 'Tag (%s) already exists in the database!\n' % tag
         sys.exit(1)
 
     query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (sanitize_string(tag.strip()), sanitize_string(path.strip()), cur_date)
-    rqdb.do_query(db, query)
+    rq.db.do_query(db, query)
 
     query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
-    tag_id  = rqdb.fetch_one(db, query)
+    tag_id  = rq.db.fetch_one(db, query)
     if tag_id:
         return(tag_id)
     else:
@@ -560,7 +560,7 @@ def add_file_requires(tag_id, record, file):
             if options.verbose:
                 print 'Dependency: %s' % dep
             query  = "INSERT INTO requires (t_record, p_record, requires) VALUES ('%s', '%s', '%s')" % (tag_id, record, sanitize_string(dep.strip()))
-            result = rqdb.do_query(db, query)
+            result = rq.db.do_query(db, query)
 
 
 def add_file_provides(tag_id, record, file):
@@ -577,7 +577,7 @@ def add_file_provides(tag_id, record, file):
             if options.verbose:
                 print 'Provides: %s' % prov
             query  = "INSERT INTO provides (t_record, p_record, provides) VALUES ('%s', '%s', '%s')" % (tag_id, record, sanitize_string(prov.strip()))
-            result = rqdb.do_query(db, query)
+            result = rq.db.do_query(db, query)
 
 
 def rpm_list(file, raw=False):
@@ -703,7 +703,7 @@ def add_file_records(tag_id, record, file_list):
             file_list[x]['is_suid'],
             file_list[x]['is_sgid'],
             file_list[x]['perms'])
-        result = rqdb.do_query(db, query)
+        result = rq.db.do_query(db, query)
 
 
 def add_source_records(tag_id, record, file_list):
@@ -731,7 +731,7 @@ def add_source_records(tag_id, record, file_list):
         if options.verbose:
             print 'Source: %s, Type: %s' % (sfile, stype)
         query  = "INSERT INTO sources (t_record, p_record, s_type, s_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, stype, sanitize_string(sfile.strip()))
-        result = rqdb.do_query(db, query)
+        result = rq.db.do_query(db, query)
 
 
 def add_source_file_records(tag_id, record, file_list):
@@ -761,7 +761,7 @@ def add_source_file_records(tag_id, record, file_list):
 
             # get the s_record for this source from the db
             query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(sfile))
-            db_srec = rqdb.fetch_one(db, query)
+            db_srec = rq.db.fetch_one(db, query)
             if not db_srec:
                 logging.critical('adding files from %s failed...' % sfile)
                 sys.exit(1)
@@ -783,7 +783,7 @@ def add_source_file_records(tag_id, record, file_list):
                         if options.verbose:
                             print 'File: %s' % dfile
                         query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
-                        result = rqdb.do_query(db, query)
+                        result = rq.db.do_query(db, query)
         else:
             logging.debug('unwilling to process: %s' % sfile)
 
@@ -804,7 +804,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
         if re_tar.search(file):
             # get the s_record for this source from the db
             query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file))
-            db_srec = rqdb.fetch_one(db, query)
+            db_srec = rq.db.fetch_one(db, query)
             if not db_srec:
                 logging.critical('!!!!! adding files from %s failed...' % file)
                 # don't bail, it's logged, continue
@@ -861,7 +861,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
                         sanitize_string(line),
                         sanitize_string(path),
                         sanitize_string(extra))
-                    result = rqdb.do_query(db, query)
+                    result = rq.db.do_query(db, query)
                     #print '%s\n' % query
             os.chdir(cpio_dir)
 
@@ -958,7 +958,7 @@ def add_source_buildreq_records(tag_id, record, cpio_dir):
                         tag_id,
                         record,
                         sanitize_string(require))
-        result = rqdb.do_query(db, query)
+        result = rq.db.do_query(db, query)
         #print '%s\n' % query
 
 
@@ -1028,7 +1028,7 @@ def package_add_record(tag_id, file, type):
         arch    = tlist[4].strip()
 
     query = "SELECT tag FROM tags WHERE t_record = '%s' LIMIT 1" % tag_id
-    tag   = rqdb.fetch_one(db, query)
+    tag   = rq.db.fetch_one(db, query)
 
     if type == 'binary':
         query = "SELECT t_record, p_package, p_version, p_release, p_arch FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (
@@ -1043,7 +1043,7 @@ def package_add_record(tag_id, file, type):
             sanitize_string(package),
             sanitize_string(version),
             sanitize_string(release))
-    result = rqdb.fetch_all(db, query)
+    result = rq.db.fetch_all(db, query)
     if result:
         if type == 'binary':
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
@@ -1071,11 +1071,11 @@ def package_add_record(tag_id, file, type):
             sanitize_string(version),
             sanitize_string(release),
             sanitize_string(pdate))
-    result = rqdb.do_query(db, query)
+    result = rq.db.do_query(db, query)
     show_progress(path)
 
     query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, sanitize_string(package))
-    p_record = rqdb.fetch_one(db, query)
+    p_record = rq.db.fetch_one(db, query)
     if p_record:
             return(p_record)
     else:
@@ -1140,7 +1140,7 @@ def run_binary_query(qstring, type):
         query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
 
     query  = query + " ORDER BY p_tag, p_package, " + type
-    result = rqdb.fetch_all(db, query)
+    result = rq.db.fetch_all(db, query)
     if result:
         if options.count:
             if options.quiet:
@@ -1249,7 +1249,7 @@ def run_source_query(qstring, type):
     if not options.quiet:
         print 'Searching database records for substring match on %s ("%s")' % (match_t, qstring)
 
-    result = rqdb.fetch_all(db, query)
+    result = rq.db.fetch_all(db, query)
     if result:
         if options.count:
             if options.quiet:
@@ -1384,7 +1384,7 @@ def run_source_showinfo(srpm):
 
     query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (sanitize_string(srpm), qtag)
 
-    result = rqdb.fetch_all(db, query)
+    result = rq.db.fetch_all(db, query)
     if not result:
         print 'No matches found for package %s' % srpm
         sys.exit(0)
@@ -1394,7 +1394,7 @@ def run_source_showinfo(srpm):
         print '  Tag: %-20s Source path: %s' % (row['p_tag'], row['path'])
 
         query   = "SELECT s_file FROM sources WHERE p_record = '%s' ORDER BY s_type, s_file ASC" % row['p_record']
-        results = rqdb.fetch_all(db, query)
+        results = rq.db.fetch_all(db, query)
         if results:
             print ''
             print '  Source RPM contains the following source files:'
@@ -1402,7 +1402,7 @@ def run_source_showinfo(srpm):
                 print '  %s' % xrow['s_file']
 
         query   = "SELECT b_req FROM buildreqs WHERE p_record = '%s' ORDER BY b_req ASC" % row['p_record']
-        results = rqdb.fetch_all(db, query)
+        results = rq.db.fetch_all(db, query)
         if results:
             print ''
             print '  Source RPM has the following BuildRequires:'
@@ -1550,7 +1550,7 @@ if __name__ == '__main__':
         logging.critical('No configuration file found!')
         sys.exit(1)
 
-    (db, config) = rqdb.connect(rq_type, config)
+    (db, config) = rq.db.connect(rq_type, config)
 
     # start doing useful things
     if options.list:
