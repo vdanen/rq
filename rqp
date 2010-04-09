@@ -27,19 +27,6 @@ re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
 file_excludes = ('/.svn', '/CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
 
-def sanitize_string(string):
-    """
-    String to cleanup a string to remove characters that will cause problems
-    with the database
-    """
-    #logging.debug('  in sanitize_string(%s)' % string)
-    if string:
-        # escape single and double quotes
-        new_string = re.sub('''(['";\\\])''', r'\\\1', string)
-    else:
-        new_string = None
-    return(new_string)
-
 
 def fix_excludes(file):
     """
@@ -135,9 +122,9 @@ def tag_update_entries(tag, type='binary'):
     to_remove = []
     to_add    = []
 
-    query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
     path   = rq.db.fetch_one(db, query)
-    query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
     tag_id = rq.db.fetch_one(db, query)
 
     if path:
@@ -165,7 +152,7 @@ def tag_update_entries(tag, type='binary'):
             version = tlist[1].strip()
             release = tlist[2].strip()
 
-            query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, sanitize_string(package), sanitize_string(version), sanitize_string(release))
+            query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, rq.db.sanitize_string(package), rq.db.sanitize_string(version), rq.db.sanitize_string(release))
             package = rq.db.fetch_one(db, query)
             if package:
                 logging.info('OK')
@@ -346,7 +333,7 @@ def tag_lookup(tag):
     """
     logging.debug('in tag_lookup(%s)' % tag)
 
-    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
     path  = rq.db.fetch_one(db, query)
     if path:
         return(path)
@@ -360,7 +347,7 @@ def tag_lookup_id(tag):
     """
     logging.debug('in tag_lookup_id(%s)' % tag)
 
-    query     = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    query     = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
     t_record  = rq.db.fetch_one(db, query)
     if t_record:
         return(t_record)
@@ -413,16 +400,16 @@ def tag_add_record(tag, file):
     else:
         path = os.path.abspath(file)
     # we can have multiple similar paths, but not multiple similar tags
-    query = "SELECT tag FROM tags WHERE tag = '%s'" % sanitize_string(tag)
+    query = "SELECT tag FROM tags WHERE tag = '%s'" % rq.db.sanitize_string(tag)
     dbtag = rq.db.fetch_one(db, query)
     if dbtag:
         print 'Tag (%s) already exists in the database!\n' % tag
         sys.exit(1)
 
-    query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (sanitize_string(tag.strip()), sanitize_string(path.strip()), cur_date)
+    query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (rq.db.sanitize_string(tag.strip()), rq.db.sanitize_string(path.strip()), cur_date)
     rq.db.do_query(db, query)
 
-    query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % sanitize_string(tag)
+    query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
     tag_id  = rq.db.fetch_one(db, query)
     if tag_id:
         return(tag_id)
@@ -538,7 +525,7 @@ def add_file_requires(tag_id, record, file):
             show_progress()
             if options.verbose:
                 print 'Dependency: %s' % dep
-            query  = "INSERT INTO requires (t_record, p_record, requires) VALUES ('%s', '%s', '%s')" % (tag_id, record, sanitize_string(dep.strip()))
+            query  = "INSERT INTO requires (t_record, p_record, requires) VALUES ('%s', '%s', '%s')" % (tag_id, record, rq.db.sanitize_string(dep.strip()))
             result = rq.db.do_query(db, query)
 
 
@@ -555,7 +542,7 @@ def add_file_provides(tag_id, record, file):
             show_progress()
             if options.verbose:
                 print 'Provides: %s' % prov
-            query  = "INSERT INTO provides (t_record, p_record, provides) VALUES ('%s', '%s', '%s')" % (tag_id, record, sanitize_string(prov.strip()))
+            query  = "INSERT INTO provides (t_record, p_record, provides) VALUES ('%s', '%s', '%s')" % (tag_id, record, rq.db.sanitize_string(prov.strip()))
             result = rq.db.do_query(db, query)
 
 
@@ -676,9 +663,9 @@ def add_file_records(tag_id, record, file_list):
         query  = "INSERT INTO files (t_record, p_record, files, f_user, f_group, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
             tag_id,
             record,
-            sanitize_string(file_list[x]['file'].strip()),
-            sanitize_string(file_list[x]['user']),
-            sanitize_string(file_list[x]['group']),
+            rq.db.sanitize_string(file_list[x]['file'].strip()),
+            rq.db.sanitize_string(file_list[x]['user']),
+            rq.db.sanitize_string(file_list[x]['group']),
             file_list[x]['is_suid'],
             file_list[x]['is_sgid'],
             file_list[x]['perms'])
@@ -709,7 +696,7 @@ def add_source_records(tag_id, record, file_list):
 
         if options.verbose:
             print 'Source: %s, Type: %s' % (sfile, stype)
-        query  = "INSERT INTO sources (t_record, p_record, s_type, s_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, stype, sanitize_string(sfile.strip()))
+        query  = "INSERT INTO sources (t_record, p_record, s_type, s_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, stype, rq.db.sanitize_string(sfile.strip()))
         result = rq.db.do_query(db, query)
 
 
@@ -739,7 +726,7 @@ def add_source_file_records(tag_id, record, file_list):
             files = flist.split()
 
             # get the s_record for this source from the db
-            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(sfile))
+            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, rq.db.sanitize_string(sfile))
             db_srec = rq.db.fetch_one(db, query)
             if not db_srec:
                 logging.critical('adding files from %s failed...' % sfile)
@@ -761,7 +748,7 @@ def add_source_file_records(tag_id, record, file_list):
                         show_progress()
                         if options.verbose:
                             print 'File: %s' % dfile
-                        query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, sanitize_string(dfile))
+                        query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, rq.db.sanitize_string(dfile))
                         result = rq.db.do_query(db, query)
         else:
             logging.debug('unwilling to process: %s' % sfile)
@@ -782,7 +769,7 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
     for file in os.listdir(cpio_dir):
         if re_tar.search(file):
             # get the s_record for this source from the db
-            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, sanitize_string(file))
+            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, rq.db.sanitize_string(file))
             db_srec = rq.db.fetch_one(db, query)
             if not db_srec:
                 logging.critical('!!!!! adding files from %s failed...' % file)
@@ -835,11 +822,11 @@ def add_source_ctag_records(tag_id, record, cpio_dir):
                         tag_id,
                         record,
                         db_srec,
-                        sanitize_string(name),
-                        sanitize_string(type),
-                        sanitize_string(line),
-                        sanitize_string(path),
-                        sanitize_string(extra))
+                        rq.db.sanitize_string(name),
+                        rq.db.sanitize_string(type),
+                        rq.db.sanitize_string(line),
+                        rq.db.sanitize_string(path),
+                        rq.db.sanitize_string(extra))
                     result = rq.db.do_query(db, query)
                     #print '%s\n' % query
             os.chdir(cpio_dir)
@@ -936,7 +923,7 @@ def add_source_buildreq_records(tag_id, record, cpio_dir):
         query = "INSERT INTO buildreqs (t_record, p_record, b_req) VALUES ('%s', '%s', '%s')" % (
                         tag_id,
                         record,
-                        sanitize_string(require))
+                        rq.db.sanitize_string(require))
         result = rq.db.do_query(db, query)
         #print '%s\n' % query
 
@@ -1012,16 +999,16 @@ def package_add_record(tag_id, file, type):
     if type == 'binary':
         query = "SELECT t_record, p_package, p_version, p_release, p_arch FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (
             tag_id,
-            sanitize_string(package),
-            sanitize_string(version),
-            sanitize_string(release),
-            sanitize_string(arch))
+            rq.db.sanitize_string(package),
+            rq.db.sanitize_string(version),
+            rq.db.sanitize_string(release),
+            rq.db.sanitize_string(arch))
     else:
         query = "SELECT t_record, p_package, p_version, p_release FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (
             tag_id,
-            sanitize_string(package),
-            sanitize_string(version),
-            sanitize_string(release))
+            rq.db.sanitize_string(package),
+            rq.db.sanitize_string(version),
+            rq.db.sanitize_string(release))
     result = rq.db.fetch_all(db, query)
     if result:
         if type == 'binary':
@@ -1036,24 +1023,24 @@ def package_add_record(tag_id, file, type):
     if type == 'binary':
         query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
             tag_id,
-            sanitize_string(tag),
-            sanitize_string(package),
-            sanitize_string(version),
-            sanitize_string(release),
-            sanitize_string(pdate),
-            sanitize_string(arch))
+            rq.db.sanitize_string(tag),
+            rq.db.sanitize_string(package),
+            rq.db.sanitize_string(version),
+            rq.db.sanitize_string(release),
+            rq.db.sanitize_string(pdate),
+            rq.db.sanitize_string(arch))
     else:
         query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
             tag_id,
-            sanitize_string(tag),
-            sanitize_string(package),
-            sanitize_string(version),
-            sanitize_string(release),
-            sanitize_string(pdate))
+            rq.db.sanitize_string(tag),
+            rq.db.sanitize_string(package),
+            rq.db.sanitize_string(version),
+            rq.db.sanitize_string(release),
+            rq.db.sanitize_string(pdate))
     result = rq.db.do_query(db, query)
     show_progress(path)
 
-    query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, sanitize_string(package))
+    query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, rq.db.sanitize_string(package))
     p_record = rq.db.fetch_one(db, query)
     if p_record:
             return(p_record)
@@ -1113,7 +1100,7 @@ def run_binary_query(qstring, type):
         query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
             type, type, type, ignorecase, type)
 
-    query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
+    query = query + "LIKE '%" + rq.db.sanitize_string(qstring) + "%'"
 
     if options.tag:
         query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
@@ -1212,13 +1199,13 @@ def run_source_query(qstring, type):
         orderby = "f_file"
         match_t = 'files'
 
-    query = query + "LIKE '%" + sanitize_string(qstring) + "%'"
+    query = query + "LIKE '%" + rq.db.sanitize_string(qstring) + "%'"
 
     if options.sourceonly:
         query = query + " AND s_type = 'S'"
 
     if options.tag:
-        query = query + " AND p_tag = '" + sanitize_string(options.tag) + "'"
+        query = query + " AND p_tag = '" + rq.db.sanitize_string(options.tag) + "'"
 
     if type == 'buildreqs':
         query   = '%s ORDER BY p_tag, p_package' % query
@@ -1357,11 +1344,11 @@ def run_source_showinfo(srpm):
     print 'Displaying all known information on srpm "%s"\n' % srpm
 
     if options.tag:
-        qtag = " AND p_tag = '%s'" % sanitize_string(options.tag)
+        qtag = " AND p_tag = '%s'" % rq.db.sanitize_string(options.tag)
     else:
         qtag = ''
 
-    query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (sanitize_string(srpm), qtag)
+    query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (rq.db.sanitize_string(srpm), qtag)
 
     result = rq.db.fetch_all(db, query)
     if not result:

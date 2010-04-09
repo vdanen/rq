@@ -11,10 +11,11 @@ $Id$
 import MySQLdb, MySQLdb.cursors
 import logging
 import sys
+import re
 
 def connect(type, config):
     """
-    function db_connect(type, config)
+    function connect(type, config)
 
     Function to connect to the database.  It requires two arguments: type is
     'source' or 'binary' to know which database we are working with and config
@@ -65,7 +66,7 @@ def connect(type, config):
 
 def close(db):
     """
-    function db_close()
+    function close()
 
     Function to close connections to the database
     """
@@ -82,7 +83,7 @@ def fetch_all(db, query):
     query was successful, returns False if not.  This function is meant to be
     used with multi-result queries.
     """
-    logging.debug('  in db_fetchall()')
+    logging.debug('  in fetch_all()')
     logging.debug('  => query is: %s' % query)
 
     try:
@@ -103,14 +104,14 @@ def fetch_all(db, query):
 
 def fetch_one(db, query):
     """
-    function db_fetchone(query)
+    function fetch_one(query)
 
     Function to perform database queries.  It takes one argument, the query to
     execute (a SELECT statement), and returns the results of the query if the
     query was successful, returns False if not.  This function is meant to be
     used with single-result queries.
     """
-    logging.debug('  in db_fetchone()')
+    logging.debug('  in fetch_one()')
     logging.debug('  => query is: %s' % query)
 
     try:
@@ -132,7 +133,7 @@ def do_query(db, query):
     """
     Function to perform an actual update (UPDATE/INSERT) query (non-SELECT) from the database
     """
-    logging.debug('  in db_doquery()')
+    logging.debug('  in do_query()')
     logging.debug('  => query is: %s' % query)
 
     try:
@@ -142,3 +143,17 @@ def do_query(db, query):
     except MySQLdb.Error, e:
         logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
         sys.exit(1)
+
+
+def sanitize_string(string):
+    """
+    String to cleanup a string to remove characters that will cause problems
+    with the database
+    """
+    #logging.debug('  in sanitize_string(%s)' % string)
+    if string:
+        # escape single and double quotes
+        new_string = re.sub('''(['";\\\])''', r'\\\1', string)
+    else:
+        new_string = None
+    return(new_string)
