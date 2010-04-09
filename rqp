@@ -13,6 +13,7 @@ import optparse, os, sys, re, datetime, commands, shutil, tempfile, logging
 #import MySQLdb, MySQLdb.cursors
 import rq.db
 import rq.basics
+import rq.tag
 from glob import glob
 #import MySQLdb.connect
 
@@ -38,147 +39,6 @@ def fix_excludes(file):
     return file
 
 
-def tag_list():
-    """
-    Function to show database tags
-    """
-    logging.debug("in tag_list()")
-
-    query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
-    results = rq.db.fetch_all(db, query)
-    if results:
-        for row in results:
-            print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row['tag'], row['tdate'], row['path'])
-    else:
-        print 'No tags exist in the database!\n'
-
-    rq.db.close(db)
-    sys.exit(0)
-
-
-def tag_delete_entries(tag, type='binary'):
-    """
-    Function to delete database tags and associated entries
-    """
-    logging.debug('in tag_delete_entries(%s)' % tag)
-
-    tag_id =  tag_lookup_id(tag)
-
-    if not tag_id:
-        print 'No matching tag found for entry %s!\n' % tag
-        sys.exit(1)
-    else:
-        print 'Removing tag (%s) from Tags...\n' % tag
-        query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id
-        rq.db.do_query(db, query)
-
-        query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id
-        result = rq.db.fetch_one(db, query)
-        if result:
-            if result == 1:
-                word_package = 'Package'
-                word_entry   = 'entry'
-            else:
-                word_package = 'Packages'
-                word_entry   = 'entries'
-
-            sys.stdout.write('Removing %s tagged %s %s for %s... ' % (result, word_package, word_entry, tag))
-            sys.stdout.flush()
-
-            if type == 'binary':
-                tables = ('packages', 'requires', 'provides', 'files')
-            if type == 'source':
-                tables = ('packages', 'sources', 'files', 'ctags')
-
-            for table in tables:
-                query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id)
-                res   = rq.db.do_query(db, query)
-
-            sys.stdout.write(' done\n')
-
-            if result > 500:
-                sys.stdout.write('Optimizing database (this may take some time)... ')
-                sys.stdout.flush()
-                for table in tables:
-                    query = 'OPTIMIZE TABLE %s' % table
-                    res   = rq.db.do_query(db, query)
-                sys.stdout.write(' done\n')
-            else:
-                sys.stdout.write('Skipping database optimization, less than 500 package records removed.\n')
-        else:
-            sys.stdout.write('No matching package tags to remove.\n')
-
-
-def tag_update_entries(tag, type='binary'):
-    """
-    function to update entries for a given tag
-    """
-    logging.debug('in tag_update_entries(%s)' % tag)
-    #
-    # this function is designed for src.rpm handling, but we can update it for binary rpm handling too
-    # XXX: TODO
-    #
-
-    to_remove = []
-    to_add    = []
-
-    query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-    path   = rq.db.fetch_one(db, query)
-    query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-    tag_id = rq.db.fetch_one(db, query)
-
-    if path:
-        logging.info('Update tag (%s) entries from %s...' % (tag, path))
-        # get the existing entries
-        query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE t_record = '%s'" % tag_id
-        result = rq.db.fetch_all(db, query)
-        for row in result:
-            pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
-            logging.info('Checking for %s in %s...' % (pname, path))
-            if os.path.isfile(pname):
-                logging.info('OK')
-            else:
-                logging.info('Missing')
-                to_remove.append(result['p_record'])
-
-        src_list = glob(path + "/*.rpm")
-        src_list.sort()
-
-        for src_rpm in src_list:
-            logging.info('Checking for %s in database...' % src_rpm)
-            rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm.replace(' ', '\ '))
-            tlist   = rtags.split('|')
-            package = tlist[0].strip()
-            version = tlist[1].strip()
-            release = tlist[2].strip()
-
-            query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, rq.db.sanitize_string(package), rq.db.sanitize_string(version), rq.db.sanitize_string(release))
-            package = rq.db.fetch_one(db, query)
-            if package:
-                logging.info('OK')
-            else:
-                logging.info('Adding')
-                to_add.append(src_rpm)
-    else:
-        sys.stdout.write('No Tag entry found for tag: %s\n' % tag)
-
-    if to_remove:
-        logging.info('Removing tagged entries for tag: %s...' % tag)
-        if type == 'binary':
-            tables = ('packages', 'requires', 'provides', 'files')
-        if type == 'source':
-            tables = ('packages', 'sources')
-        for rnum in to_remove:
-            for table in tables:
-                query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                result = rq.db.do_query(db, query)
-
-    if to_add:
-        logging.info('Adding tagged entries for tag: %s...' % tag)
-        for rpm in to_add:
-            record_add(tag_id, rpm, type)
-
-
 def showdbstats(type, tag):
     """
     Function to show database info
@@ -188,7 +48,7 @@ def showdbstats(type, tag):
     if tag == 'all':
         extra_opts = ''
     else:
-        tag_id = tag_lookup_id(tag)
+        tag_id = rtag.lookup_id(tag)
         if tag_id:
             extra_opts = "WHERE t_record = '%d'" % tag_id
         else:
@@ -325,96 +185,6 @@ def get_file_mode(mode):
                 num = num + 1
     num = '%04d' % num
     return(num)
-
-
-def tag_lookup(tag):
-    """
-    Function to see if a tag exists
-    """
-    logging.debug('in tag_lookup(%s)' % tag)
-
-    query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-    path  = rq.db.fetch_one(db, query)
-    if path:
-        return(path)
-    else:
-        return False
-
-
-def tag_lookup_id(tag):
-    """
-    Function to return the t_record ID of a tag
-    """
-    logging.debug('in tag_lookup_id(%s)' % tag)
-
-    query     = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-    t_record  = rq.db.fetch_one(db, query)
-    if t_record:
-        return(t_record)
-    else:
-        return False
-
-
-def tag_check(tag, file):
-    """
-    Function to check for the existence of tags
-    """
-    logging.debug('in tag_check(%s, %s)' % (tag, file))
-
-    if os.path.isfile(file):
-        path = os.path.abspath(os.path.dirname(file))
-    else:
-        path = os.path.abspath(file)
-
-    tpath = tag_lookup(tag)
-
-    if tpath:
-        logging.debug('Tag (%s) already exists in the database with path: %s' % (tag, tpath))
-        return True
-    else:
-        logging.debug('Tag or path does NOT exist in the database')
-        return False
-
-#        if len(result) > 0:
-#            if result[1] != path:
-#                #print 'Tag (%s) is already in the database with path: %s\n' % (tag, result[1])
-#                #sys.exit(1)
-#                return(True)
-#            else:
-#                return(False)
-#    except:
-#        return(False)
-
-
-def tag_add_record(tag, file):
-    """
-    Function to add a tag record, returns the ID of the newly created tag
-    """
-    logging.debug('in tag_add_record(%s, %s)' % (tag, file))
-
-    cur_date = datetime.datetime.now()
-    cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
-
-    if os.path.isfile(file):
-        path = os.path.abspath(os.path.dirname(file))
-    else:
-        path = os.path.abspath(file)
-    # we can have multiple similar paths, but not multiple similar tags
-    query = "SELECT tag FROM tags WHERE tag = '%s'" % rq.db.sanitize_string(tag)
-    dbtag = rq.db.fetch_one(db, query)
-    if dbtag:
-        print 'Tag (%s) already exists in the database!\n' % tag
-        sys.exit(1)
-
-    query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (rq.db.sanitize_string(tag.strip()), rq.db.sanitize_string(path.strip()), cur_date)
-    rq.db.do_query(db, query)
-
-    query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-    tag_id  = rq.db.fetch_one(db, query)
-    if tag_id:
-        return(tag_id)
-    else:
-        return(0)
 
 
 def record_add(tag_id, file, type):
@@ -627,7 +397,7 @@ def rpm_add_directory(tag, path, type='binary'):
         print 'No files found to import in directory: %s' % path
         sys.exit(1)
 
-    tag_id = tag_add_record(tag, path)
+    tag_id = rtag.add_record(tag, path)
     if tag_id == 0:
         logging.critical('Unable to add tag "%s" to the database!' % tag)
         sys.exit(1)
@@ -1078,11 +848,11 @@ def run_binary_query(qstring, type):
     """
     logging.debug('in run_binary_query(%s, %s)' % (qstring, type))
 
-    if options.tag and not tag_lookup(options.tag):
+    if options.tag and not rtag.lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
 
-    tag_id =  tag_lookup_id(options.tag)
+    tag_id =  rtag.lookup_id(options.tag)
 
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
@@ -1178,7 +948,7 @@ def run_source_query(qstring, type):
     """
     logging.debug('in run_source_query(%s, %s)' % (qstring, type))
 
-    if options.tag and not tag_lookup(options.tag):
+    if options.tag and not rtag.lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
 
@@ -1337,7 +1107,7 @@ def run_source_showinfo(srpm):
     """
     logging.debug('in run_source_showinfo(%s)' % srpm)
 
-    if options.tag and not tag_lookup(options.tag):
+    if options.tag and not rtag.lookup(options.tag):
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
 
@@ -1499,9 +1269,11 @@ if __name__ == '__main__':
 
     (db, config) = rq.db.connect(rq_type, config)
 
+    rtag = rq.tag.Tag(db, rq_type)
+
     # start doing useful things
     if options.list:
-        tag_list()
+        rtag.list()
 
     if options.stats:
         if options.tag:
@@ -1513,11 +1285,11 @@ if __name__ == '__main__':
         logging.debug('Tag:\t%s\n' % options.tag)
 
     if options.tagdelete:
-        tag_delete_entries(options.tagdelete, rq_type)
+        rtag.delete_entries(options.tagdelete)
         sys.exit(0)
 
     if options.tagupdate:
-        tag_update_entries(options.tagupdate, rq_type)
+        rtag.update_entries(options.tagupdate)
         sys.exit(0)
 
     if options.query:
@@ -1565,7 +1337,7 @@ if __name__ == '__main__':
             logging.critical('The --add option requires a tag entry!')
             sys.exit(1)
 
-        havetag = tag_check(options.tag, options.addfile)
+        havetag = rtag.check(options.tag, options.addfile)
         logging.debug('havetag is: %s' % havetag)
 
         if not havetag:
