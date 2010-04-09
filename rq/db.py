@@ -10,6 +10,7 @@ $Id$
 """
 import MySQLdb, MySQLdb.cursors
 import logging
+import sys
 
 def connect(type, config):
     """

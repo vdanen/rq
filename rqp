@@ -1508,7 +1508,7 @@ if __name__ == '__main__':
 
     logging.debug("%s starting, debug mode enabled; type => %s" % (rq_prog, rq_type))
 
-    config = rq.basics.get_config(options.conffile)
+    config = rq.basics.Config(options.conffile)
 
     (db, config) = rq.db.connect(rq_type, config)
 
