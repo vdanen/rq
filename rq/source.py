@@ -9,6 +9,7 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 $Id$
 """
 import os, sys, re, commands, logging, tempfile, shutil
+from glob import glob
 import rq.db
 import rq.basics
 
@@ -24,6 +25,7 @@ class Source:
         self.rtag    = rtag
         self.rcommon = rcommon
 
+        self.re_srpm    = re.compile(r'\.src\.rpm$')
         self.re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
         self.re_tar     = re.compile(r'\.((tar)(\.bz2|\.gz)?|t(gz|bz2?))$')
         self.re_targz   = re.compile(r'\.(tgz|tar\.gz)$')
@@ -593,3 +595,130 @@ class Source:
                             self.db.sanitize_string(require))
             result = self.db.do_query(query)
             #print '%s\n' % query
+
+
+    def rpm_add_directory(self, tag, path):
+        """
+        Function to import a directory full of source RPMs
+        """
+        logging.debug('in Source.rpm_add_directory(%s, %s)' % (tag, path))
+
+        if not os.path.isdir(path):
+            print 'Path (%s) is not a valid directory!' % path
+            sys.exit(1)
+
+        file_list = glob(path + "/*.src.rpm")
+        file_list.sort()
+
+        if not file_list:
+            print 'No files found to import in directory: %s' % path
+            sys.exit(1)
+
+        tag_id = self.rtag.add_record(tag, path)
+        if tag_id == 0:
+            logging.critical('Unable to add tag "%s" to the database!' % tag)
+            sys.exit(1)
+
+        for file in file_list:
+            if not os.path.isfile(file):
+                print 'File %s not found!\n' % file
+                next
+
+            if not self.re_srpm.search(file):
+                print 'File %s is not a source rpm!\n' % file
+                next
+
+            self.record_add(tag_id, file)
+
+
+    def record_add(self, tag_id, file):
+        """
+        Function to add a record to the database
+        """
+        logging.debug('in Source.record_add(%s, %s)' % (tag_id, file))
+
+        if os.path.isfile(file):
+            path = os.path.abspath(os.path.dirname(file))
+        else:
+            path = os.path.abspath(file)
+        logging.debug('Path:\t%s' % path)
+
+        rq.basics.file_rpm_check(file, type)
+
+        record = self.package_add_record(tag_id, file)
+        if not record:
+            return
+
+        file_list = rq.basics.rpm_list(file)
+        if not file_list:
+            return
+
+        logging.debug('Add source records for package record: %s' % record)
+        self.add_records(tag_id, record, file_list)
+        cpio_dir = tempfile.mkdtemp()
+
+        try:
+            current_dir = os.getcwd()
+            os.chdir(cpio_dir)
+            self.get_all_files(file)
+            self.add_file_records(tag_id, record, file_list)
+            self.add_ctag_records(tag_id, record, cpio_dir)
+            self.add_buildreq_records(tag_id, record, cpio_dir)
+            os.chdir(current_dir)
+        finally:
+            logging.debug('Removing temporary directory: %s...' % cpio_dir)
+            shutil.rmtree(cpio_dir)
+
+        if self.options.progress:
+            sys.stdout.write('\n')
+
+
+    def package_add_record(self, tag_id, file):
+        """
+        Function to add a package record
+        """
+        logging.debug('in Source.package_add_record(%s, %s)' % (tag_id, file))
+
+        path    = os.path.basename(file)
+        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file.replace(' ', '\ '))
+        tlist   = rpmtags.split('|')
+        logging.debug("tlist is %s " % tlist)
+        package = tlist[0].strip()
+        version = tlist[1].strip()
+        release = tlist[2].strip()
+        pdate   = tlist[3].strip()
+
+        query = "SELECT tag FROM tags WHERE t_record = '%s' LIMIT 1" % tag_id
+        tag   = self.db.fetch_one(query)
+
+        query = "SELECT t_record, p_package, p_version, p_release FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (
+            tag_id,
+            self.db.sanitize_string(package),
+            self.db.sanitize_string(version),
+            self.db.sanitize_string(release))
+        result = self.db.fetch_all(query)
+
+        if result:
+            print 'File %s-%s-%s is already in the database under tag %s' % (package, version, release, tag)
+            return(0)
+
+        ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
+        ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
+
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
+            tag_id,
+            self.db.sanitize_string(tag),
+            self.db.sanitize_string(package),
+            self.db.sanitize_string(version),
+            self.db.sanitize_string(release),
+            self.db.sanitize_string(pdate))
+        result = self.db.do_query(query)
+        self.rcommon.show_progress(path)
+
+        query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, self.db.sanitize_string(package))
+        p_record = self.db.fetch_one(query)
+        if p_record:
+                return(p_record)
+        else:
+            print 'Adding file %s failed!\n' % file
+            return(0)

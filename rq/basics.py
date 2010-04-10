@@ -9,7 +9,7 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 $Id$
 """
 
-import logging, os, sys, re, commands
+import logging, os, sys, re, commands, tempfile, shutil
 
 def get_file_excludes():
     """
@@ -160,9 +160,14 @@ class Common:
     define some common functions for use
     """
 
-    def __init__(self, options):
+    def __init__(self, options, rtag):
         self.pstate  = 1
         self.options = options
+        self.rtag    = rtag
+
+        self.re_srpm    = re.compile(r'\.src\.rpm$')
+        self.re_brpm    = re.compile(r'\.rpm$')
+
 
 
     def show_progress(self, prefix=False):

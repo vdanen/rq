@@ -13,7 +13,7 @@ import optparse, os, sys, logging
 import rq.db
 import rq.basics
 import rq.tag
-import rq.binary
+import rq.source
 
 
 if __name__ == '__main__':
@@ -23,8 +23,8 @@ if __name__ == '__main__':
     global options, config
 
     rq_version = '0.3'
-    rq_prog    = 'rqp'
-    rq_type    = 'binary'
+    rq_prog    = 'rqs'
+    rq_type    = 'source'
 
     sys.stdout.write("%s %s ($Id$)\n\n" % (rq_prog, rq_version))
     # XXX: TODO add options to search files by ownership and sgid/suid status
@@ -39,9 +39,11 @@ if __name__ == '__main__':
     p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true", help="Show extra info (version, release, date)")
     p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true", help="Case insensitive search")
     p.add_option('-l', '--list', dest="list", default=False, action="store_true", help="List database tags")
-    p.add_option('-o', '--ownership', dest="ownership", default=False, action="store_true", help="Display ownership information on files")
+    p.add_option('-p', '--patch', dest="patch", default=False, action="store_true", help="List patched files when examining a src.rpm")
     p.add_option('-P', '--progress', dest="progress", default=False, action="store_true", help="Show processing progress")
     p.add_option('-Q', '--quiet', dest="quiet", default=False, action="store_true", help="Quiet query - show tag and package name only (or numeric count only)")
+    p.add_option('-s', '--skip-tar', dest="skiptar", default=False, action="store_true", help="Skip tarfile extract when examining a src.rpm")
+    p.add_option('-S', '--source-only', dest="sourceonly", default=False, action="store_true", help="Limit query to source files (no patches)")
     p.add_option('-T', '--suppresstag', dest="suppresstag", default=False, action="store_true", help="Suppress Tag and Path label output for queries") # was only in rqs -- why?
     p.add_option('-x', '--statistics', dest="stats", default=False, action="store_true", help="Show database statistics")
     p.add_option('-v', '--verbose', dest="verbose", default=False, action="store_true", help="Verbose output")
@@ -49,14 +51,15 @@ if __name__ == '__main__':
     dbgroup.add_option('-a', '--add', dest="addfile", help="Add a " + rq_type + " rpm entry with TAG to the database", metavar="FILE")
     dbgroup.add_option('-c', '--createpath', dest="createpath", help="Create database entries with TAG from a " + rq_type + " rpm DIR", metavar="DIR")
     dbgroup.add_option('-D', '--delete', dest="tagdelete", help="Delete all TAG entries", metavar="TAG")
+    dbgroup.add_option('-f', '--file', dest="src_examine", help="Examine a src.rpm FILE and output to stdout", metavar="FILE")
     dbgroup.add_option('-t', '--tag', dest="tag", help="TAG for created database entries or database queries", metavar="TAG")
     dbgroup.add_option('-u', '--update', dest="tagupdate", help="Update TAG entries (new/removed files in directory)", metavar="TAG")
     p.add_option_group(dbgroup)
     group = optparse.OptionGroup(p, "Query Options")
-    group.add_option('-p', '--provides', dest="provides", help="Query database for substring match on provides", metavar="STRING")
     group.add_option('-q', '--query', dest="query", help="Query database for substring match on files", metavar="STRING")
-    group.add_option('-r', '--requires', dest="requires", help="Query database for substring match on requires", metavar="STRING")
-    group.add_option('-z', '--symbols', dest="symbols", help="Query database for substring match on symbols in binary files", metavar="STRING")
+    group.add_option('-b', '--buildreqs', dest="buildreqs", help="Query database for substring match on BuildRequires", metavar="STRING")
+    group.add_option('-o', '--info', dest="showinfo", help="Show all info on specified srpm", metavar="STRING")
+    group.add_option('-z', '--ctags', dest="ctags", help="Query database for substring match on ctags data (functions, etc.)", metavar="STRING")
     p.add_option_group(group)
     (options, arguments) = p.parse_args()       # 'arguments' is a tuple of non-optioned things
 
@@ -65,15 +68,6 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # setup the options
-    if options.provides and options.query:
-        p.error("--provides and --query are mutually exclusive")
-    if options.provides and options.requires:
-        p.error("--provides and --requires are mutually exclusive")
-    if options.query and options.requires:
-        p.error("--query and --provides are mutually exclusive")
-    if options.provides and options.query and options.requires:
-        p.error("--query, --provides, and --requires are mutually exclusive")
-
     if options.verbose and options.quiet:
         p.error("--quiet and --verbose are mutually exclusive")
     if options.tag and options.tagdelete:
@@ -123,7 +117,7 @@ if __name__ == '__main__':
 
     rcommon = rq.basics.Common(options, rtag)
 
-    rqp = rq.binary.Binary(db, config, options, rtag, rcommon)
+    rqs = rq.source.Source(db, config, options, rtag, rcommon)
 
     # start doing useful things
     if options.list:
@@ -147,19 +141,23 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.query:
-        rqp.query('files')
+        rqs.query('files')
         sys.exit(0)
 
-    if options.provides:
-        rqp.query('provides')
+    if options.ctags:
+        rqs.query('ctags')
         sys.exit(0)
 
-    if options.requires:
-        rqp.query('requires')
+    if options.buildreqs:
+        rqs.query('buildreqs')
         sys.exit(0)
 
-    if options.symbols:
-        rqp.query('symbols')
+    if options.showinfo:
+        rqs.showinfo()
+        sys.exit(0)
+
+    if options.src_examine:
+        rqs.examine()
         sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
@@ -214,7 +212,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
         sys.stdout.write('Searching for rpms to import...\n\n')
-        rqp.rpm_add_directory(options.tag, createpath)
+        rqs.rpm_add_directory(options.tag, createpath)
         sys.exit(0)
 
     # if we get here, we have completely invalid arguments
