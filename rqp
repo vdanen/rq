@@ -48,9 +48,9 @@ def showdbstats(type, tag):
     if tag == 'all':
         extra_opts = ''
     else:
-        tag_id = rtag.lookup_id(tag)
+        tag_id = rtag.lookup(tag)
         if tag_id:
-            extra_opts = "WHERE t_record = '%d'" % tag_id
+            extra_opts = "WHERE t_record = '%d'" % tag_id['id']
         else:
             print 'No such tag: "%s" does not exist in the database!\n' % tag
             sys.exit(1)
@@ -751,10 +751,10 @@ def package_add_record(tag_id, file, type):
 
     path    = os.path.basename(file)
     if type == 'binary':
-        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file.replace(' ', '\ '))
+        rpmtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file.replace(' ', '\ '))
     else:
-        rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file.replace(' ', '\ '))
-    tlist   = rtags.split('|')
+        rpmtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file.replace(' ', '\ '))
+    tlist   = rpmtags.split('|')
     logging.debug("tlist is %s " % tlist)
     package = tlist[0].strip()
     version = tlist[1].strip()
@@ -848,11 +848,12 @@ def run_binary_query(qstring, type):
     """
     logging.debug('in run_binary_query(%s, %s)' % (qstring, type))
 
-    if options.tag and not rtag.lookup(options.tag):
+    tag_id = rtag.lookup(options.tag)
+    if options.tag and not tag_id:
         print 'Tag %s is not a known tag!\n' % options.tag
         sys.exit(1)
 
-    tag_id =  rtag.lookup_id(options.tag)
+    tag_id =  tag_id['id']
 
     if not options.quiet:
         print 'Searching database records for substring match for %s (%s)' % (type, qstring)
@@ -1337,21 +1338,38 @@ if __name__ == '__main__':
             logging.critical('The --add option requires a tag entry!')
             sys.exit(1)
 
-        havetag = rtag.check(options.tag, options.addfile)
-        logging.debug('havetag is: %s' % havetag)
+        # are we passed a file, or directory?
+        if os.path.isfile(options.addfile):
+            # passed a file, we want the path
+            path = os.path.abspath(os.path.dirname(options.addfile))
+        else:
+            # passed a directory
+            path = os.path.abspath(options.addfile)
+
+        havetag = rtag.lookup(options.tag)
 
         if not havetag:
-            logging.critical('The --add option requires an existing tag entry!')
+            logging.critical('The --add option requires a tag that already exists!')
             sys.exit(1)
 
+        if path != havetag['path']:
+            logging.critical('Tag (%s) is already in the database with path: %s' % (options.tag, havetag['path']))
+            logging.critical('Cannot add to an existing tag from a different path!  Unwilling to use %s to add a new file!' % path)
+            sys.exit(1)
+
+        # the rest of this just makes no sense as-is so bail
+        print 'The --add option is non-functional.  Sorry.'
+        sys.exit(1)
+
         addfiles = []
-        addfiles.append(options.addfile)
+        addfiles.append(path)
 
         if len(arguments) > 0:
             addfiles.extend(arguments)
 
         for afile in addfiles:
-            record_add(options.tag, afile, rq_type)
+            print afile
+            #record_add(options.tag, afile, rq_type)
 
         sys.exit(0)
 

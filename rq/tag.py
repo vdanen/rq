@@ -12,6 +12,18 @@ import sys, datetime, logging, os
 import rq.db
 
 class Tag:
+    """
+    Class to handle tag management.  Init the class with the database connection and the
+    type of connection, whether it is binary or source.  This saves us having to pass
+    this information as arguments to functions
+
+    Tag.list()           : show database tags
+    Tag.lookup()         : returns a dictionary of tag information
+    Tag.add_record()     : ads a new tag to the db
+    Tag.deleted_entries(): deletes a tag and associated db entries
+    Tag.update_entries() : updates entries based on tag <-- this function doesn't work yet
+    """
+
     def __init__(self, db, rq_type):
         self.db   = db
         self.type = rq_type
@@ -19,7 +31,9 @@ class Tag:
 
     def list(self):
         """
-        Function to show database tags
+        Function to show database tags.
+
+        Exits the program when complete.
         """
         logging.debug("in Tag.list()")
 
@@ -37,66 +51,35 @@ class Tag:
 
     def lookup(self, tag):
         """
-        Function to see if a tag exists
+        Function to return a diction of information about a tag.
+
+        Tag.lookup_id(tag):
+          tag: the tag name to lookup
+
+        Returns a dictionary (id, path) of the tag if it exists, otherwise returns False.
         """
         logging.debug('in Tag.lookup(%s)' % tag)
 
-        query = "SELECT path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-        path  = rq.db.fetch_one(self.db, query)
-        if path:
-            return(path)
+        query  = "SELECT t_record, path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
+        result = rq.db.fetch_all(self.db, query)
+
+        if result:
+            for row in result:
+                return_tag = {'id': row['t_record'], 'path': row['path']}
+            return(return_tag)
         else:
             return False
-
-
-    def lookup_id(self, tag):
-        """
-        Function to return the t_record ID of a tag
-        """
-        logging.debug('in Tag.lookup_id(%s)' % tag)
-
-        query     = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-        t_record  = rq.db.fetch_one(self.db, query)
-        if t_record:
-            return(t_record)
-        else:
-            return False
-
-
-    def check(self, tag, file):
-        """
-        Function to check for the existence of tags
-        """
-        logging.debug('in Tag.check(%s, %s)' % (tag, file))
-
-        if os.path.isfile(file):
-            path = os.path.abspath(os.path.dirname(file))
-        else:
-            path = os.path.abspath(file)
-
-        tpath = self.lookup(tag)
-
-        if tpath:
-            logging.debug('Tag (%s) already exists in the database with path: %s' % (tag, tpath))
-            return True
-        else:
-            logging.debug('Tag or path does NOT exist in the database')
-            return False
-
-#        if len(result) > 0:
-#            if result[1] != path:
-#                #print 'Tag (%s) is already in the database with path: %s\n' % (tag, result[1])
-#                #sys.exit(1)
-#                return(True)
-#            else:
-#                return(False)
-#    except:
-#        return(False)
 
 
     def add_record(self, tag, file):
         """
-        Function to add a tag record, returns the ID of the newly created tag
+        Function to add a tag record.
+
+        Tag.add_record(tag, file):
+          tag : the tag to add
+          file: the path for this tag
+
+        Returns the ID of the newly created tag, otherwise returns 0
         """
         logging.debug('in Tag.add_record(%s, %s)' % (tag, file))
 
@@ -128,6 +111,11 @@ class Tag:
     def delete_entries(self, tag):
         """
         Function to delete database tags and associated entries
+
+        Tag.delete_entries(tag):
+          tag : the tag to check
+
+        Returns nothing.
         """
         logging.debug('in Tag.delete_entries(%s)' % tag)
 
@@ -180,7 +168,9 @@ class Tag:
 
     def update_entries(self, tag):
         """
-        function to update entries for a given tag
+        Function to update entries for a given tag
+
+        This is an incomplete function
         """
         logging.debug('in Tag.update_entries(%s)' % tag)
         #
