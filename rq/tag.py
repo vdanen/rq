@@ -38,14 +38,14 @@ class Tag:
         logging.debug("in Tag.list()")
 
         query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
-        results = rq.db.fetch_all(self.db, query)
+        results = self.db.fetch_all(query)
         if results:
             for row in results:
                 print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row['tag'], row['tdate'], row['path'])
         else:
             print 'No tags exist in the database!\n'
 
-        rq.db.close(self.db)
+        self.db.close()
         sys.exit(0)
 
 
@@ -53,15 +53,15 @@ class Tag:
         """
         Function to return a diction of information about a tag.
 
-        Tag.lookup_id(tag):
+        Tag.lookup(tag):
           tag: the tag name to lookup
 
         Returns a dictionary (id, path) of the tag if it exists, otherwise returns False.
         """
         logging.debug('in Tag.lookup(%s)' % tag)
 
-        query  = "SELECT t_record, path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-        result = rq.db.fetch_all(self.db, query)
+        query  = "SELECT t_record, path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
+        result = self.db.fetch_all(query)
 
         if result:
             for row in result:
@@ -91,17 +91,17 @@ class Tag:
         else:
             path = os.path.abspath(file)
         # we can have multiple similar paths, but not multiple similar tags
-        query = "SELECT tag FROM tags WHERE tag = '%s'" % rq.db.sanitize_string(tag)
-        dbtag = rq.db.fetch_one(self.db, query)
+        query = "SELECT tag FROM tags WHERE tag = '%s'" % self.db.sanitize_string(tag)
+        dbtag = self.db.fetch_one(query)
         if dbtag:
             print 'Tag (%s) already exists in the database!\n' % tag
             sys.exit(1)
 
-        query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (rq.db.sanitize_string(tag.strip()), rq.db.sanitize_string(path.strip()), cur_date)
-        rq.db.do_query(self.db, query)
+        query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (self.db.sanitize_string(tag.strip()), self.db.sanitize_string(path.strip()), cur_date)
+        self.db.do_query(query)
 
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-        tag_id  = rq.db.fetch_one(self.db, query)
+        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
+        tag_id  = self.db.fetch_one(query)
         if tag_id:
             return(tag_id)
         else:
@@ -119,18 +119,18 @@ class Tag:
         """
         logging.debug('in Tag.delete_entries(%s)' % tag)
 
-        tag_id =  self.lookup_id(tag)
+        tag_id =  self.lookup(tag)
 
         if not tag_id:
             print 'No matching tag found for entry %s!\n' % tag
             sys.exit(1)
         else:
             print 'Removing tag (%s) from Tags...\n' % tag
-            query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id
-            rq.db.do_query(self.db, query)
+            query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id['id']
+            self.db.do_query(query)
 
-            query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id
-            result = rq.db.fetch_one(self.db, query)
+            query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id['id']
+            result = self.db.fetch_one(query)
             if result:
                 if result == 1:
                     word_package = 'Package'
@@ -148,8 +148,8 @@ class Tag:
                     tables = ('packages', 'sources', 'files', 'ctags')
 
                 for table in tables:
-                    query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id)
-                    res   = rq.db.do_query(self.db, query)
+                    query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id['id'])
+                    res   = self.db.do_query(query)
 
                 sys.stdout.write(' done\n')
 
@@ -158,7 +158,7 @@ class Tag:
                     sys.stdout.flush()
                     for table in tables:
                         query = 'OPTIMIZE TABLE %s' % table
-                        res   = rq.db.do_query(self.db, query)
+                        res   = self.db.do_query(query)
                     sys.stdout.write(' done\n')
                 else:
                     sys.stdout.write('Skipping database optimization, less than 500 package records removed.\n')
@@ -181,16 +181,16 @@ class Tag:
         to_remove = []
         to_add    = []
 
-        query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-        path   = rq.db.fetch_one(self.db, query)
-        query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % rq.db.sanitize_string(tag)
-        tag_id = rq.db.fetch_one(self.db, query)
+        query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
+        path   = self.db.fetch_one(query)
+        query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
+        tag_id = self.db.fetch_one(query)
 
         if path:
             logging.info('Update tag (%s) entries from %s...' % (tag, path))
             # get the existing entries
             query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE t_record = '%s'" % tag_id
-            result = rq.db.fetch_all(self.db, query)
+            result = self.db.fetch_all(query)
             for row in result:
                 pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
                 logging.info('Checking for %s in %s...' % (pname, path))
@@ -211,8 +211,8 @@ class Tag:
                 version = tlist[1].strip()
                 release = tlist[2].strip()
 
-                query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, rq.db.sanitize_string(package), rq.db.sanitize_string(version), rq.db.sanitize_string(release))
-                package = rq.db.fetch_one(self.db, query)
+                query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, self.db.sanitize_string(package), self.db.sanitize_string(version), self.db.sanitize_string(release))
+                package = self.db.fetch_one(query)
                 if package:
                     logging.info('OK')
                 else:
@@ -230,7 +230,7 @@ class Tag:
             for rnum in to_remove:
                 for table in tables:
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    result = rq.db.do_query(self.db, query)
+                    result = self.db.do_query(query)
 
         if to_add:
             logging.info('Adding tagged entries for tag: %s...' % tag)
