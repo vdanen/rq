@@ -22,7 +22,7 @@ if __name__ == '__main__':
     """
     global options, config
 
-    rq_version = '0.3'
+    rq_version = '0.4'
     rq_prog    = 'rqp'
     rq_type    = 'binary'
 
