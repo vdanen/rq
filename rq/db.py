@@ -29,6 +29,7 @@ class DB:
         the appropriate database name (for whether it is called with type 'source'
         or type 'binary').
         """
+        logging.debug('  in DB.__init__(%s, %s)' % (type, config))
 
         self.db     = ''    # db connection
         self.dbname = ''    # srpm or rpm database name depending on how called
@@ -96,7 +97,7 @@ class DB:
         query was successful, returns False if not.  This function is meant to be
         used with multi-result queries.
         """
-        logging.debug('  in fetch_all()')
+        logging.debug('  in DB.fetch_all()')
         logging.debug('  => query is: %s' % query)
 
         try:
@@ -124,7 +125,7 @@ class DB:
         query was successful, returns False if not.  This function is meant to be
         used with single-result queries.
         """
-        logging.debug('  in fetch_one()')
+        logging.debug('  in DB.fetch_one()')
         logging.debug('  => query is: %s' % query)
 
         try:
@@ -146,7 +147,7 @@ class DB:
         """
         Function to perform an actual update (UPDATE/INSERT) query (non-SELECT) from the database
         """
-        logging.debug('  in do_query()')
+        logging.debug('  in DB.do_query()')
         logging.debug('  => query is: %s' % query)
 
         try:
@@ -163,7 +164,7 @@ class DB:
         String to cleanup a string to remove characters that will cause problems
         with the database
         """
-        #logging.debug('  in sanitize_string(%s)' % string)
+        #logging.debug('  in DB.sanitize_string(%s)' % string)
 
         if string:
             # escape single and double quotes

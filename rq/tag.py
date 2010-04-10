@@ -22,11 +22,13 @@ class Tag:
     Tag.add_record()     : ads a new tag to the db
     Tag.deleted_entries(): deletes a tag and associated db entries
     Tag.update_entries() : updates entries based on tag <-- this function doesn't work yet
+    Tag.showdbstats()    : show database statistics, by optional tag
     """
 
-    def __init__(self, db, rq_type):
-        self.db   = db
-        self.type = rq_type
+    def __init__(self, db, rq_type, config):
+        self.db     = db
+        self.type   = rq_type
+        self.config = config
 
 
     def list(self):
@@ -237,3 +239,74 @@ class Tag:
             for rpm in to_add:
                 ### this will have to come from another module XXX TODO XXX
                 record_add(tag_id, rpm, self.type)
+
+
+    def showdbstats(self, tag = 'all'):
+        """
+        Function to show database info
+        """
+        logging.debug("in Tag.showdbstats(%s)" % tag)
+
+        if tag == 'all':
+            extra_opts = ''
+        else:
+            tag_id = self.lookup(tag)
+            if tag_id:
+                extra_opts = "WHERE t_record = '%d'" % tag_id['id']
+            else:
+                print 'No such tag: "%s" does not exist in the database!\n' % tag
+                sys.exit(1)
+
+        query   = "SELECT count(*) FROM tags %s" % extra_opts
+        c_tags  = self.db.fetch_one(query)
+        query   = "SELECT count(*) FROM packages %s" % extra_opts
+        c_pkgs  = self.db.fetch_one(query)
+        if self.type == 'binary':
+            query   = "SELECT count(*) FROM requires %s" % extra_opts
+            c_reqs  = self.db.fetch_one(query)
+            query   = "SELECT count(*) FROM provides %s" % extra_opts
+            c_provs = self.db.fetch_one(query)
+        else:
+            query   = "SELECT count(*) FROM sources %s" % extra_opts
+            c_src   = self.db.fetch_one(query)
+            query   = "SELECT count(*) FROM ctags %s" % extra_opts
+            c_ctags = self.db.fetch_one(query)
+            query   = "SELECT count(*) FROM buildreqs %s" % extra_opts
+            c_breqs = self.db.fetch_one(query)
+        query   = "SELECT count(*) FROM files %s" % extra_opts
+        c_files = self.db.fetch_one(query)
+
+        # get the size of the database as well
+        size   = 0.00
+        bytes  = ''
+        query  = "SHOW TABLE STATUS"
+        tbsize = self.db.fetch_all(query)
+
+        for x in tbsize:
+            size += x['Data_length']
+        count = 0
+
+        while size > 1024:
+            size   = size / 1024
+            count += 1
+            if count == 1:
+                bytes = 'KB'
+            if count == 2:
+                bytes = 'MB'
+            if count == 3:
+                bytes = 'GB'
+                break
+
+        print 'Database statistics:\n'
+        if tag != 'all':
+            print 'Printing statistics for tag: %s\n' % tag
+        print '   Database  => User: %s, Host: %s, Database: %s' % (self.config['username'], self.config['hostspec'], self.config['database'])
+        print '   Data size => %2.2f %s\n' % (size, bytes)
+        print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
+        if self.type == 'binary':
+            print '   File records : %-15d  Requires records: %-15d' % (c_files, c_reqs)
+            print '                                   Provides records: %-15d\n' % c_provs
+        else:
+            print '   File records : %-15d  Source records  : %-15d' % (c_files, c_src)
+            print '   Ctags records: %-15d  Requires records: %-15d '% (c_ctags, c_breqs)
+        sys.exit(0)

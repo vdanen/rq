@@ -39,77 +39,6 @@ def fix_excludes(file):
     return file
 
 
-def showdbstats(type, tag):
-    """
-    Function to show database info
-    """
-    logging.debug("in showdbstats(%s, %s)" % (type, tag))
-
-    if tag == 'all':
-        extra_opts = ''
-    else:
-        tag_id = rtag.lookup(tag)
-        if tag_id:
-            extra_opts = "WHERE t_record = '%d'" % tag_id['id']
-        else:
-            print 'No such tag: "%s" does not exist in the database!\n' % tag
-            sys.exit(1)
-
-    query   = "SELECT count(*) FROM tags %s" % extra_opts
-    c_tags  = db.fetch_one(query)
-    query   = "SELECT count(*) FROM packages %s" % extra_opts
-    c_pkgs  = db.fetch_one(query)
-    if type == 'binary':
-        query   = "SELECT count(*) FROM requires %s" % extra_opts
-        c_reqs  = db.fetch_one(query)
-        query   = "SELECT count(*) FROM provides %s" % extra_opts
-        c_provs = db.fetch_one(query)
-    else:
-        query   = "SELECT count(*) FROM sources %s" % extra_opts
-        c_src   = db.fetch_one(query)
-        query   = "SELECT count(*) FROM ctags %s" % extra_opts
-        c_ctags = db.fetch_one(query)
-        query   = "SELECT count(*) FROM buildreqs %s" % extra_opts
-        c_breqs = db.fetch_one(query)
-    query   = "SELECT count(*) FROM files %s" % extra_opts
-    c_files = db.fetch_one(query)
-
-    # get the size of the database as well
-    size   = 0.00
-    bytes  = ''
-    query  = "SHOW TABLE STATUS"
-    tbsize = db.fetch_all(query)
-
-    for x in tbsize:
-        size += x['Data_length']
-    count = 0
-
-    while size > 1024:
-        size   = size / 1024
-        count += 1
-        if count == 1:
-            bytes = 'KB'
-        if count == 2:
-            bytes = 'MB'
-        if count == 3:
-            bytes = 'GB'
-            break
-
-    print 'Database statistics:\n'
-    if tag != 'all':
-        print 'Printing statistics for tag: %s\n' % tag
-    print '   Database  => User: %s, Host: %s, Database: %s' % (config['username'], config['hostspec'], config['database'])
-    print '   Data size => %2.2f %s\n' % (size, bytes)
-    print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
-    if type == 'binary':
-        print '   File records : %-15d  Requires records: %-15d' % (c_files, c_reqs)
-        print '                                   Provides records: %-15d\n' % c_provs
-    else:
-        print '   File records : %-15d  Source records  : %-15d' % (c_files, c_src)
-        print '   Ctags records: %-15d  Requires records: %-15d '% (c_ctags, c_breqs)
-    sys.exit(0)
-
-
 def show_progress(prefix=False):
     """
     Function to show progress
@@ -1270,9 +1199,8 @@ if __name__ == '__main__':
     db     = rq.db.DB(rq_type, config)
 
     config['database'] = db.get_dbname()
-    #(config) = db.connect(rq_type, config)
 
-    rtag = rq.tag.Tag(db, rq_type)
+    rtag = rq.tag.Tag(db, rq_type, config)
 
     # start doing useful things
     if options.list:
@@ -1280,9 +1208,9 @@ if __name__ == '__main__':
 
     if options.stats:
         if options.tag:
-            showdbstats(rq_type, options.tag)
+            rtag.showdbstats(options.tag)
         else:
-            showdbstats(rq_type, 'all')
+            rtag.showdbstats()
 
     if options.tag:
         logging.debug('Tag:\t%s\n' % options.tag)
