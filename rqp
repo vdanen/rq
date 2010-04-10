@@ -23,97 +23,6 @@ re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
 re_tar     = re.compile(r'\.((tar)(\.bz2|\.gz)?|t(gz|bz2?))$')
 re_targz   = re.compile(r'\.(tgz|tar\.gz)$')
 re_tarbz   = re.compile(r'\.(tbz2?|tar\.bz2)$')
-re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
-re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
-
-file_excludes = ('/.svn', '/CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
-
-
-def fix_excludes(file):
-    """
-    if this is a directory exclude, remove the leading '/' for the tar extract
-    """
-    if file[0] == '/':
-        file = file[1:]
-
-    return file
-
-
-def show_progress(prefix=False):
-    """
-    Function to show progress
-    """
-    global pstate
-
-    if not options.verbose and not options.debug and options.progress:
-        if not prefix:
-            if pstate == 1:
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            pstate = pstate + 1
-            if pstate > 150:
-                pstate = 1
-            return
-
-        if prefix != 'files' and prefix != 'sources' and prefix != '':
-            sys.stdout.write("%s: " % prefix.strip())
-            sys.stdout.flush()
-            pstate = 1
-            return
-        elif prefix != lprefix:
-            sys.stdout.write('\t%s: ' %prefix)
-            sys.stdout.flush()
-            lprefix = prefix
-            return
-
-
-def get_file_mode(mode):
-    """
-    Function to return the numeric file mode given the r--r--r-- string as input
-    """
-    user  = mode[1:4]
-    group = mode[4:7]
-    other = mode[7:]
-    perms = {'user': user, 'group': group, 'other': other}
-
-    num   = 0
-    for type in perms.keys():
-
-        read    = perms[type][0]
-        write   = perms[type][1]
-        execute = perms[type][2]
-
-        if type == 'user':
-            if read == 'r':
-                num = num + 400
-            if write == 'w':
-                num = num + 200
-            if execute == 'x':
-                num = num + 100
-            elif execute == 'S':
-                num = num + 4000
-            elif execute == 's':
-                num = num + 4100
-        if type == 'group':
-            if read == 'r':
-                num = num + 40
-            if write == 'w':
-                num = num + 20
-            if execute == 'x':
-                num = num + 10
-            elif execute == 'S':
-                num = num + 2000
-            elif execute == 's':
-                num = num + 2010
-        if type == 'other':
-            if read == 'r':
-                num = num + 4
-            if write == 'w':
-                num = num + 2
-            if execute == 'x':
-                num = num + 1
-    num = '%04d' % num
-    return(num)
 
 
 def record_add(tag_id, file, type):
@@ -128,13 +37,13 @@ def record_add(tag_id, file, type):
         path = os.path.abspath(file)
     logging.debug('Path:\t%s' % path)
 
-    file_rpm_check(file, type)
+    rq.basics.file_rpm_check(file, type)
 
     record = package_add_record(tag_id, file, type)
     if not record:
         return
 
-    file_list = rpm_list(file)
+    file_list = rq.basics.rpm_list(file)
     if not file_list:
         return
 
@@ -146,16 +55,16 @@ def record_add(tag_id, file, type):
 
     if type == 'source':
         logging.debug('Add source records for package record: %s' % record)
-        add_source_records(tag_id, record, file_list)
+        rqs.add_records(tag_id, record, file_list)
         cpio_dir = tempfile.mkdtemp()
 
         try:
             current_dir = os.getcwd()
             os.chdir(cpio_dir)
-            source_get_all_files(file)
-            add_source_file_records(tag_id, record, file_list)
-            add_source_ctag_records(tag_id, record, cpio_dir)
-            add_source_buildreq_records(tag_id, record, cpio_dir)
+            rqs.get_all_files(file)
+            rqs.add_file_records(tag_id, record, file_list)
+            rqs.add_ctag_records(tag_id, record, cpio_dir)
+            rqs.add_buildreq_records(tag_id, record, cpio_dir)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -163,52 +72,6 @@ def record_add(tag_id, file, type):
 
     if options.progress:
         sys.stdout.write('\n')
-
-
-def source_get_all_files(file):
-    """
-    Function to get the source and patch files from a SRPM
-    """
-    logging.debug('in source_get_all_files(%s)' % file)
-    source_get_tar_files(file)
-    source_get_patch_files(file)
-
-
-def source_get_tar_files(file):
-    """
-    Function to get the tar files from a SRPM
-
-    cpio --quiet is a GNU-ism and isn't portable
-    """
-    logging.debug('in source_get_tar_files(%s)' % file)
-
-    # include the .spec file here; we need it later
-    exts = ['*.tar.?z*', '*.tgz', '*.tbz', '*.zip', '*.spec']
-    for search in exts:
-        command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
-        (rc, output) = commands.getstatusoutput(command)
-        logging.debug('called cpio (rc=%s): %s' % (rc, command))
-
-#    if not rc == 0:
-#        logging.critical('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
-#        sys.exit(1)
-
-
-def source_get_patch_files(file):
-    """
-    Function to get the patch files from a SRPM
-    """
-    logging.debug('in source_get_patch_files(%s)' % file)
-
-    exts = ['*patch*', '*diff*']
-    for search in exts:
-        command      = 'rpm2cpio "%s" | cpio -i "%s" 2>/dev/null' % (file, search)
-        (rc, output) = commands.getstatusoutput(command)
-        logging.debug('called cpio (rc=%s): %s' % (rc, output))
-
-#    if not rc == 0:
-#        logging.critical('Failed to execute rpm2cpio!  Command was: %s\nOutput was:\n(rc: %s) %s\n' % (command, rc, output))
-#        sys.exit(1)
 
 
 def add_file_requires(tag_id, record, file):
@@ -221,7 +84,7 @@ def add_file_requires(tag_id, record, file):
     list = list.splitlines()
     for dep in list:
         if dep:
-            show_progress()
+            rcommon.show_progress()
             if options.verbose:
                 print 'Dependency: %s' % dep
             query  = "INSERT INTO requires (t_record, p_record, requires) VALUES ('%s', '%s', '%s')" % (tag_id, record, db.sanitize_string(dep.strip()))
@@ -238,70 +101,11 @@ def add_file_provides(tag_id, record, file):
     list = list.splitlines()
     for prov in list:
         if prov:
-            show_progress()
+            rcommon.show_progress()
             if options.verbose:
                 print 'Provides: %s' % prov
             query  = "INSERT INTO provides (t_record, p_record, provides) VALUES ('%s', '%s', '%s')" % (tag_id, record, db.sanitize_string(prov.strip()))
             result = db.do_query(query)
-
-
-def rpm_list(file, raw=False):
-    """
-    Function to get the list of files in an RPM, excluding those files defined
-    by files_exclude
-    """
-    logging.debug('in rpm_list(%s)' % file)
-
-    list  = commands.getoutput("rpm -qlvp --nosignature " + file.replace(' ', '\ '))
-
-    if list == '(contains no files)' or list == '':
-        return False
-
-    if raw:
-        return(list)
-
-    list  = list.splitlines()
-    rlist = {}
-    count = 0
-
-    for entry in list:
-        break_loop = False
-        logging.debug('processing: %s' % entry) ### DEBUG
-        for exclude in file_excludes:
-            # make sure we don't include any files in our exclude list
-            if re.search(exclude, entry):
-                logging.debug('found unwanted entry: %s' % entry)
-                break_loop = True
-
-        if break_loop:
-            continue
-
-        is_suid = 0
-        is_sgid = 0
-        foo     = entry.split()
-
-        # this actually really stinks because we are allowed usernames longer
-        # than 8 characters, but rpm -qlv will only display the first 8 characters
-        # of the owner/group name -- not cool at all
-        if len(foo[2]) > 8:
-            user  = foo[2][:8]
-            group = foo[2][8:]
-            fname = foo[7]
-        else:
-            user  = foo[2]
-            group = foo[3]
-            fname = foo[8]
-        if foo[0][3].lower() == 's':
-            is_suid = 1
-        if foo[0][6].lower() == 's':
-            is_sgid = 1
-
-        perms = get_file_mode(foo[0])
-
-        rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid, 'perms': perms}
-        count       += 1
-
-    return(rlist)
 
 
 def rpm_add_directory(tag, path, type='binary'):
@@ -356,7 +160,7 @@ def add_file_records(tag_id, record, file_list):
     logging.debug('in add_file_records(%s, %s, %s)' % (tag_id, record, file_list))
 
     for x in file_list.keys():
-        show_progress()
+        rcommon.show_progress()
         if options.verbose:
             print 'File: %s' % file_list[x]['file']
         query  = "INSERT INTO files (t_record, p_record, files, f_user, f_group, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
@@ -369,307 +173,6 @@ def add_file_records(tag_id, record, file_list):
             file_list[x]['is_sgid'],
             file_list[x]['perms'])
         result = db.do_query(query)
-
-
-def add_source_records(tag_id, record, file_list):
-    """
-    Function to add source records
-    """
-    logging.debug('in add_source_records(%s, %s, %s)' % (tag_id, record, file_list))
-
-    for x in file_list.keys():
-        # remove any possible paths from source files; may be due to rpm5
-        sfile = file_list[x]['file'].split('/')[-1]
-        logging.debug('processing source: %s ' % sfile)
-        show_progress()
-        stype = ''
-
-        if re_patch.search(sfile):
-            stype = 'P'
-        if re_tar.search(sfile):
-            stype = 'S'
-
-        # we only care about source and patch files, nothing else
-        if stype == '':
-            continue
-
-        if options.verbose:
-            print 'Source: %s, Type: %s' % (sfile, stype)
-        query  = "INSERT INTO sources (t_record, p_record, s_type, s_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, stype, db.sanitize_string(sfile.strip()))
-        result = db.do_query(query)
-
-
-def add_source_file_records(tag_id, record, file_list):
-    """
-    Function to add all source file records
-    """
-    logging.debug('in add_source_file_records(%s, %s, %s)' % (tag_id, record, file_list))
-
-    for x in file_list.keys():
-        good_src = False
-        # file_list may contain paths, so strip them; may be due to rpm5
-        sfile    = file_list[x]['file'].split('/')[-1]
-        logging.debug('processing file: %s' % sfile) ### DEBUG
-
-        if re_patch.search(sfile):
-            flist    = patch_list(sfile)
-            good_src = True
-
-        if re_tar.search(sfile):
-            flist    = tar_list(sfile)
-            good_src = True
-
-        # only proceed for tarballs and patches
-        if good_src:
-            logging.debug('found good file to process: %s' % sfile)
-            files = flist.split()
-
-            # get the s_record for this source from the db
-            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, db.sanitize_string(sfile))
-            db_srec = db.fetch_one(query)
-            if not db_srec:
-                logging.critical('adding files from %s failed...' % sfile)
-                sys.exit(1)
-
-            for dfile in files:
-                break_loop = False
-                if dfile.endswith('/'):     # skip directories
-                    pass
-                else:
-                    for exclude in file_excludes:
-                        # make sure we don't include any files in our exclude list
-                        if re.search(exclude, dfile):
-                            logging.debug('found unwanted entry: %s' % dfile)
-                            break_loop = True
-                    if break_loop == True:
-                        pass
-                    else:
-                        show_progress()
-                        if options.verbose:
-                            print 'File: %s' % dfile
-                        query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, db.sanitize_string(dfile))
-                        result = db.do_query(query)
-        else:
-            logging.debug('unwilling to process: %s' % sfile)
-
-
-def add_source_ctag_records(tag_id, record, cpio_dir):
-    """
-    Function to run ctags against an unpacked source directory
-    and insert records into the database
-    """
-    logging.debug('in add_source_ctag_records(%s, %s, %s)' % (tag_id, record, cpio_dir))
-
-    # this is likely a double chdir, but let's make sure we're in the right place
-    # so we don't have to strip out the path from the ctags output
-    os.chdir(cpio_dir)
-
-    # first, identify and expand any tarballs found:
-    for file in os.listdir(cpio_dir):
-        if re_tar.search(file):
-            # get the s_record for this source from the db
-            query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, db.sanitize_string(file))
-            db_srec = db.fetch_one(query)
-            if not db_srec:
-                logging.critical('!!!!! adding files from %s failed...' % file)
-                # don't bail, it's logged, continue
-                #sys.exit(1)
-                continue
-
-            comp = 'xf'
-            if re_targz.search(file):
-                comp = 'xzf'
-            if re_tarbz.search(file):
-                comp = 'xjf'
-
-            excludes = ''
-            for f in file_excludes:
-                f = fix_excludes(f)
-
-                excludes = '%s --exclude=%s' % (excludes, f)
-
-            tmpdir  = tempfile.mkdtemp()
-            command = 'tar -%s "%s" -C %s %s 2>/dev/null' % (comp, file.replace(' ', '\ '), tmpdir, excludes)
-
-            (rc, list) = commands.getstatusoutput(command)
-            logging.debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
-
-            os.chdir(tmpdir)
-
-            # some packages contain files that are r--r--r-- which prevents
-            # us from cleanly removing the directory, so do a recursive
-            # chmod first
-            command = "chmod -R u+rwx ."
-            (rc, output) = commands.getstatusoutput(command)
-            logging.debug('called chmod (rc=%s): %s' % (rc, command))
-
-            command = "ctags -x -R -f - ."
-            (rc, output) = commands.getstatusoutput(command)
-            logging.debug('called ctags (rc=%s): %s' % (rc, command))
-
-            for tag in output.split('\n'):
-                try:
-                    (name, type, line, path, extra) = tag.split(None, 4)
-                except:
-                    continue
-
-                # only store some ctags info, not all of it
-                wanted = ['function', 'macro', 'subroutine', 'class', 'method']
-                if type in wanted:
-                    show_progress()
-                    query = "INSERT INTO ctags (t_record, p_record, s_record, c_name, c_type, c_line, c_file, c_extra) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
-                        tag_id,
-                        record,
-                        db_srec,
-                        db.sanitize_string(name),
-                        db.sanitize_string(type),
-                        db.sanitize_string(line),
-                        db.sanitize_string(path),
-                        db.sanitize_string(extra))
-                    result = db.do_query(query)
-                    #print '%s\n' % query
-            os.chdir(cpio_dir)
-
-            # have to put this in a try statement; who puts files and directories in a tarball all mode 0200?!?
-            try:
-                shutil.rmtree(tmpdir)
-            except:
-                logging.critical('Unable to remove directory: %s, most likely because the tarball has idiotic permissions' % tmpdir)
-
-
-def add_source_buildreq_records(tag_id, record, cpio_dir):
-    """
-    Get the build requirements for this package from the spec file
-    """
-    logging.debug('in add_source_buildreq_records(%s, %s, %s)' % (tag_id, record, cpio_dir))
-
-    specfile = ''
-    r        = []
-
-    # this is likely a double chdir, but let's make sure we're in the right place
-    # so we don't have to strip out the path from the ctags output
-    os.chdir(cpio_dir)
-
-    for file in os.listdir(cpio_dir):
-        if re.search('.spec', file):
-            specfile = file
-
-    if specfile == '':
-        logging.critical('No specfile found, unable to process buildrequirements')
-        sys.exit(1)
-
-    for line in open(specfile):
-        reqs  = {}
-        count = 0
-        if re.search('^buildrequire', line.lower()):
-            words = line.split()
-            for c in words:
-                if not c.startswith('Build'):
-                    reqs[count] = c.strip()
-                    count += 1
-
-        # if there is more than one item on this line
-        if len(reqs) > 1:
-            skip = 0
-            for x in reqs.keys():
-                # iterate through each item on the line, if this item includes
-                # the >, <, or = characters, create our requirement string
-                # based on the N+1 and N+2 words
-                new = ''
-
-                if skip == 0 and x+1 in reqs.keys():
-                    if re.search('(>|<|=)', reqs[x+1]):
-                        # construct the new string based on N+1 (equality) and N+2 (nvr)
-                        new = '%s %s %s' % (reqs[x], reqs[x+1], reqs[x+2])
-                        # tell it to skip the next item since we grabbed it
-                        skip += 1
-                    else:
-                        new = reqs[x]
-
-                elif skip == 0:
-                    # there is no following equality string, so take it as it is
-                    new = reqs[x]
-
-                else:
-                    if skip == 1:
-                        # skipped the equality, so skip one more (nvr)
-                        skip += 1
-                    else:
-                        # skip would be 2, so reset the counter
-                        skip = 0
-
-                if new.endswith(','):
-                    # multi-item dependencies, uses ',' as a delimiter so remove it
-                    new = new[:-1]
-
-                # we want to make sure we don't list the same thing twice, we also don't want blank items
-                if not new in r:
-                    if new != '':
-                        r.append(new)
-
-        elif len(reqs) == 1:
-            # exactly one item on this line, put it in as-is
-            if reqs[0].endswith(','):
-                new = reqs[0][:-1]
-            else:
-                new = reqs[0]
-            r.append(new)
-
-    for require in r:
-        # now iterate through each item and add them to the database
-        show_progress()
-        # record == p_record
-        query = "INSERT INTO buildreqs (t_record, p_record, b_req) VALUES ('%s', '%s', '%s')" % (
-                        tag_id,
-                        record,
-                        db.sanitize_string(require))
-        result = db.do_query(query)
-        #print '%s\n' % query
-
-
-def patch_list(file):
-    """
-    Function to get a list of files that a patch touches
-    """
-    logging.debug('in patch_list(%s)' % file)
-
-    grep = 'grep'
-
-    if re_patchgz.search(file):
-        grep = 'zgrep'
-
-    if re_patchbz.search(file):
-        grep = 'bzgrep'
-
-    list = commands.getoutput(grep + " '^+++' " + file.replace(' ', '\ ') + " 2>/dev/null | awk '{print $2}'")
-
-    return(list)
-
-
-def tar_list(file):
-    """
-    Function to get a list of files in a tarball
-    """
-    logging.debug('in tar_list(%s)' % file)
-
-    comp = 'tf'
-    if re_targz.search(file):
-        comp = 'tzf'
-    if re_tarbz.search(file):
-        comp = 'tjf'
-
-    excludes = ''
-    for f in file_excludes:
-        f = fix_excludes(f)
-
-        excludes = '%s --exclude=%s' % (excludes, f)
-
-    command = 'tar -%s "%s" %s 2>/dev/null' % (comp, file.replace(' ', '\ '), excludes)
-
-    (rc, list) = commands.getstatusoutput(command)
-    logging.debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
-
-    return(list)
 
 
 def package_add_record(tag_id, file, type):
@@ -737,7 +240,7 @@ def package_add_record(tag_id, file, type):
             db.sanitize_string(release),
             db.sanitize_string(pdate))
     result = db.do_query(query)
-    show_progress(path)
+    rcommon.show_progress(path)
 
     query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, db.sanitize_string(package))
     p_record = db.fetch_one(query)
@@ -746,29 +249,6 @@ def package_add_record(tag_id, file, type):
     else:
         print 'Adding file %s failed!\n' % file
         return(0)
-
-
-def file_rpm_check(file, type='binary'):
-    """
-    Function to check whether the file is a source or binary RPM
-
-    The default is binary
-    """
-    logging.debug('in file_rpm_check(%s, %s)' % (file, type))
-
-    if not os.path.isfile(file):
-        print 'File %s not found!\n' % file
-        sys.exit(1)
-
-    if type == 'binary':
-        if not re_brpm.search(file) or re_srpm.search(file):
-            print 'File %s is not a binary rpm!\n' % file
-            sys.exit(1)
-
-    if type == 'source':
-        if not re_srpm.search(file):
-            print 'File %s is not a source rpm!\n' % file
-            sys.exit(1)
 
 
 def run_binary_query(qstring, type):
@@ -870,212 +350,6 @@ def run_binary_query(qstring, type):
             print 'No matches in database for tag (%s) and substring (%s)' % (options.tag, qstring)
         else:
             print 'No matches in database for substring (%s)' % qstring
-
-
-def run_source_query(qstring, type):
-    """
-    Function to run the query for source RPMs
-    """
-    logging.debug('in run_source_query(%s, %s)' % (qstring, type))
-
-    if options.tag and not rtag.lookup(options.tag):
-        print 'Tag %s is not a known tag!\n' % options.tag
-        sys.exit(1)
-
-    if options.ignorecase:
-        ignorecase = ''
-    else:
-        ignorecase = 'BINARY'
-
-    if type == 'ctags':
-        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
-        orderby = "c_file"
-        match_t = 'Ctags data'
-    elif type == 'buildreqs':
-        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req " % ignorecase
-        match_t = '.spec BuildRequires'
-    else:
-        query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE %s f_file " % ignorecase
-        orderby = "f_file"
-        match_t = 'files'
-
-    query = query + "LIKE '%" + db.sanitize_string(qstring) + "%'"
-
-    if options.sourceonly:
-        query = query + " AND s_type = 'S'"
-
-    if options.tag:
-        query = query + " AND p_tag = '" + db.sanitize_string(options.tag) + "'"
-
-    if type == 'buildreqs':
-        query   = '%s ORDER BY p_tag, p_package' % query
-    else:
-        query   = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
-
-    if not options.quiet:
-        print 'Searching database records for substring match on %s ("%s")' % (match_t, qstring)
-
-    result = db.fetch_all(query)
-    if result:
-        if options.count:
-            if options.quiet:
-                print len(result)
-            else:
-                if options.tag:
-                    print '%d match(es) in database for tag (%s) and substring ("%s")' % (len(result), options.tag, qstring)
-                else:
-                    print '%d match(es) in database for substring ("%s")' % (len(result), qstring)
-            return
-
-        ltag = ''
-        lsrc = ''
-        for row in result:
-            # for readability
-            fromdb_tag   = row['p_tag']
-            fromdb_rpm   = row['p_package']
-            fromdb_ver   = row['p_version']
-            fromdb_rel   = row['p_release']
-            fromdb_date  = row['p_date']
-            if type == 'buildreqs':
-                fromdb_type  = 'S'
-                fromdb_breq  = row['b_req']
-            else:
-                fromdb_type  = row['s_type']
-                fromdb_file  = row['s_file']
-                fromdb_sfile = row[orderby]
-            if type == 'ctags':
-                fromdb_ctype  = row['c_type']
-                fromdb_cline  = row['c_line']
-                fromdb_cextra = row['c_extra']
-
-            if not ltag == fromdb_tag:
-                print '\nResults in Tag: %s\n' % fromdb_tag
-                ltag = fromdb_tag
-
-            if options.debug:
-                print row
-            else:
-                srpm  = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
-                stype = 'source'
-
-                if options.quiet:
-                    lsrc = srpm
-                    sys.stdout.write('%s\n' % srpm)
-                    sys.stdout.flush()
-                else:
-                    if fromdb_type == 'P':
-                        stype = 'patch'
-                    if options.extrainfo:
-                        rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                        print '\n%-16s%-30s' % (stype.title() + " File:", fromdb_file)
-                        print '%-16s%-30s' % ("Source Path:", fromdb_sfile)
-                        print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
-                        print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
-                    else:
-                        if type == 'ctags':
-                            sys.stdout.write('%s: (%s) %s\n\tFound matching %s in %s:%s: %s\n' % (srpm, stype, fromdb_file, fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
-                        elif type == 'buildreqs':
-                            sys.stdout.write('%s: %s\n' % (srpm, fromdb_breq))
-                        else:
-                            sys.stdout.write('%s: (%s) %s: %s\n' % (srpm, stype, fromdb_file, fromdb_sfile))
-
-    else:
-        if options.tag:
-            print 'No matches in database for tag (%s) and substring ("%s")' % (options.tag, qstring)
-        else:
-            print 'No matches in database for substring ("%s")' % qstring
-
-
-def run_source_examine(file):
-    """
-    Examine a src.rpm and output the details
-    """
-    logging.debug('in run_source_examine(%s)' % file)
-
-    file_rpm_check(file, 'source')
-
-    file = path = os.path.abspath(file)
-
-    print 'Examining %s...\n' % file
-
-    # stage 1, list the rpm content
-    src_list = rpm_list(file, raw=True)
-    print 'SRPM Contents:\n%s\n' % src_list
-
-    file_list = rpm_list(file)
-
-    cpio_dir = tempfile.mkdtemp()
-    try:
-        current_dir = os.getcwd()
-        os.chdir(cpio_dir)
-
-        # stage 2, list patched files
-        if options.patch:
-            source_get_patch_files(file)
-            for x in file_list.keys():
-                if re_patch.search(file_list[x]['file']):
-                    plist = patch_list(file_list[x]['file'])
-                    print 'Patch file %s modifies:\n%s\n' % (file_list[x]['file'], plist)
-
-        # stage 3, list the tarball contents
-        if not options.skiptar:
-            source_get_tar_files(file)
-            for y in file_list.keys():
-                if re_tar.search(file_list[y]['file']):
-                    tlist = tar_list(file_list[y]['file'])
-                    print 'Tarfile %s contents:\n%s\n' % (file_list[y]['file'], tlist)
-
-        os.chdir(current_dir)
-    finally:
-        logging.debug('Removing temporary directory: %s...' % cpio_dir)
-        shutil.rmtree(cpio_dir)
-
-
-def run_source_showinfo(srpm):
-    """
-    Display all known information on a srpm
-    """
-    logging.debug('in run_source_showinfo(%s)' % srpm)
-
-    if options.tag and not rtag.lookup(options.tag):
-        print 'Tag %s is not a known tag!\n' % options.tag
-        sys.exit(1)
-
-    print 'Displaying all known information on srpm "%s"\n' % srpm
-
-    if options.tag:
-        qtag = " AND p_tag = '%s'" % db.sanitize_string(options.tag)
-    else:
-        qtag = ''
-
-    query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (db.sanitize_string(srpm), qtag)
-
-    result = db.fetch_all(query)
-    if not result:
-        print 'No matches found for package %s' % srpm
-        sys.exit(0)
-
-    for row in result:
-        print 'Results for package %s-%s-%s' % (row['p_package'], row['p_version'], row['p_release'])
-        print '  Tag: %-20s Source path: %s' % (row['p_tag'], row['path'])
-
-        query   = "SELECT s_file FROM sources WHERE p_record = '%s' ORDER BY s_type, s_file ASC" % row['p_record']
-        results = db.fetch_all(query)
-        if results:
-            print ''
-            print '  Source RPM contains the following source files:'
-            for xrow in results:
-                print '  %s' % xrow['s_file']
-
-        query   = "SELECT b_req FROM buildreqs WHERE p_record = '%s' ORDER BY b_req ASC" % row['p_record']
-        results = db.fetch_all(query)
-        if results:
-            print ''
-            print '  Source RPM has the following BuildRequires:'
-            for xrow in results:
-                print '  %s' % xrow['b_req']
-        print ''
-
 
 
 
@@ -1198,9 +472,16 @@ if __name__ == '__main__':
     config = rq.basics.Config(options.conffile)
     db     = rq.db.DB(rq_type, config)
 
+    # get the name of the database we want to talk to
     config['database'] = db.get_dbname()
 
     rtag = rq.tag.Tag(db, rq_type, config)
+
+    rcommon = rq.basics.Common(options)
+
+    if rq_type == 'source':
+        import rq.source
+        rqs = rq.source.Source(db, config, options, rtag, rcommon)
 
     # start doing useful things
     if options.list:
@@ -1227,7 +508,7 @@ if __name__ == '__main__':
         if rq_type == 'binary':
             run_binary_query(options.query, 'files')
         elif rq_type == 'source':
-            run_source_query(options.query, 'files')
+            rqs.query('files')
         sys.exit(0)
 
     if rq_type == 'binary':
@@ -1244,19 +525,19 @@ if __name__ == '__main__':
 
     if rq_type == 'source':
         if options.ctags:
-            run_source_query(options.ctags, 'ctags')
+            rqs.query('ctags')
             sys.exit(0)
 
         if options.buildreqs:
-            run_source_query(options.buildreqs, 'buildreqs')
+            rqs.query('buildreqs')
             sys.exit(0)
 
         if options.showinfo:
-            run_source_showinfo(options.showinfo)
+            rqs.showinfo()
             sys.exit(0)
 
         if options.src_examine:
-            run_source_examine(options.src_examine)
+            rqs.examine()
             sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
