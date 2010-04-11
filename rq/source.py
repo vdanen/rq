@@ -151,6 +151,13 @@ class Source:
             ignorecase = 'BINARY'
 
         if type == 'ctags':
+            like_q = self.options.ctags
+        if type == 'buildreqs':
+            like_q = self.options.buildreqs
+        if type == 'files':
+            like_q = self.options.query
+
+        if type == 'ctags':
             query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
             orderby = "c_file"
             match_t = 'Ctags data'
@@ -162,7 +169,7 @@ class Source:
             orderby = "f_file"
             match_t = 'files'
 
-        query = query + "LIKE '%" + self.db.sanitize_string(self.options.query) + "%'"
+        query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
 
         if self.options.sourceonly:
             query = query + " AND s_type = 'S'"
@@ -176,7 +183,7 @@ class Source:
             query   = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
 
         if not self.options.quiet:
-            print 'Searching database records for substring match on %s ("%s")' % (match_t, self.options.query)
+            print 'Searching database records for substring match on %s ("%s")' % (match_t, like_q)
 
         result = self.db.fetch_all(query)
         if result:
@@ -185,9 +192,9 @@ class Source:
                     print len(result)
                 else:
                     if self.options.tag:
-                        print '%d match(es) in database for tag (%s) and substring ("%s")' % (len(result), self.options.tag, self.options.query)
+                        print '%d match(es) in database for tag (%s) and substring ("%s")' % (len(result), self.options.tag, like_q)
                     else:
-                        print '%d match(es) in database for substring ("%s")' % (len(result), self.options.query)
+                        print '%d match(es) in database for substring ("%s")' % (len(result), like_q)
                 return
 
             ltag = ''
@@ -244,9 +251,9 @@ class Source:
 
         else:
             if self.options.tag:
-                print 'No matches in database for tag (%s) and substring ("%s")' % (self.options.tag, self.options.query)
+                print 'No matches in database for tag (%s) and substring ("%s")' % (self.options.tag, like_q)
             else:
-                print 'No matches in database for substring ("%s")' % self.options.query
+                print 'No matches in database for substring ("%s")' % like_q
 
 
     def examine(self, file):
@@ -294,24 +301,24 @@ class Source:
             shutil.rmtree(cpio_dir)
 
 
-    def showinfo(self, srpm):
+    def showinfo(self):
         """
         Display all known information on a srpm
         """
-        logging.debug('in Source.showinfo(%s)' % srpm)
+        logging.debug('in Source.showinfo()')
 
         if self.options.tag and not self.rtag.lookup(self.options.tag):
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
 
-        print 'Displaying all known information on srpm "%s"\n' % srpm
+        print 'Displaying all known information on srpm "%s"\n' % self.options.showinfo
 
         if self.options.tag:
             qtag = " AND p_tag = '%s'" % self.db.sanitize_string(self.options.tag)
         else:
             qtag = ''
 
-        query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (self.db.sanitize_string(srpm), qtag)
+        query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (self.db.sanitize_string(self.options.showinfo), qtag)
 
         result = self.db.fetch_all(query)
         if not result:
