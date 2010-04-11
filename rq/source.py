@@ -66,7 +66,7 @@ class Source:
             comp = 'tjf'
 
         excludes = ''
-        for f in rq.basics.get_file_excludes():
+        for f in self.rcommon.get_file_excludes():
             f = self.fix_excludes(f)
 
             excludes = '%s --exclude=%s' % (excludes, f)
@@ -255,17 +255,17 @@ class Source:
         """
         logging.debug('in Source.examine(%s)' % file)
 
-        rq.basics.file_rpm_check(file, 'source')
+        self.rcommon.file_rpm_check(file, 'source')
 
         file = path = os.path.abspath(file)
 
         print 'Examining %s...\n' % file
 
         # stage 1, list the rpm content
-        src_list = rqs.basics.rpm_list(file, raw=True)
+        src_list = self.rcommon.rpm_list(file, raw=True)
         print 'SRPM Contents:\n%s\n' % src_list
 
-        file_list = rqs.basics.rpm_list(file)
+        file_list = self.rcommon.rpm_list(file)
 
         cpio_dir = tempfile.mkdtemp()
         try:
@@ -405,7 +405,7 @@ class Source:
                     if dfile.endswith('/'):     # skip directories
                         pass
                     else:
-                        for exclude in rq.basics.get_file_excludes():
+                        for exclude in self.rcommon.get_file_excludes():
                             # make sure we don't include any files in our exclude list
                             if re.search(exclude, dfile):
                                 logging.debug('found unwanted entry: %s' % dfile)
@@ -452,7 +452,7 @@ class Source:
                     comp = 'xjf'
 
                 excludes = ''
-                for f in rq.basics.get_file_excludes():
+                for f in self.rcommon.get_file_excludes():
                     f = self.fix_excludes(f)
 
                     excludes = '%s --exclude=%s' % (excludes, f)
@@ -643,13 +643,13 @@ class Source:
             path = os.path.abspath(file)
         logging.debug('Path:\t%s' % path)
 
-        rq.basics.file_rpm_check(file, type)
+        self.rcommon.file_rpm_check(file, type)
 
         record = self.package_add_record(tag_id, file)
         if not record:
             return
 
-        file_list = rq.basics.rpm_list(file)
+        file_list = self.rcommon.rpm_list(file)
         if not file_list:
             return
 

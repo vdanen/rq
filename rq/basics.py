@@ -11,150 +11,6 @@ $Id$
 
 import logging, os, sys, re, commands, tempfile, shutil
 
-def get_file_excludes():
-    """
-    Function to return the file_excludes
-    """
-
-    file_excludes = ('/.svn', '/CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
-
-    return(file_excludes)
-
-
-def file_rpm_check(file, type='binary'):
-    """
-    Function to check whether the file is a source or binary RPM
-
-    The default is binary
-    """
-    logging.debug('in file_rpm_check(%s, %s)' % (file, type))
-
-    re_srpm    = re.compile(r'\.src\.rpm$')
-    re_brpm    = re.compile(r'\.rpm$')
-
-    if not os.path.isfile(file):
-        print 'File %s not found!\n' % file
-        sys.exit(1)
-
-    if type == 'binary':
-        if not re_brpm.search(file) or re_srpm.search(file):
-            print 'File %s is not a binary rpm!\n' % file
-            sys.exit(1)
-
-    if type == 'source':
-        if not re_srpm.search(file):
-            print 'File %s is not a source rpm!\n' % file
-            sys.exit(1)
-
-
-def rpm_list(file, raw=False):
-    """
-    Function to get the list of files in an RPM, excluding those files defined
-    by files_exclude
-    """
-    logging.debug('in rpm_list(%s)' % file)
-
-    list  = commands.getoutput("rpm -qlvp --nosignature " + file.replace(' ', '\ '))
-
-    if list == '(contains no files)' or list == '':
-        return False
-
-    if raw:
-        return(list)
-
-    list  = list.splitlines()
-    rlist = {}
-    count = 0
-
-    for entry in list:
-        break_loop = False
-        logging.debug('processing: %s' % entry) ### DEBUG
-        for exclude in get_file_excludes():
-            # make sure we don't include any files in our exclude list
-            if re.search(exclude, entry):
-                logging.debug('found unwanted entry: %s' % entry)
-                break_loop = True
-
-        if break_loop:
-            continue
-
-        is_suid = 0
-        is_sgid = 0
-        foo     = entry.split()
-
-        # this actually really stinks because we are allowed usernames longer
-        # than 8 characters, but rpm -qlv will only display the first 8 characters
-        # of the owner/group name -- not cool at all
-        if len(foo[2]) > 8:
-            user  = foo[2][:8]
-            group = foo[2][8:]
-            fname = foo[7]
-        else:
-            user  = foo[2]
-            group = foo[3]
-            fname = foo[8]
-        if foo[0][3].lower() == 's':
-            is_suid = 1
-        if foo[0][6].lower() == 's':
-            is_sgid = 1
-
-        perms = get_file_mode(foo[0])
-
-        rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid, 'perms': perms}
-        count       += 1
-
-    return(rlist)
-
-
-def get_file_mode(mode):
-    """
-    Function to return the numeric file mode given the r--r--r-- string as input
-    """
-    user  = mode[1:4]
-    group = mode[4:7]
-    other = mode[7:]
-    perms = {'user': user, 'group': group, 'other': other}
-
-    num   = 0
-    for type in perms.keys():
-
-        read    = perms[type][0]
-        write   = perms[type][1]
-        execute = perms[type][2]
-
-        if type == 'user':
-            if read == 'r':
-                num = num + 400
-            if write == 'w':
-                num = num + 200
-            if execute == 'x':
-                num = num + 100
-            elif execute == 'S':
-                num = num + 4000
-            elif execute == 's':
-                num = num + 4100
-        if type == 'group':
-            if read == 'r':
-                num = num + 40
-            if write == 'w':
-                num = num + 20
-            if execute == 'x':
-                num = num + 10
-            elif execute == 'S':
-                num = num + 2000
-            elif execute == 's':
-                num = num + 2010
-        if type == 'other':
-            if read == 'r':
-                num = num + 4
-            if write == 'w':
-                num = num + 2
-            if execute == 'x':
-                num = num + 1
-    num = '%04d' % num
-    return(num)
-
-
 class Common:
     """
     define some common functions for use
@@ -167,7 +23,6 @@ class Common:
 
         self.re_srpm    = re.compile(r'\.src\.rpm$')
         self.re_brpm    = re.compile(r'\.rpm$')
-
 
 
     def show_progress(self, prefix=False):
@@ -195,6 +50,150 @@ class Common:
                 sys.stdout.flush()
                 lprefix = prefix
                 return
+
+
+    def get_file_excludes(self):
+        """
+        Function to return the file_excludes
+        """
+
+        file_excludes = ('/.svn', '/CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
+
+        return(file_excludes)
+
+
+    def rpm_list(self, file, raw=False):
+        """
+        Function to get the list of files in an RPM, excluding those files defined
+        by files_exclude
+        """
+        logging.debug('in rpm_list(%s)' % file)
+
+        list  = commands.getoutput("rpm -qlvp --nosignature " + file.replace(' ', '\ '))
+
+        if list == '(contains no files)' or list == '':
+            return False
+
+        if raw:
+            return(list)
+
+        list  = list.splitlines()
+        rlist = {}
+        count = 0
+
+        for entry in list:
+            break_loop = False
+            logging.debug('processing: %s' % entry) ### DEBUG
+            for exclude in self.get_file_excludes():
+                # make sure we don't include any files in our exclude list
+                if re.search(exclude, entry):
+                    logging.debug('found unwanted entry: %s' % entry)
+                    break_loop = True
+
+            if break_loop:
+                continue
+
+            is_suid = 0
+            is_sgid = 0
+            foo     = entry.split()
+
+            # this actually really stinks because we are allowed usernames longer
+            # than 8 characters, but rpm -qlv will only display the first 8 characters
+            # of the owner/group name -- not cool at all
+            if len(foo[2]) > 8:
+                user  = foo[2][:8]
+                group = foo[2][8:]
+                fname = foo[7]
+            else:
+                user  = foo[2]
+                group = foo[3]
+                fname = foo[8]
+            if foo[0][3].lower() == 's':
+                is_suid = 1
+            if foo[0][6].lower() == 's':
+                is_sgid = 1
+
+            perms = self.get_file_mode(foo[0])
+
+            rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid, 'perms': perms}
+            count       += 1
+
+        return(rlist)
+
+
+    def file_rpm_check(self, file, type='binary'):
+        """
+        Function to check whether the file is a source or binary RPM
+
+        The default is binary
+        """
+        logging.debug('in file_rpm_check(%s, %s)' % (file, type))
+
+        re_srpm    = re.compile(r'\.src\.rpm$')
+        re_brpm    = re.compile(r'\.rpm$')
+
+        if not os.path.isfile(file):
+            print 'File %s not found!\n' % file
+            sys.exit(1)
+
+        if type == 'binary':
+            if not re_brpm.search(file) or re_srpm.search(file):
+                print 'File %s is not a binary rpm!\n' % file
+                sys.exit(1)
+
+        if type == 'source':
+            if not re_srpm.search(file):
+                print 'File %s is not a source rpm!\n' % file
+                sys.exit(1)
+
+
+    def get_file_mode(self, mode):
+        """
+        Function to return the numeric file mode given the r--r--r-- string as input
+        """
+        user  = mode[1:4]
+        group = mode[4:7]
+        other = mode[7:]
+        perms = {'user': user, 'group': group, 'other': other}
+
+        num   = 0
+        for type in perms.keys():
+
+            read    = perms[type][0]
+            write   = perms[type][1]
+            execute = perms[type][2]
+
+            if type == 'user':
+                if read == 'r':
+                    num = num + 400
+                if write == 'w':
+                    num = num + 200
+                if execute == 'x':
+                    num = num + 100
+                elif execute == 'S':
+                    num = num + 4000
+                elif execute == 's':
+                    num = num + 4100
+            if type == 'group':
+                if read == 'r':
+                    num = num + 40
+                if write == 'w':
+                    num = num + 20
+                if execute == 'x':
+                    num = num + 10
+                elif execute == 'S':
+                    num = num + 2000
+                elif execute == 's':
+                    num = num + 2010
+            if type == 'other':
+                if read == 'r':
+                    num = num + 4
+                if write == 'w':
+                    num = num + 2
+                if execute == 'x':
+                    num = num + 1
+        num = '%04d' % num
+        return(num)
 
 
 class Config:
