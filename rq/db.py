@@ -73,14 +73,17 @@ class DB:
 
     def get_dbname(self):
         """
-        function to return the database name we're using
+        function DB.get_dbname()
+
+        Function to return the database name we're using depending on if this
+        is being called by rqp or rqs
         """
         return (self.dbname)
 
 
     def close(self):
         """
-        function close()
+        function DB.close()
 
         Function to close connections to the database
         """
@@ -90,7 +93,7 @@ class DB:
 
     def fetch_all(self, query):
         """
-        function db_fetchall(query)
+        function DB.fetchall(query)
 
         Function to perform database queries.  It takes one argument, the query to
         execute (a SELECT statement), and returns the results of the query if the
@@ -111,6 +114,7 @@ class DB:
                 return results
             else:
                 return False
+
         except MySQLdb.Error, e:
             logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
             sys.exit(1)
@@ -118,7 +122,7 @@ class DB:
 
     def fetch_one(self, query):
         """
-        function fetch_one(query)
+        function DB.fetch_one(query)
 
         Function to perform database queries.  It takes one argument, the query to
         execute (a SELECT statement), and returns the results of the query if the
@@ -133,11 +137,13 @@ class DB:
             cursor.execute(query)
             results = cursor.fetchone()
             cursor.close()
+
             if results:
                 key = results.keys()
                 return(results[key[0]])
             else:
                 return False
+
         except MySQLdb.Error, e:
             logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
             sys.exit(1)
@@ -145,6 +151,8 @@ class DB:
 
     def do_query(self, query):
         """
+        function DB.do_query(query)
+
         Function to perform an actual update (UPDATE/INSERT) query (non-SELECT) from the database
         """
         logging.debug('  in DB.do_query()')
@@ -161,6 +169,8 @@ class DB:
 
     def sanitize_string(self, string):
         """
+        function DB.sanitize_string(string)
+        
         String to cleanup a string to remove characters that will cause problems
         with the database
         """
