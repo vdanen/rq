@@ -9,6 +9,10 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 $Id$
 """
 
+RQ_VERSION = '0.4'
+RQ_PROG    = 'rqs'
+RQ_TYPE    = 'source'
+
 import optparse, os, sys, logging
 import rq.db
 import rq.basics
@@ -17,51 +21,68 @@ import rq.source
 
 
 if __name__ == '__main__':
-    """
-    The main program
-    """
-    global options, config
-
-    rq_version = '0.4'
-    rq_prog    = 'rqs'
-    rq_type    = 'source'
-
-    sys.stdout.write("%s %s ($Id$)\n\n" % (rq_prog, rq_version))
-    # XXX: TODO add options to search files by ownership and sgid/suid status
+    sys.stdout.write("%s %s ($Id$)\n\n" % (RQ_PROG, RQ_VERSION))
+    # TODO: add options to search files by ownership and sgid/suid status
 
     p = optparse.OptionParser(description="RPM package query tool",
-                              prog=rq_prog,
-                              version="%prog " + rq_version,
+                              prog=RQ_PROG,
+                              version="%prog " + RQ_VERSION,
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p|z] <substring>] [-t <tag>]")
-    p.add_option('-n', '--config', dest="conffile", help="Optional configuration file", metavar="FILE")
-    p.add_option('-C', '--count', dest="count", default=False, action="store_true", help="Only output the count of query matches")
-    p.add_option('-d', '--debug', dest="debug", default=False, action="store_true", help="Enable debugging output")
-    p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true", help="Show extra info (version, release, date)")
-    p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true", help="Case insensitive search")
-    p.add_option('-l', '--list', dest="list", default=False, action="store_true", help="List database tags")
-    p.add_option('-p', '--patch', dest="patch", default=False, action="store_true", help="List patched files when examining a src.rpm")
-    p.add_option('-P', '--progress', dest="progress", default=False, action="store_true", help="Show processing progress")
-    p.add_option('-Q', '--quiet', dest="quiet", default=False, action="store_true", help="Quiet query - show tag and package name only (or numeric count only)")
-    p.add_option('-s', '--skip-tar', dest="skiptar", default=False, action="store_true", help="Skip tarfile extract when examining a src.rpm")
-    p.add_option('-S', '--source-only', dest="sourceonly", default=False, action="store_true", help="Limit query to source files (no patches)")
-    p.add_option('-T', '--suppresstag', dest="suppresstag", default=False, action="store_true", help="Suppress Tag and Path label output for queries") # was only in rqs -- why?
-    p.add_option('-x', '--statistics', dest="stats", default=False, action="store_true", help="Show database statistics")
-    p.add_option('-v', '--verbose', dest="verbose", default=False, action="store_true", help="Verbose output")
+    p.add_option('-n', '--config', dest="conffile", metavar="FILE",
+                 help="Optional configuration file")
+    p.add_option('-C', '--count', dest="count", default=False, action="store_true",
+                 help="Only output the count of query matches")
+    p.add_option('-d', '--debug', dest="debug", default=False, action="store_true",
+                 help="Enable debugging output")
+    p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true",
+                 help="Show extra info (version, release, date)")
+    p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true",
+                 help="Case insensitive search")
+    p.add_option('-l', '--list', dest="list", default=False, action="store_true",
+                 help="List database tags")
+    p.add_option('-p', '--patch', dest="patch", default=False, action="store_true",
+                 help="List patched files when examining a src.rpm")
+    p.add_option('-P', '--progress', dest="progress", default=False, action="store_true",
+                 help="Show processing progress")
+    p.add_option('-Q', '--quiet', dest="quiet", default=False, action="store_true",
+                 help="Quiet query - show tag and package name only (or numeric count only)")
+    p.add_option('-s', '--skip-tar', dest="skiptar", default=False, action="store_true",
+                 help="Skip tarfile extract when examining a src.rpm")
+    p.add_option('-S', '--source-only', dest="sourceonly", default=False, action="store_true",
+                 help="Limit query to source files (no patches)")
+    p.add_option('-T', '--suppresstag', dest="suppresstag", default=False, action="store_true",
+                 help="Suppress Tag and Path label output for queries")
+    p.add_option('-x', '--statistics', dest="stats", default=False, action="store_true",
+                 help="Show database statistics")
+    p.add_option('-v', '--verbose', dest="verbose", default=False, action="store_true",
+                 help="Verbose output")
     dbgroup = optparse.OptionGroup(p, "Database Options")
-    dbgroup.add_option('-a', '--add', dest="addfile", help="Add a " + rq_type + " rpm entry with TAG to the database", metavar="FILE")
-    dbgroup.add_option('-c', '--createpath', dest="createpath", help="Create database entries with TAG from a " + rq_type + " rpm DIR", metavar="DIR")
-    dbgroup.add_option('-D', '--delete', dest="tagdelete", help="Delete all TAG entries", metavar="TAG")
-    dbgroup.add_option('-f', '--file', dest="src_examine", help="Examine a src.rpm FILE and output to stdout", metavar="FILE")
-    dbgroup.add_option('-t', '--tag', dest="tag", help="TAG for created database entries or database queries", metavar="TAG")
-    dbgroup.add_option('-u', '--update', dest="tagupdate", help="Update TAG entries (new/removed files in directory)", metavar="TAG")
+    dbgroup.add_option('-a', '--add', dest="addfile", metavar="FILE",
+                       help="Add a " + RQ_TYPE + " rpm entry with TAG to the database")
+    dbgroup.add_option('-c', '--createpath', dest="createpath", metavar="DIR",
+                       help="Create database entries with TAG from a " + RQ_TYPE + " rpm DIR")
+    dbgroup.add_option('-D', '--delete', dest="tagdelete", metavar="TAG",
+                       help="Delete all TAG entries")
+    dbgroup.add_option('-f', '--file', dest="src_examine", metavar="FILE",
+                       help="Examine a src.rpm FILE and output to stdout")
+    dbgroup.add_option('-t', '--tag', dest="tag", metavar="TAG",
+                       help="TAG for created database entries or database queries")
+    dbgroup.add_option('-u', '--update', dest="tagupdate", metavar="TAG",
+                       help="Update TAG entries (new/removed files in directory)")
     p.add_option_group(dbgroup)
     group = optparse.OptionGroup(p, "Query Options")
-    group.add_option('-q', '--query', dest="query", help="Query database for substring match on files", metavar="STRING")
-    group.add_option('-b', '--buildreqs', dest="buildreqs", help="Query database for substring match on BuildRequires", metavar="STRING")
-    group.add_option('-o', '--info', dest="showinfo", help="Show all info on specified srpm", metavar="STRING")
-    group.add_option('-z', '--ctags', dest="ctags", help="Query database for substring match on ctags data (functions, etc.)", metavar="STRING")
+    group.add_option('-q', '--query', dest="query", metavar="STRING",
+                     help="Query database for substring match on files")
+    group.add_option('-b', '--buildreqs', dest="buildreqs", metavar="STRING",
+                     help="Query database for substring match on BuildRequires")
+    group.add_option('-o', '--info', dest="showinfo", metavar="STRING",
+                     help="Show all info on specified srpm")
+    group.add_option('-z', '--ctags', dest="ctags", metavar="STRING",
+                     help="Query database for substring match on ctags data (functions, etc.)")
     p.add_option_group(group)
-    (options, arguments) = p.parse_args()       # 'arguments' is a tuple of non-optioned things
+
+    # 'arguments' is a tuple of non-optioned things
+    (options, arguments) = p.parse_args()
 
     if len(sys.argv) == 1:      # no arguments passed
         p.print_help()
@@ -74,46 +95,46 @@ if __name__ == '__main__':
         p.error("--tag and --delete are mutually exclusive; you do not need to use --tag")
 
     # setup logging facilities
-    LOG_FILENAME = '%s/%s.log' % (os.getcwd(), rq_prog)
+    LOG_FILENAME = '%s/%s.log' % (os.getcwd(), RQ_PROG)
     LEVELS = {'debug'  : logging.DEBUG,
               'info'   : logging.INFO,
               'warning': logging.WARNING}
 
     if options.debug:
-        filelevel = LEVELS.get('debug', logging.NOTSET)
-        conslevel = LEVELS.get('debug', logging.NOTSET)
-        filefmt   = '%(asctime)s %(filename)s(%(funcName)s[%(lineno)d]): %(levelname)s: %(message)s'
+        FILELEVEL = LEVELS.get('debug', logging.NOTSET)
+        CONSLEVEL = LEVELS.get('debug', logging.NOTSET)
+        FILEFMT   = '%(asctime)s %(filename)s(%(funcName)s[%(lineno)d]): %(levelname)s: %(message)s'
 
     if options.verbose:
-        filelevel = LEVELS.get('info', logging.NOTSET)
-        conslevel = LEVELS.get('info', logging.NOTSET)
-        filefmt   = '%(asctime)s %(message)s'
+        FILELEVEL = LEVELS.get('info', logging.NOTSET)
+        CONSLEVEL = LEVELS.get('info', logging.NOTSET)
+        FILEFMT   = '%(asctime)s %(message)s'
 
     if not options.verbose and not options.debug:
-        filelevel = LEVELS.get('info', logging.NOTSET)
-        conslevel = LEVELS.get('warning', logging.NOTSET)
-        filefmt   = '%(asctime)s %(message)s'
+        FILELEVEL = LEVELS.get('info', logging.NOTSET)
+        CONSLEVEL = LEVELS.get('warning', logging.NOTSET)
+        FILEFMT   = '%(asctime)s %(message)s'
 
-    logging.basicConfig(level=filelevel,
-                        format=filefmt,
+    logging.basicConfig(level=FILELEVEL,
+                        format=FILEFMT,
                         datefmt='%b %d %H:%M:%S',
                         filename=LOG_FILENAME,
                         filemode='a')
     console = logging.StreamHandler()
-    console.setLevel(conslevel)
-    consfmt = logging.Formatter('%(message)s')
-    console.setFormatter(consfmt)
+    console.setLevel(CONSLEVEL)
+    CONSFMT = logging.Formatter('%(message)s')
+    console.setFormatter(CONSFMT)
     logging.getLogger('').addHandler(console)
 
-    logging.debug("%s starting, debug mode enabled; type => %s" % (rq_prog, rq_type))
+    logging.debug("%s starting, debug mode enabled; type => %s" % (RQ_PROG, RQ_TYPE))
 
     config = rq.basics.Config(options.conffile)
-    db     = rq.db.DB(rq_type, config)
+    db     = rq.db.DB(RQ_TYPE, config)
 
     # get the name of the database we want to talk to
     config['database'] = db.get_dbname()
 
-    rtag = rq.tag.Tag(db, rq_type, config)
+    rtag = rq.tag.Tag(db, RQ_TYPE, config)
 
     rcommon = rq.basics.Common(options, rtag)
 
@@ -157,13 +178,12 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.src_examine:
-        rqs.examine()
+        rqs.examine(options.src_examine)
         sys.exit(0)
 
     # this option is strange... it must be for adding a file, but should a single file
     # have a new tag?  or can we add it (despite the path) to an existing tag?
-    # XXX: it also needs to be able to support numerous files at once
-    # XXX: TODO
+    # TODO: it also needs to be able to support numerous files at once
     if options.addfile:
         if not options.tag:
             logging.critical('The --add option requires a tag entry!')
@@ -200,7 +220,7 @@ if __name__ == '__main__':
 
         for afile in addfiles:
             print afile
-            #record_add(options.tag, afile, rq_type)
+            #record_add(options.tag, afile, RQ_TYPE)
 
         sys.exit(0)
 
