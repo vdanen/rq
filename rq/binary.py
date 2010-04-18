@@ -81,7 +81,7 @@ class Binary:
             path = os.path.abspath(file)
         logging.debug('Path:\t%s' % path)
 
-        self.rcommon.file_rpm_check(file, type)
+        self.rcommon.file_rpm_check(file)
 
         record = self.package_add_record(tag_id, file)
         if not record:

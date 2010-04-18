@@ -139,7 +139,7 @@ if __name__ == '__main__':
     config['database'] = db.get_dbname()
 
     rtag    = rq.tag.Tag(db, RQ_TYPE, config)
-    rcommon = rq.basics.Common(options, rtag)
+    rcommon = rq.basics.Common(options, rtag, rq_type)
     rqp     = rq.binary.Binary(db, config, options, rtag, rcommon)
 
     # start doing useful things

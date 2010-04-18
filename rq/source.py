@@ -262,7 +262,7 @@ class Source:
         """
         logging.debug('in Source.examine(%s)' % file)
 
-        self.rcommon.file_rpm_check(file, 'source')
+        self.rcommon.file_rpm_check(file)
 
         file = path = os.path.abspath(file)
 
@@ -650,7 +650,7 @@ class Source:
             path = os.path.abspath(file)
         logging.debug('Path:\t%s' % path)
 
-        self.rcommon.file_rpm_check(file, type)
+        self.rcommon.file_rpm_check(file)
 
         record = self.package_add_record(tag_id, file)
         if not record:
