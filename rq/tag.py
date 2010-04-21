@@ -25,8 +25,8 @@ class Tag:
     Tag.showdbstats()    : show database statistics, by optional tag
     """
 
-    def __init__(self, db, rq_type, config):
-        self.db     = db
+    def __init__(self, rq_db, rq_type, config):
+        self.db     = rq_db
         self.type   = rq_type
         self.config = config
 
@@ -73,25 +73,25 @@ class Tag:
             return False
 
 
-    def add_record(self, tag, file):
+    def add_record(self, tag, path_to_tag):
         """
         Function to add a tag record.
 
-        Tag.add_record(tag, file):
-          tag : the tag to add
-          file: the path for this tag
+        Tag.add_record(tag, path_to_tag):
+          tag        : the tag to add
+          path_to_tag: the path for this tag
 
         Returns the ID of the newly created tag, otherwise returns 0
         """
-        logging.debug('in Tag.add_record(%s, %s)' % (tag, file))
+        logging.debug('in Tag.add_record(%s, %s)' % (tag, path_to_tag))
 
         cur_date = datetime.datetime.now()
         cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
 
-        if os.path.isfile(file):
-            path = os.path.abspath(os.path.dirname(file))
+        if os.path.isfile(path_to_tag):
+            path = os.path.abspath(os.path.dirname(path_to_tag))
         else:
-            path = os.path.abspath(file)
+            path = os.path.abspath(path_to_tag)
         # we can have multiple similar paths, but not multiple similar tags
         query = "SELECT tag FROM tags WHERE tag = '%s'" % self.db.sanitize_string(tag)
         dbtag = self.db.fetch_one(query)
@@ -151,7 +151,7 @@ class Tag:
 
                 for table in tables:
                     query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id['id'])
-                    res   = self.db.do_query(query)
+                    self.db.do_query(query)
 
                 sys.stdout.write(' done\n')
 
@@ -160,7 +160,7 @@ class Tag:
                     sys.stdout.flush()
                     for table in tables:
                         query = 'OPTIMIZE TABLE %s' % table
-                        res   = self.db.do_query(query)
+                        self.db.do_query(query)
                     sys.stdout.write(' done\n')
                 else:
                     sys.stdout.write('Skipping database optimization, less than 500 package records removed.\n')
