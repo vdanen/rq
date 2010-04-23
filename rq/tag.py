@@ -8,8 +8,9 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 
 $Id$
 """
-import sys, datetime, logging, os
+import sys, datetime, logging, os, commands
 import rq.db
+from glob import glob
 
 class Tag:
     """
@@ -99,7 +100,10 @@ class Tag:
             print 'Tag (%s) already exists in the database!\n' % tag
             sys.exit(1)
 
-        query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (self.db.sanitize_string(tag.strip()), self.db.sanitize_string(path.strip()), cur_date)
+        query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (
+                self.db.sanitize_string(tag.strip()),
+                self.db.sanitize_string(path.strip()),
+                cur_date)
         self.db.do_query(query)
 
         query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
@@ -213,7 +217,11 @@ class Tag:
                 version = tlist[1].strip()
                 release = tlist[2].strip()
 
-                query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (tag_id, self.db.sanitize_string(package), self.db.sanitize_string(version), self.db.sanitize_string(release))
+                query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (
+                          tag_id,
+                          self.db.sanitize_string(package),
+                          self.db.sanitize_string(version),
+                          self.db.sanitize_string(release))
                 package = self.db.fetch_one(query)
                 if package:
                     logging.info('OK')
@@ -278,7 +286,7 @@ class Tag:
 
         # get the size of the database as well
         size   = 0.00
-        bytes  = ''
+        btype  = ''
         query  = "SHOW TABLE STATUS"
         tbsize = self.db.fetch_all(query)
 
@@ -290,18 +298,21 @@ class Tag:
             size   = size / 1024
             count += 1
             if count == 1:
-                bytes = 'KB'
+                btype = 'KB'
             if count == 2:
-                bytes = 'MB'
+                btype = 'MB'
             if count == 3:
-                bytes = 'GB'
+                btype = 'GB'
                 break
 
         print 'Database statistics:\n'
         if tag != 'all':
             print 'Printing statistics for tag: %s\n' % tag
-        print '   Database  => User: %s, Host: %s, Database: %s' % (self.config['username'], self.config['hostspec'], self.config['database'])
-        print '   Data size => %2.2f %s\n' % (size, bytes)
+        print '   Database  => User: %s, Host: %s, Database: %s' % (
+            self.config['username'],
+            self.config['hostspec'],
+            self.config['database'])
+        print '   Data size => %2.2f %s\n' % (size, btype)
         print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
         if self.type == 'binary':
             print '   File records : %-15d  Requires records: %-15d' % (c_files, c_reqs)
