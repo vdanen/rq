@@ -136,7 +136,7 @@ if __name__ == '__main__':
 
     rtag = rq.tag.Tag(db, RQ_TYPE, config)
 
-    rcommon = rq.basics.Common(options, rtag, rq_type)
+    rcommon = rq.basics.Common(options, rtag, RQ_TYPE)
 
     rqs = rq.source.Source(db, config, options, rtag, rcommon)
 
