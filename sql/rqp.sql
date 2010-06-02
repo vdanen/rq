@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS `packages` (
   `p_release` text NOT NULL,
   `p_date` text NOT NULL,
   `p_arch` varchar(10) NOT NULL,
+  `p_srpm` text NOT NULL,
   PRIMARY KEY  (`p_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;

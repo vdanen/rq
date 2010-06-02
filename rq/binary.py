@@ -25,14 +25,15 @@ class Binary:
         self.rtag    = rtag
         self.rcommon = rcommon
 
-        self.re_brpm    = re.compile(r'\.rpm$')
-        self.re_srpm    = re.compile(r'\.src\.rpm$')
-        self.re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
-        self.re_tar     = re.compile(r'\.((tar)(\.bz2|\.gz)?|t(gz|bz2?))$')
-        self.re_targz   = re.compile(r'\.(tgz|tar\.gz)$')
-        self.re_tarbz   = re.compile(r'\.(tbz2?|tar\.bz2)$')
-        self.re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
-        self.re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
+        self.re_brpm     = re.compile(r'\.rpm$')
+        self.re_srpm     = re.compile(r'\.src\.rpm$')
+        self.re_patch    = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
+        self.re_tar      = re.compile(r'\.((tar)(\.bz2|\.gz)?|t(gz|bz2?))$')
+        self.re_targz    = re.compile(r'\.(tgz|tar\.gz)$')
+        self.re_tarbz    = re.compile(r'\.(tbz2?|tar\.bz2)$')
+        self.re_patchgz  = re.compile(r'\.(patch|diff|dif)(\.gz)$')
+        self.re_patchbz  = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
+        self.re_srpmname = re.compile(r'(\w+)(-[0-9]).*')
 
 
     def rpm_add_directory(self, tag, path):
@@ -107,7 +108,7 @@ class Binary:
         logging.debug('in Binary.package_add_record(%s, %s)' % (tag_id, file))
 
         path    = os.path.basename(file)
-        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + file.replace(' ', '\ '))
+        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + file.replace(' ', '\ '))
         tlist   = rpmtags.split('|')
         logging.debug("tlist is %s " % tlist)
         package = tlist[0].strip()
@@ -115,6 +116,7 @@ class Binary:
         release = tlist[2].strip()
         pdate   = tlist[3].strip()
         arch    = tlist[4].strip()
+        srpm    = self.re_srpmname.sub(r'\1', tlist[5].strip())
 
         query = "SELECT tag FROM tags WHERE t_record = '%s' LIMIT 1" % tag_id
         tag   = self.db.fetch_one(query)
@@ -134,14 +136,15 @@ class Binary:
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch, p_srpm) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
             tag_id,
             self.db.sanitize_string(tag),
             self.db.sanitize_string(package),
             self.db.sanitize_string(version),
             self.db.sanitize_string(release),
             self.db.sanitize_string(pdate),
-            self.db.sanitize_string(arch))
+            self.db.sanitize_string(arch),
+            self.db.sanitize_string(srpm))
 
         result = self.db.do_query(query)
         self.rcommon.show_progress(path)
@@ -186,11 +189,11 @@ class Binary:
             like_q = self.options.symbols
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
                 type, type, type, ignorecase, type)
         else:
             # query on type: provides, requires, symbols
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
                 type, type, type, ignorecase, type)
 
         query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
@@ -220,6 +223,7 @@ class Binary:
                 fromdb_ver  = row['p_version']
                 fromdb_rel  = row['p_release']
                 fromdb_date = row['p_date']
+                fromdb_srpm = row['p_srpm']
                 fromdb_file = row[type]
 
                 if type == 'files':
@@ -246,9 +250,9 @@ class Binary:
                                 is_suid = '*'
                             if fromdb_is_sgid == 1:
                                 is_sgid = '*'
-                            print '%s: %s (%04d,%s%s,%s%s)' % (rpm, fromdb_file, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
+                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_file, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
                         else:
-                            print '%s: %s' % (rpm, fromdb_file)
+                            print '%s (%s): %s' % (rpm, fromdb_srpm, fromdb_file)
 
                     if self.options.quiet:
                         lsrc = rpm
