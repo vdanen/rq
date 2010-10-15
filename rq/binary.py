@@ -8,7 +8,7 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 
 $Id$
 """
-import os, sys, re, commands, logging, tempfile, shutil
+import os, sys, re, commands, logging, tempfile, shutil, datetime
 from glob import glob
 import rq.db
 import rq.basics
@@ -386,6 +386,8 @@ class Binary:
         """
         symbols = []
 
+        self.rcommon.show_progress()
+
         nm_output = commands.getoutput('nm -D -g ' + file)
         nm_output = nm_output.split()
         for symbol in nm_output:
@@ -403,6 +405,8 @@ class Binary:
         Function to get binary flags from a file
         """
         flags = {}
+
+        self.rcommon.show_progress()
 
         readelf_l = commands.getoutput('readelf -l ' + file)
         readelf_d = commands.getoutput('readelf -d ' + file)
