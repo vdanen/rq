@@ -97,6 +97,8 @@ class Binary:
         self.add_requires(tag_id, record, file)
         self.add_provides(tag_id, record, file)
 
+        self.add_binary_records(tag_id, record, file)
+
         if self.options.progress:
             sys.stdout.write('\n')
 
@@ -322,4 +324,130 @@ class Binary:
                 file_list[x]['is_suid'],
                 file_list[x]['is_sgid'],
                 file_list[x]['perms'])
+            result = self.db.do_query(query)
+
+
+    def add_binary_records(self, tag_id, record, rpm):
+        """
+        Function to add binary symbols and flags to the database
+        """
+        logging.debug('in Binary.add_binary_records(%s, %s, %s)' % (tag_id, record, rpm))
+
+        cpio_dir = tempfile.mkdtemp()
+        try:
+            current_dir = os.getcwd()
+            os.chdir(cpio_dir)
+            # explode rpm
+            command      = 'rpm2cpio "%s" | cpio -d -i 2>/dev/null' % rpm
+            (rc, output) = commands.getstatusoutput(command)
+
+            command      = 'find %s -perm /u+x -type f' % cpio_dir
+            (rc, output) = commands.getstatusoutput(command)
+
+            dir = output.split()
+            for file in dir:
+                if os.path.exists(file):
+                    # executable files
+                    if re.search('ELF', commands.getoutput('file ' + file)):
+                        # ELF binaries
+                        flags   = self.get_binary_flags(file)
+                        #symbols = self.get_binary_symbols(file)
+                        self.add_flag_records(tag_id, record, flags)
+                        #self.add_symbol_records(tag_id, record, symbols)
+            os.chdir(current_dir)
+        finally:
+            logging.debug('Removing temporary directory: %s...' % cpio_dir)
+            shutil.rmtree(cpio_dir)
+
+
+    def get_binary_symbols(self, file):
+        """
+        Function to get symbols from a binary file
+        """
+        symbols = []
+
+        nm_output = commands.getoutput('nm -D -g ' + file)
+        nm_output = nm_output.split()
+        for symbol in nm_output:
+            if re.search('^[A-Za-z_]{2}.*', symbol):
+                if symbol not in excluded_symbols:
+                    # dump the __cxa* symbols
+                    if not re.search('^__cxa', symbol):
+                        symbols.append(symbol)
+
+        return symbols
+
+
+    def get_binary_flags(self, file):
+        """
+        Function to get binary flags from a file
+        """
+        flags = {}
+
+        readelf_l = commands.getoutput('readelf -l ' + file)
+        readelf_d = commands.getoutput('readelf -d ' + file)
+        readelf_s = commands.getoutput('readelf -s ' + file)
+        readelf_h = commands.getoutput('readelf -h ' + file)
+
+        if re.search('GNU_RELRO', readelf_l):
+            if re.search('BIND_NOW', readelf_d):
+                # full RELRO
+                flags['relro'] = '1'
+            else:
+                # partial RELRO
+                flags['relro'] = '2'
+        else:
+            # no RELRO
+            flags['relro'] = '0'
+
+        if re.search('__stack_chk_fail', readelf_s):
+            # found
+            flags['ssp'] = '1'
+        else:
+            # none
+            flags['ssp'] = '0'
+
+        if re.search('GNU_STACK.*RWE', readelf_l):
+            # disabled
+            flags['nx'] = '0'
+        else:
+            # enabled
+            flags['nx'] = '1'
+
+        if re.search('Type:( )+EXEC', readelf_h):
+            # none
+            flags['pie'] = '0'
+        elif re.search('Type:( )+DYN', readelf_h):
+            if re.search('\(DEBUG\)', readelf_d):
+                # enabled
+                flags['pie'] = '1'
+            else:
+                # DSO
+                flags['pie'] = '2'
+
+        if re.search('_chk@GLIBC', readelf_s):
+            # found
+            flags['fortify_source'] = '1'
+        else:
+            # not found
+            flags['fortify_source'] = '0'
+
+        return flags
+
+
+    def add_flag_records(self, tag_id, record, flags):
+        """
+        Function to add flag records to the database
+        """
+        logging.debug('in Binary.add_flag_records(%s, %s, %s)' % (tag_id, record, flags))
+
+        for x in flags:
+            query  = "INSERT INTO flags (t_record, p_record, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', %d, %d, %d, %d, %d)" % (
+                tag_id,
+                record,
+                file_list[x]['relro'],
+                file_list[x]['ssp'],
+                file_list[x]['pie'],
+                file_list[x]['fortify_source'],
+                file_list[x]['nx'])
             result = self.db.do_query(query)
