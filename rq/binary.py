@@ -35,6 +35,26 @@ class Binary:
         self.re_patchbz  = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
         self.re_srpmname = re.compile(r'(\w+)(-[0-9]).*')
 
+        self.excluded_symbols = ['abort', '__assert_fail', 'bindtextdomain', '__bss_start', 'calloc',
+                                 'chmod', 'close', 'close_stdout', '__data_start', 'dcgettext', 'dirname',
+                                 '_edata', '_end', 'error', '_exit', 'exit', 'fclose', 'fdopen', 'ferror',
+                                 'fgets', '_fini', 'fnmatch', 'fopen', 'fork', 'fprintf', '__fprintf_chk',
+                                 'fread', 'free', 'fscanf', 'fwrite', 'getenv', 'getgrgid', 'getgrnam',
+                                 'getopt', 'getopt_long', 'getpwnam', 'getpwuid', 'gettimeofday',
+                                 '__gmon_start__', '_init', 'ioctl', '_IO_stdin_used', 'isatty', 'iswalnum',
+                                 'iswprint', 'iswspace', '_Jv_RegisterClasses', 'kill', '__libc_csu_fini',
+                                 '__libc_csu_init', '__libc_start_main', 'localtime', 'malloc', 'memchr',
+                                 'memcpy', '__memcpy_chk', 'memmove', 'mempcpy', '__mempcpy_chk', 'memset',
+                                 'mkstemp', 'mktime', 'opendir', 'optarg', 'pclose', 'pipe', 'popen',
+                                 '__printf_chk', '__progname', '__progname_full', 'program_invocation_name',
+                                 'program_invocation_short_name', 'program_name', 'read', 'readdir',
+                                 'readlink', 'realloc', 'rename', 'setenv', 'setlocale', 'sigaction',
+                                 'sigaddset', 'sigemptyset', 'sigismember', 'signal', 'sigprocmask',
+                                 '__stack_chk_fail', 'stderr', 'stdout', 'stpcpy', 'strcasecmp', 'strchr',
+                                 'strcmp', 'strcpy', 'strerror', 'strftime', 'strlen', 'strncasecmp',
+                                 'strnlen', 'strrchr', 'strstr', 'strtol', 'textdomain', 'time', 'umask',
+                                 'unlink', 'Version', 'version_etc_copyright', 'waitpid', 'write', '__xstat']
+
 
     def rpm_add_directory(self, tag, path):
         """
@@ -351,9 +371,9 @@ class Binary:
                     if re.search('ELF', commands.getoutput('file ' + file)):
                         # ELF binaries
                         flags   = self.get_binary_flags(file)
-                        #symbols = self.get_binary_symbols(file)
+                        symbols = self.get_binary_symbols(file)
                         self.add_flag_records(tag_id, record, flags)
-                        #self.add_symbol_records(tag_id, record, symbols)
+                        self.add_symbol_records(tag_id, record, symbols)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -370,7 +390,7 @@ class Binary:
         nm_output = nm_output.split()
         for symbol in nm_output:
             if re.search('^[A-Za-z_]{2}.*', symbol):
-                if symbol not in excluded_symbols:
+                if symbol not in self.excluded_symbols:
                     # dump the __cxa* symbols
                     if not re.search('^__cxa', symbol):
                         symbols.append(symbol)
@@ -392,45 +412,45 @@ class Binary:
         if re.search('GNU_RELRO', readelf_l):
             if re.search('BIND_NOW', readelf_d):
                 # full RELRO
-                flags['relro'] = '1'
+                flags['relro'] = 1
             else:
                 # partial RELRO
-                flags['relro'] = '2'
+                flags['relro'] = 2
         else:
             # no RELRO
-            flags['relro'] = '0'
+            flags['relro'] = 0
 
         if re.search('__stack_chk_fail', readelf_s):
             # found
-            flags['ssp'] = '1'
+            flags['ssp'] = 1
         else:
             # none
-            flags['ssp'] = '0'
+            flags['ssp'] = 0
 
         if re.search('GNU_STACK.*RWE', readelf_l):
             # disabled
-            flags['nx'] = '0'
+            flags['nx'] = 0
         else:
             # enabled
-            flags['nx'] = '1'
+            flags['nx'] = 1
 
         if re.search('Type:( )+EXEC', readelf_h):
             # none
-            flags['pie'] = '0'
+            flags['pie'] = 0
         elif re.search('Type:( )+DYN', readelf_h):
             if re.search('\(DEBUG\)', readelf_d):
                 # enabled
-                flags['pie'] = '1'
+                flags['pie'] = 1
             else:
                 # DSO
-                flags['pie'] = '2'
+                flags['pie'] = 2
 
         if re.search('_chk@GLIBC', readelf_s):
             # found
-            flags['fortify_source'] = '1'
+            flags['fortify_source'] = 1
         else:
             # not found
-            flags['fortify_source'] = '0'
+            flags['fortify_source'] = 0
 
         return flags
 
@@ -441,13 +461,26 @@ class Binary:
         """
         logging.debug('in Binary.add_flag_records(%s, %s, %s)' % (tag_id, record, flags))
 
-        for x in flags:
-            query  = "INSERT INTO flags (t_record, p_record, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', %d, %d, %d, %d, %d)" % (
+        query  = "INSERT INTO flags (t_record, p_record, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', %d, %d, %d, %d, %d)" % (
+            tag_id,
+            record,
+            flags['relro'],
+            flags['ssp'],
+            flags['pie'],
+            flags['fortify_source'],
+            flags['nx'])
+        result = self.db.do_query(query)
+
+
+    def add_symbol_records(self, tag_id, record, symbols):
+        """
+        Function to add symbol records to the database
+        """
+        logging.debug('in Binary.add_symbol_records(%s, %s, %s)' % (tag_id, record, symbols))
+
+        for symbol in symbols:
+            query  = "INSERT INTO symbols (t_record, p_record, symbols) VALUES ('%s', '%s', '%s')" % (
                 tag_id,
                 record,
-                file_list[x]['relro'],
-                file_list[x]['ssp'],
-                file_list[x]['pie'],
-                file_list[x]['fortify_source'],
-                file_list[x]['nx'])
+                self.db.sanitize_string(symbol))
             result = self.db.do_query(query)
