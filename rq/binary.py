@@ -154,7 +154,7 @@ class Binary:
         query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, self.db.sanitize_string(package))
         p_record = self.db.fetch_one(query)
         if p_record:
-                return(p_record)
+            return(p_record)
         else:
             print 'Adding file %s failed!\n' % file
             return(0)
