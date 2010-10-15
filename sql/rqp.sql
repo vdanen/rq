@@ -110,6 +110,27 @@ CREATE TABLE IF NOT EXISTS `symbols` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `flags`
+--
+
+DROP TABLE IF EXISTS `flags`;
+CREATE TABLE IF NOT EXISTS `flags` (
+  `l_id` INT NOT NULL auto_increment,
+  `p_record` INT NOT NULL,
+  `t_record` INT NOT NULL,
+  `f_relro` tinyint DEFAULT 0,
+  `f_ssp` tinyint DEFAULT 0,
+  `f_pie` tinyint DEFAULT 0,
+  `f_fortify` tinyint DEFAULT 0,
+  `f_nx` tinyint DEFAULT 0,
+  PRIMARY KEY  (`l_id`),
+  KEY `rec` USING BTREE (`p_record`),
+  KEY `trec` USING BTREE (`t_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `tags`
 --
 
