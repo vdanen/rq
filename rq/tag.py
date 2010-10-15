@@ -149,7 +149,7 @@ class Tag:
                 sys.stdout.flush()
 
                 if self.type == 'binary':
-                    tables = ('packages', 'requires', 'provides', 'files')
+                    tables = ('packages', 'requires', 'provides', 'files', 'flags', 'symbols')
                 if self.type == 'source':
                     tables = ('packages', 'sources', 'files', 'ctags')
 
@@ -274,6 +274,10 @@ class Tag:
             c_reqs  = self.db.fetch_one(query)
             query   = "SELECT count(*) FROM provides %s" % extra_opts
             c_provs = self.db.fetch_one(query)
+            query   = "SELECT count(*) FROM flags %s" % extra_opts
+            c_flags = self.db.fetch_one(query)
+            query   = "SELECT count(*) FROM symbols %s" % extra_opts
+            c_symbs = self.db.fetch_one(query)
         else:
             query   = "SELECT count(*) FROM sources %s" % extra_opts
             c_src   = self.db.fetch_one(query)
@@ -316,7 +320,8 @@ class Tag:
         print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
         if self.type == 'binary':
             print '   File records : %-15d  Requires records: %-15d' % (c_files, c_reqs)
-            print '                                   Provides records: %-15d\n' % c_provs
+            print '   Flag records : %-15d  Provides records: %-15d' % (c_flags, c_provs)
+            print '                                   Symbol records  : %-15d\n' % c_symbs
         else:
             print '   File records : %-15d  Source records  : %-15d' % (c_files, c_src)
             print '   Ctags records: %-15d  Requires records: %-15d '% (c_ctags, c_breqs)
