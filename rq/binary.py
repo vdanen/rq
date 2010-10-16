@@ -210,7 +210,7 @@ class Binary:
             like_q = self.options.symbols
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms, f_relro, f_ssp, f_pie, f_fortify, f_nx FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) LEFT JOIN flags ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms, f_relro, f_ssp, f_pie, f_fortify, f_nx FROM %s LEFT JOIN (packages, flags) ON (%s.p_record = packages.p_record AND %s.p_record = packages.p_record) WHERE %s %s " % (
                 type, type, type, type, ignorecase, type)
         else:
             # query on type: provides, requires, symbols
@@ -222,7 +222,9 @@ class Binary:
         if self.options.tag:
             query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
 
-        query  = query + " ORDER BY p_tag, p_package, " + type
+        # I'm not going to pretend to know why the old ORDER BY resulted in 7 results for each
+        # match, but GROUP BY works (I suspect it is due to the second LEFT JOIN)
+        query  = query + " GROUP BY p_tag, p_package, " + type
         result = self.db.fetch_all(query)
         if result:
             if self.options.count:
