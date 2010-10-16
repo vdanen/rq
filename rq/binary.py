@@ -116,7 +116,6 @@ class Binary:
         self.add_records(tag_id, record, file_list)
         self.add_requires(tag_id, record, file)
         self.add_provides(tag_id, record, file)
-
         self.add_binary_records(tag_id, record, file)
 
         if self.options.progress:
@@ -211,8 +210,8 @@ class Binary:
             like_q = self.options.symbols
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
-                type, type, type, ignorecase, type)
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms, f_relro, f_ssp, f_pie, f_fortify, f_nx FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) LEFT JOIN flags ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+                type, type, type, type, ignorecase, type)
         else:
             # query on type: provides, requires, symbols
             query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
@@ -254,6 +253,15 @@ class Binary:
                     fromdb_is_suid = row['f_is_suid']
                     fromdb_is_sgid = row['f_is_sgid']
                     fromdb_perms   = row['f_perms']
+                    # flags
+                    fromdb_flags = {}
+                    fromdb_flags['relro']   = row['f_relro']
+                    fromdb_flags['ssp']     = row['f_ssp']
+                    fromdb_flags['pie']     = row['f_pie']
+                    fromdb_flags['fortify'] = row['f_fortify']
+                    fromdb_flags['nx']      = row['f_nx']
+                    flags                   = self.convert_flags(fromdb_flags)
+
 
                 if not ltag == fromdb_tag:
                     print '\nResults in Tag: %s\n' % fromdb_tag
@@ -283,6 +291,7 @@ class Binary:
                             rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
                             print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                             print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
+                            print 'Flags  : RELRO: %s | SSP: %s | PIE: %s | FORTIFY: %s | NX: %s' % (flags['relro'], flags['ssp'], flags['pie'], flags['fortify'], flags['nx'])
 
         else:
             if self.options.tag:
@@ -361,19 +370,25 @@ class Binary:
             command      = 'rpm2cpio "%s" | cpio -d -i 2>/dev/null' % rpm
             (rc, output) = commands.getstatusoutput(command)
 
-            command      = 'find %s -perm /u+x -type f' % cpio_dir
+            command      = 'find . -perm /u+x -type f'
             (rc, output) = commands.getstatusoutput(command)
 
             dir = output.split()
+            logging.debug('dir is %s' % dir)
             for file in dir:
-                if os.path.exists(file):
+                if os.path.isfile(file):
+                    logging.debug('checking file: %s' % file)
                     # executable files
                     if re.search('ELF', commands.getoutput('file ' + file)):
                         # ELF binaries
                         flags   = self.get_binary_flags(file)
                         symbols = self.get_binary_symbols(file)
-                        self.add_flag_records(tag_id, record, flags)
-                        self.add_symbol_records(tag_id, record, symbols)
+                        # need to change ./usr/sbin/foo to /usr/sbin/foo and look up the file record
+                        nfile   = file[1:]
+                        query   = "SELECT f_id FROM files WHERE t_record = %s AND p_record = %s AND files = '%s'" % (tag_id, record, nfile)
+                        file_id = self.db.fetch_one(query)
+                        self.add_flag_records(tag_id, file_id, record, flags)
+                        self.add_symbol_records(tag_id, file_id, record, symbols)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -459,15 +474,17 @@ class Binary:
         return flags
 
 
-    def add_flag_records(self, tag_id, record, flags):
+    def add_flag_records(self, tag_id, file_id, record, flags):
         """
         Function to add flag records to the database
         """
-        logging.debug('in Binary.add_flag_records(%s, %s, %s)' % (tag_id, record, flags))
+        logging.debug('in Binary.add_flag_records(%s, %s, %s, %s)' % (tag_id, file_id, record, flags))
 
-        query  = "INSERT INTO flags (t_record, p_record, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', %d, %d, %d, %d, %d)" % (
+        logging.debug('flags: %s' % flags)
+        query  = "INSERT INTO flags (t_record, p_record, f_id, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', '%s', %d, %d, %d, %d, %d)" % (
             tag_id,
             record,
+            file_id,
             flags['relro'],
             flags['ssp'],
             flags['pie'],
@@ -476,15 +493,54 @@ class Binary:
         result = self.db.do_query(query)
 
 
-    def add_symbol_records(self, tag_id, record, symbols):
+    def add_symbol_records(self, tag_id, file_id, record, symbols):
         """
         Function to add symbol records to the database
         """
-        logging.debug('in Binary.add_symbol_records(%s, %s, %s)' % (tag_id, record, symbols))
+        logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tag_id, file_id, record, symbols))
 
         for symbol in symbols:
-            query  = "INSERT INTO symbols (t_record, p_record, symbols) VALUES ('%s', '%s', '%s')" % (
+            query  = "INSERT INTO symbols (t_record, p_record, f_id, symbols) VALUES ('%s', '%s', '%s', '%s')" % (
                 tag_id,
                 record,
+                file_id,
                 self.db.sanitize_string(symbol))
             result = self.db.do_query(query)
+
+
+    def convert_flags(self, flags):
+        """
+        Convert numeric representation of flags to human readable
+        """
+        newflags = {}
+
+        if flags['relro'] == 1:
+            newflags['relro'] = "full"
+        elif flags['relro'] == 2:
+            newflags['relro'] = "partial"
+        else:
+            newflags['relro'] = "none"
+
+        if flags['ssp'] == 1:
+            newflags['ssp'] = "found"
+        else:
+            newflags['ssp'] = "not found"
+
+        if flags['nx'] == 1:
+            newflags['nx'] = "enabled"
+        else:
+            newflags['nx'] = "disabled"
+
+        if flags['pie'] == 2:
+            newflags['pie'] = "DSO"
+        elif flags['pie'] == 1:
+            newflags['pie'] = "enabled"
+        else:
+            newflags['pie'] = "none"
+
+        if flags['fortify'] == 1:
+            newflags['fortify'] = "found"
+        else:
+            newflags['fortify'] = "not found"
+
+        return(newflags)
