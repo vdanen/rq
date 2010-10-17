@@ -192,9 +192,6 @@ class Binary:
         elif self.options.tag and tag_id:
             tag_id =  tag_id['id']
 
-        if not self.options.quiet:
-            print 'Searching database records for substring match for %s (%s)' % (type, self.options.query)
-
         if self.options.ignorecase:
             ignorecase = ''
         else:
@@ -209,11 +206,15 @@ class Binary:
         if type == 'symbols':
             like_q = self.options.symbols
 
+        if not self.options.quiet:
+            print 'Searching database records for substring match for %s (%s)' % (type, like_q)
+
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
-                type, type, type, ignorecase, type)
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
+        elif type == 'symbols':
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
         else:
-            # query on type: provides, requires, symbols
+            # query on type: provides, requires
             query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
                 type, type, type, ignorecase, type)
 
@@ -245,7 +246,7 @@ class Binary:
                 fromdb_rel  = row['p_release']
                 fromdb_date = row['p_date']
                 fromdb_srpm = row['p_srpm']
-                fromdb_file = row[type]
+                fromdb_type = row[type]
 
                 if type == 'files':
                     fromdb_user    = row['f_user']
@@ -254,15 +255,17 @@ class Binary:
                     fromdb_is_sgid = row['f_is_sgid']
                     fromdb_perms   = row['f_perms']
                     fromdb_fileid  = row['f_id']
+                if type == 'symbols':
+                    fromdb_files   = row['files']
 
                 if not ltag == fromdb_tag:
-                    print '\nResults in Tag: %s\n' % fromdb_tag
+                    print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
                     ltag = fromdb_tag
 
                 if self.options.debug:
                     print row
                 else:
-                    rpm = fromdb_rpm
+                    rpm = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
 
                     if not rpm == lsrc:
                         if type == 'files' and self.options.ownership:
@@ -272,25 +275,29 @@ class Binary:
                                 is_suid = '*'
                             if fromdb_is_sgid == 1:
                                 is_sgid = '*'
-                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_file, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
+                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_type, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
+                        elif type == 'symbols':
+                            print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_type, fromdb_files)
                         else:
-                            print '%s (%s): %s' % (rpm, fromdb_srpm, fromdb_file)
+                            print '%s (%s): %s' % (rpm, fromdb_srpm, fromdb_type)
 
                     if self.options.quiet:
                         lsrc = rpm
                     else:
+                        flag_result = None
                         if self.options.extrainfo:
-                            query       = 'SELECT * FROM flags WHERE f_id = %d LIMIT 1' % fromdb_fileid
-                            flag_result = self.db.fetch_all(query)
-                            if flag_result:
-                                for x in flag_result:
-                                    #fetch_all returns a tuple containing a dict, so...
-                                    flags = self.convert_flags(x)
+                            if type == 'files':
+                                query       = 'SELECT * FROM flags WHERE f_id = %d LIMIT 1' % fromdb_fileid
+                                flag_result = self.db.fetch_all(query)
+                                if flag_result:
+                                    for x in flag_result:
+                                        #fetch_all returns a tuple containing a dict, so...
+                                        flags = self.convert_flags(x)
                             rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                            print '  %-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
-                            print '  %-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
                             if flag_result:
-                                print '  Flags  : RELRO: %s | SSP: %s | PIE: %s | FORTIFY: %s | NX: %s' % (flags['relro'], flags['ssp'], flags['pie'], flags['fortify'], flags['nx'])
+                                print '  %-10s%s' % ("Date :", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
+                                print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags['relro'], "SSP:", flags['ssp'], "PIE:", flags['pie'])
+                                print '  %-10s%-10s%-12s%-10s%s' % ("", "FORTIFY:", flags['fortify'], "NX :", flags['nx'])
 
         else:
             if self.options.tag:
