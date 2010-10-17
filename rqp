@@ -9,7 +9,7 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 $Id$
 """
 
-RQ_VERSION = '0.5'
+RQ_VERSION = '0.6'
 RQ_PROG    = 'rqp'
 RQ_TYPE    = 'binary'
 
