@@ -145,7 +145,7 @@ class Source:
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
 
-        if self.options.ignorecase:
+        if self.options.ignorecase and not self.options.regexp:
             ignorecase = ''
         else:
             ignorecase = 'BINARY'
@@ -156,6 +156,11 @@ class Source:
             like_q = self.options.buildreqs
         if type == 'files':
             like_q = self.options.query
+
+        if self.options.regexp:
+            match_type = 'regexp'
+        else:
+            match_type = 'substring'
 
         if type == 'ctags':
             query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
@@ -169,7 +174,10 @@ class Source:
             orderby = "f_file"
             match_t = 'files'
 
-        query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
+        if self.options.regexp:
+            query = query + "RLIKE '" + self.db.sanitize_string(like_q) + "'"
+        else:
+            query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
 
         if self.options.sourceonly:
             query = query + " AND s_type = 'S'"
@@ -183,7 +191,7 @@ class Source:
             query   = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
 
         if not self.options.quiet:
-            print 'Searching database records for substring match on %s ("%s")' % (match_t, like_q)
+            print 'Searching database records for %s match on %s ("%s")' % (match_type, match_t, like_q)
 
         result = self.db.fetch_all(query)
         if result:
@@ -192,9 +200,9 @@ class Source:
                     print len(result)
                 else:
                     if self.options.tag:
-                        print '%d match(es) in database for tag (%s) and substring ("%s")' % (len(result), self.options.tag, like_q)
+                        print '%d match(es) in database for tag (%s) and %s ("%s")' % (len(result), self.options.tag, match_type, like_q)
                     else:
-                        print '%d match(es) in database for substring ("%s")' % (len(result), like_q)
+                        print '%d match(es) in database for %s ("%s")' % (len(result), match_type, like_q)
                 return
 
             ltag = ''
@@ -251,9 +259,9 @@ class Source:
 
         else:
             if self.options.tag:
-                print 'No matches in database for tag (%s) and substring ("%s")' % (self.options.tag, like_q)
+                print 'No matches in database for tag (%s) and %s ("%s")' % (self.options.tag, match_type, like_q)
             else:
-                print 'No matches in database for substring ("%s")' % like_q
+                print 'No matches in database for %s ("%s")' % (match_type, like_q)
 
 
     def examine(self, file):

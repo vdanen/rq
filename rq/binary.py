@@ -192,7 +192,7 @@ class Binary:
         elif self.options.tag and tag_id:
             tag_id =  tag_id['id']
 
-        if self.options.ignorecase:
+        if self.options.ignorecase and not self.options.regexp:
             ignorecase = ''
         else:
             ignorecase = 'BINARY'
@@ -206,8 +206,13 @@ class Binary:
         if type == 'symbols':
             like_q = self.options.symbols
 
+        if self.options.regexp:
+            match_type = 'regexp'
+        else:
+            match_type = 'substring'
+
         if not self.options.quiet:
-            print 'Searching database records for substring match for %s (%s)' % (type, like_q)
+            print 'Searching database records for %s match for %s (%s)' % (match_type, type, like_q)
 
         if type == 'files':
             query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
@@ -218,7 +223,10 @@ class Binary:
             query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
                 type, type, type, ignorecase, type)
 
-        query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
+        if self.options.regexp:
+            query = query + "RLIKE '" + self.db.sanitize_string(like_q) + "'"
+        else:
+            query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
 
         if self.options.tag:
             query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
@@ -231,9 +239,9 @@ class Binary:
                     print len(result)
                 else:
                     if self.options.tag:
-                        print '%d match(es) in database for tag (%s) and substring (%s)' % (len(result), self.options.tag, like_q)
+                        print '%d match(es) in database for tag (%s) and %s (%s)' % (len(result), self.options.tag, match_type, like_q)
                     else:
-                        print '%d match(es) in database for substring (%s)' % (len(result), like_q)
+                        print '%d match(es) in database for %s (%s)' % (len(result), match_type, like_q)
                 return
 
             ltag = ''
@@ -301,9 +309,9 @@ class Binary:
 
         else:
             if self.options.tag:
-                print 'No matches in database for tag (%s) and substring (%s)' % (self.options.tag, like_q)
+                print 'No matches in database for tag (%s) and %s (%s)' % (self.options.tag, match_type, like_q)
             else:
-                print 'No matches in database for substring (%s)' % like_q
+                print 'No matches in database for %s (%s)' % (match_type, like_q)
 
 
     def add_requires(self, tag_id, record, file):

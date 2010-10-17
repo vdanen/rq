@@ -36,6 +36,8 @@ if __name__ == '__main__':
                  help="Enable debugging output")
     p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true",
                  help="Show extra info such as file flags on binary files (NX, RELRO, etc.)")
+    p.add_option('-g', '--regexp', dest="regexp", default=False, action="store_true",
+                 help="Query string is a regular expression (invalidates -i)")
     p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true",
                  help="Case insensitive search")
     p.add_option('-l', '--list', dest="list", default=False, action="store_true",
