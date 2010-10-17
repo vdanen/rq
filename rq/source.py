@@ -8,7 +8,7 @@ copyright (c) 2007-2009 Vincent Danen <vdanen@linsec.ca>
 
 $Id$
 """
-import os, sys, re, commands, logging, tempfile, shutil
+import os, sys, re, commands, logging, tempfile, shutil, datetime
 from glob import glob
 import rq.db
 import rq.basics
@@ -219,7 +219,7 @@ class Source:
                     fromdb_cextra = row['c_extra']
 
                 if not ltag == fromdb_tag:
-                    print '\nResults in Tag: %s\n' % fromdb_tag
+                    print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
                     ltag = fromdb_tag
 
                 if self.options.debug:
@@ -237,10 +237,10 @@ class Source:
                             stype = 'patch'
                         if self.options.extrainfo:
                             rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                            print '\n%-16s%-30s' % (stype.title() + " File:", fromdb_file)
-                            print '%-16s%-30s' % ("Source Path:", fromdb_sfile)
-                            print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
+                            print '\n%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                             print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
+                            print '%-16s%-30s' % (stype.title() + " File:", fromdb_file)
+                            print '%-16s%-30s' % ("Source Path:", fromdb_sfile)
                         else:
                             if type == 'ctags':
                                 sys.stdout.write('%s: (%s) %s\n\tFound matching %s in %s:%s: %s\n' % (srpm, stype, fromdb_file, fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
