@@ -210,8 +210,8 @@ class Binary:
             like_q = self.options.symbols
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_user, f_group, f_is_suid, f_is_sgid, f_perms, f_relro, f_ssp, f_pie, f_fortify, f_nx FROM %s LEFT JOIN (packages, flags) ON (%s.p_record = packages.p_record AND %s.p_record = packages.p_record) WHERE %s %s " % (
-                type, type, type, type, ignorecase, type)
+            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+                type, type, type, ignorecase, type)
         else:
             # query on type: provides, requires, symbols
             query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
@@ -222,9 +222,7 @@ class Binary:
         if self.options.tag:
             query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
 
-        # I'm not going to pretend to know why the old ORDER BY resulted in 7 results for each
-        # match, but GROUP BY works (I suspect it is due to the second LEFT JOIN)
-        query  = query + " GROUP BY p_tag, p_package, " + type
+        query  = query + " ORDER BY p_tag, p_package, " + type
         result = self.db.fetch_all(query)
         if result:
             if self.options.count:
@@ -255,15 +253,7 @@ class Binary:
                     fromdb_is_suid = row['f_is_suid']
                     fromdb_is_sgid = row['f_is_sgid']
                     fromdb_perms   = row['f_perms']
-                    # flags
-                    fromdb_flags = {}
-                    fromdb_flags['relro']   = row['f_relro']
-                    fromdb_flags['ssp']     = row['f_ssp']
-                    fromdb_flags['pie']     = row['f_pie']
-                    fromdb_flags['fortify'] = row['f_fortify']
-                    fromdb_flags['nx']      = row['f_nx']
-                    flags                   = self.convert_flags(fromdb_flags)
-
+                    fromdb_fileid  = row['f_id']
 
                 if not ltag == fromdb_tag:
                     print '\nResults in Tag: %s\n' % fromdb_tag
@@ -290,10 +280,17 @@ class Binary:
                         lsrc = rpm
                     else:
                         if self.options.extrainfo:
+                            query       = 'SELECT * FROM flags WHERE f_id = %d LIMIT 1' % fromdb_fileid
+                            flag_result = self.db.fetch_all(query)
+                            if flag_result:
+                                for x in flag_result:
+                                    #fetch_all returns a tuple containing a dict, so...
+                                    flags = self.convert_flags(x)
                             rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                            print '%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
-                            print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
-                            print 'Flags  : RELRO: %s | SSP: %s | PIE: %s | FORTIFY: %s | NX: %s' % (flags['relro'], flags['ssp'], flags['pie'], flags['fortify'], flags['nx'])
+                            print '  %-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
+                            print '  %-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
+                            if flag_result:
+                                print '  Flags  : RELRO: %s | SSP: %s | PIE: %s | FORTIFY: %s | NX: %s' % (flags['relro'], flags['ssp'], flags['pie'], flags['fortify'], flags['nx'])
 
         else:
             if self.options.tag:
@@ -512,35 +509,36 @@ class Binary:
 
     def convert_flags(self, flags):
         """
-        Convert numeric representation of flags to human readable
+        Convert numeric representation of flags (from the database) to human
+        readable form, dropping the prefix (i.e. f_relro becomes relro)
         """
         newflags = {}
 
-        if flags['relro'] == 1:
+        if flags['f_relro'] == 1:
             newflags['relro'] = "full"
-        elif flags['relro'] == 2:
+        elif flags['f_relro'] == 2:
             newflags['relro'] = "partial"
         else:
             newflags['relro'] = "none"
 
-        if flags['ssp'] == 1:
+        if flags['f_ssp'] == 1:
             newflags['ssp'] = "found"
         else:
-            newflags['ssp'] = "not found"
+            newflags['f_ssp'] = "not found"
 
-        if flags['nx'] == 1:
+        if flags['f_nx'] == 1:
             newflags['nx'] = "enabled"
         else:
             newflags['nx'] = "disabled"
 
-        if flags['pie'] == 2:
+        if flags['f_pie'] == 2:
             newflags['pie'] = "DSO"
-        elif flags['pie'] == 1:
+        elif flags['f_pie'] == 1:
             newflags['pie'] = "enabled"
         else:
             newflags['pie'] = "none"
 
-        if flags['fortify'] == 1:
+        if flags['f_fortify'] == 1:
             newflags['fortify'] = "found"
         else:
             newflags['fortify'] = "not found"
