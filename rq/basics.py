@@ -71,7 +71,7 @@ class Common:
         """
         logging.debug('in rpm_list(%s)' % rpm_file)
 
-        rpm_list  = commands.getoutput("rpm -qlvp --nosignature " + self.clean_shell(file))
+        rpm_list  = commands.getoutput("rpm -qlvp --nosignature " + self.clean_shell(rpm_file))
 
         if rpm_list == '(contains no files)' or rpm_list == '':
             return False
