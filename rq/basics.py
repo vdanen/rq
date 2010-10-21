@@ -198,7 +198,7 @@ class Common:
         return(num)
 
 
-    def clean_shell(string):
+    def clean_shell(self, string):
         """
         Function to clean shell arguments
         """
