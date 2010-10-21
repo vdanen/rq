@@ -48,7 +48,7 @@ class Source:
         if self.re_patchbz.search(file):
             grep = 'bzgrep'
 
-        list = commands.getoutput(grep + " '^+++' " + file.replace(' ', '\ ') + " 2>/dev/null | awk '{print $2}'")
+        list = commands.getoutput(grep + " '^+++' " + self.rcommon.clean_shell(file) + " 2>/dev/null | awk '{print $2}'")
 
         return(list)
 
@@ -695,7 +695,7 @@ class Source:
         logging.debug('in Source.package_add_record(%s, %s)' % (tag_id, file))
 
         path    = os.path.basename(file)
-        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + file.replace(' ', '\ '))
+        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(file))
         tlist   = rpmtags.split('|')
         logging.debug("tlist is %s " % tlist)
         package = tlist[0].strip()

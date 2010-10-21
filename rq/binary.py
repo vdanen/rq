@@ -129,7 +129,7 @@ class Binary:
         logging.debug('in Binary.package_add_record(%s, %s)' % (tag_id, file))
 
         path    = os.path.basename(file)
-        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + file.replace(' ', '\ '))
+        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + self.rcommon.clean_shell(file))
         tlist   = rpmtags.split('|')
         logging.debug("tlist is %s " % tlist)
         package = tlist[0].strip()
@@ -320,7 +320,7 @@ class Binary:
         """
         logging.debug('in Binary.add_requires(%s, %s, %s)' % (tag_id, record, file))
 
-        list = commands.getoutput("rpm -qp --nosignature --requires " + file.replace(' ', '\ ') + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
+        list = commands.getoutput("rpm -qp --nosignature --requires " + self.rcommon.clean_shell(file) + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
         list = list.splitlines()
         for dep in list:
             if dep:
@@ -337,7 +337,7 @@ class Binary:
         """
         logging.debug('in Binary.add_provides(%s, %s, %s)' % (tag_id, record, file))
 
-        list = commands.getoutput("rpm -qp --nosignature --provides " + file.replace(' ', '\ '))
+        list = commands.getoutput("rpm -qp --nosignature --provides " + self.rcommon.clean_shell(file))
         list = list.splitlines()
         for prov in list:
             if prov:
@@ -393,7 +393,7 @@ class Binary:
                 if os.path.isfile(file):
                     logging.debug('checking file: %s' % file)
                     # executable files
-                    if re.search('ELF', commands.getoutput('file ' + file)):
+                    if re.search('ELF', commands.getoutput('file ' + self.rcommon.clean_shell(file))):
                         # ELF binaries
                         flags   = self.get_binary_flags(file)
                         symbols = self.get_binary_symbols(file)
@@ -417,7 +417,7 @@ class Binary:
 
         self.rcommon.show_progress()
 
-        nm_output = commands.getoutput('nm -D -g ' + file)
+        nm_output = commands.getoutput('nm -D -g ' + self.rcommon.clean_shell(file))
         nm_output = nm_output.split()
         for symbol in nm_output:
             if re.search('^[A-Za-z_]{2}.*', symbol):
@@ -437,10 +437,10 @@ class Binary:
 
         self.rcommon.show_progress()
 
-        readelf_l = commands.getoutput('readelf -l ' + file)
-        readelf_d = commands.getoutput('readelf -d ' + file)
-        readelf_s = commands.getoutput('readelf -s ' + file)
-        readelf_h = commands.getoutput('readelf -h ' + file)
+        readelf_l = commands.getoutput('readelf -l ' + self.rcommon.clean_shell(file))
+        readelf_d = commands.getoutput('readelf -d ' + self.rcommon.clean_shell(file))
+        readelf_s = commands.getoutput('readelf -s ' + self.rcommon.clean_shell(file))
+        readelf_h = commands.getoutput('readelf -h ' + self.rcommon.clean_shell(file))
 
         if re.search('GNU_RELRO', readelf_l):
             if re.search('BIND_NOW', readelf_d):

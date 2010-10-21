@@ -71,7 +71,7 @@ class Common:
         """
         logging.debug('in rpm_list(%s)' % rpm_file)
 
-        rpm_list  = commands.getoutput("rpm -qlvp --nosignature " + rpm_file.replace(' ', '\ '))
+        rpm_list  = commands.getoutput("rpm -qlvp --nosignature " + self.clean_shell(file))
 
         if rpm_list == '(contains no files)' or rpm_list == '':
             return False
@@ -196,6 +196,23 @@ class Common:
                     num = num + 1
         num = '%04d' % num
         return(num)
+
+
+    def clean_shell(string):
+        """
+        Function to clean shell arguments
+        """
+        return("%s" %
+            string.replace(' ', '\ ')
+                  .replace('(', '\(')
+                  .replace(')', '\)')
+                  .replace('$', '\$')
+                  .replace("'", "\'")
+                  .replace('"', '\"')
+                  .replace('`', '\`')
+                  .replace(';', '\;')
+                  .replace('*', '\*')
+            )
 
 
 class Config:
