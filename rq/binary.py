@@ -433,7 +433,7 @@ class Binary:
         """
         Function to get binary flags from a file
         """
-        flags = {}
+        flags = {'relro': 0, 'ssp': 0, 'nx': 0, 'pie': 0, 'fortify_source': 0}
 
         self.rcommon.show_progress()
 
