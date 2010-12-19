@@ -694,7 +694,7 @@ class Source:
         """
         logging.debug('in Source.package_add_record(%s, %s)' % (tag_id, file))
 
-        path    = os.path.basename(file)
+        fname   = os.path.basename(file)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(file))
         tlist   = rpmtags.split('|')
         logging.debug("tlist is %s " % tlist)
@@ -720,15 +720,16 @@ class Source:
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_fullname) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
             tag_id,
             self.db.sanitize_string(tag),
             self.db.sanitize_string(package),
             self.db.sanitize_string(version),
             self.db.sanitize_string(release),
-            self.db.sanitize_string(pdate))
+            self.db.sanitize_string(pdate),
+            self.db.sanitize_string(fname))
         result = self.db.do_query(query)
-        self.rcommon.show_progress(path)
+        self.rcommon.show_progress(fname)
 
         query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, self.db.sanitize_string(package))
         p_record = self.db.fetch_one(query)

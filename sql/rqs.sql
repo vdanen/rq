@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS `packages` (
   `p_package` text NOT NULL,
   `p_version` text NOT NULL,
   `p_release` text NOT NULL,
+  `p_fullname` text NOT NULL,
   `p_date` text NOT NULL,
   PRIMARY KEY  (`p_record`),
   KEY `trec` USING BTREE (`t_record`)
