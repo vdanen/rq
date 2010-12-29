@@ -612,14 +612,18 @@ class Source:
             #print '%s\n' % query
 
 
-    def rpm_add_directory(self, tag, path):
+    def rpm_add_directory(self, tag, path, updatepath):
         """
         Function to import a directory full of source RPMs
         """
-        logging.debug('in Source.rpm_add_directory(%s, %s)' % (tag, path))
+        logging.debug('in Source.rpm_add_directory(%s, %s, %s)' % (tag, path, updatepath))
 
         if not os.path.isdir(path):
             print 'Path (%s) is not a valid directory!' % path
+            sys.exit(1)
+
+        if not os.path.isdir(updatepath):
+            print 'Path (%s) is not a valid directory!' % updatepath
             sys.exit(1)
 
         file_list = glob(path + "/*.src.rpm")
@@ -629,7 +633,7 @@ class Source:
             print 'No files found to import in directory: %s' % path
             sys.exit(1)
 
-        tag_id = self.rtag.add_record(tag, path)
+        tag_id = self.rtag.add_record(tag, path, updatepath)
         if tag_id == 0:
             logging.critical('Unable to add tag "%s" to the database!' % tag)
             sys.exit(1)

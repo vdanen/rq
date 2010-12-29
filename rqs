@@ -30,7 +30,7 @@ if __name__ == '__main__':
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p|z] <substring>] [-t <tag>]")
     p.add_option('-n', '--config', dest="conffile", metavar="FILE",
                  help="Optional configuration file")
-    p.add_option('-C', '--count', dest="count", default=False, action="store_true",
+    p.add_option('-c', '--count', dest="count", default=False, action="store_true",
                  help="Only output the count of query matches")
     p.add_option('-d', '--debug', dest="debug", default=False, action="store_true",
                  help="Enable debugging output")
@@ -61,8 +61,10 @@ if __name__ == '__main__':
     dbgroup = optparse.OptionGroup(p, "Database Options")
     dbgroup.add_option('-a', '--add', dest="addfile", metavar="FILE",
                        help="Add a " + RQ_TYPE + " rpm entry with TAG to the database")
-    dbgroup.add_option('-c', '--createpath', dest="createpath", metavar="DIR",
+    dbgroup.add_option('-C', '--createpath', dest="createpath", metavar="DIR",
                        help="Create database entries with TAG from a " + RQ_TYPE + " rpm DIR")
+    dbgroup.add_option('-U', '--updatepath', dest="updatepath", metavar="DIR",
+                       help="Assign update path for this tag")
     dbgroup.add_option('-D', '--delete', dest="tagdelete", metavar="TAG",
                        help="Delete all TAG entries")
     dbgroup.add_option('-f', '--file', dest="src_examine", metavar="FILE",
@@ -230,11 +232,17 @@ if __name__ == '__main__':
         createpath = os.path.abspath(options.createpath)
         logging.debug('Dir:\t%s' % createpath)
         if not options.tag:
-            sys.stdout.write('The --create option requires a tag entry!\n')
+            sys.stdout.write('The --createpath option requires a tag entry!\n')
             sys.exit(1)
 
+        if not options.updatepath:
+            sys.stdout.write('The --createpath option also requires the use of --updatepath!\n')
+            sys.exit(1)
+
+        updatepath = os.path.abspath(options.updatepath)
+
         sys.stdout.write('Searching for rpms to import...\n\n')
-        rqs.rpm_add_directory(options.tag, createpath)
+        rqs.rpm_add_directory(options.tag, createpath, updatepath)
         sys.exit(0)
 
     # if we get here, we have completely invalid arguments

@@ -74,17 +74,18 @@ class Tag:
             return False
 
 
-    def add_record(self, tag, path_to_tag):
+    def add_record(self, tag, path_to_tag, updatepath):
         """
         Function to add a tag record.
 
         Tag.add_record(tag, path_to_tag):
           tag        : the tag to add
           path_to_tag: the path for this tag
+          updatepath : the updates path for this tag
 
         Returns the ID of the newly created tag, otherwise returns 0
         """
-        logging.debug('in Tag.add_record(%s, %s)' % (tag, path_to_tag))
+        logging.debug('in Tag.add_record(%s, %s, %s)' % (tag, path_to_tag, updatepath))
 
         cur_date = datetime.datetime.now()
         cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
@@ -100,9 +101,10 @@ class Tag:
             print 'Tag (%s) already exists in the database!\n' % tag
             sys.exit(1)
 
-        query = "INSERT INTO tags (t_record, tag, path, tdate) VALUES (NULL,'%s', '%s', '%s')" % (
+        query = "INSERT INTO tags (t_record, tag, path, update_path, tdate) VALUES (NULL,'%s', '%s', '%s', '%s')" % (
                 self.db.sanitize_string(tag.strip()),
                 self.db.sanitize_string(path.strip()),
+                self.db.sanitize_string(updatepath.strip()),
                 cur_date)
         self.db.do_query(query)
 
