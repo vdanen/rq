@@ -160,7 +160,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.tagupdate:
-        rtag.update_entries(options.tagupdate)
+        rtag.update_source_entries(rqs, options.tagupdate)
         sys.exit(0)
 
     if options.query:

@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `packages` (
   `p_release` text NOT NULL,
   `p_fullname` text NOT NULL,
   `p_date` text NOT NULL,
+  `p_update` tinyint DEFAULT 0,
   PRIMARY KEY  (`p_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS `tags` (
   `t_record` INT NOT NULL auto_increment,
   `tag` varchar(128) NOT NULL,
   `path` varchar(256) NOT NULL,
+  `update_path` varchar(256) NOT NULL,
   `tdate` text NOT NULL,
   PRIMARY KEY  (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;

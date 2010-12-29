@@ -172,81 +172,125 @@ class Tag:
                 sys.stdout.write('No matching package tags to remove.\n')
 
 
-    def update_entries(self, tag):
+    def update_source_entries(self, rq, tag):
         """
-        Function to update entries for a given tag
-
-        This is an incomplete function
+        Function to update entries for a given tag (for rqs)
         """
-        logging.debug('in Tag.update_entries(%s)' % tag)
-        #
-        # this function is designed for src.rpm handling, but we can update it for binary rpm handling too
-        # XXX: TODO
-        #
+        logging.debug('in Tag.update_source_entries(%s)' % tag)
 
         to_remove = []
         to_add    = []
+        updates   = 0
 
         query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
         path   = self.db.fetch_one(query)
         query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
         tag_id = self.db.fetch_one(query)
+        query  = "SELECT DISTINCT update_path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
+        u_path = self.db.fetch_one(query)
 
-        if path:
-            logging.info('Update tag (%s) entries from %s...' % (tag, path))
+        if not tag_id:
+            sys.stdout.write('No Tag entry found for tag: %s\n' % tag)
+
+        if u_path:
+            log.info('Using associated updates path: %s' % u_path)
+            path    = u_path
+            updates = 1
+
+        if updates == 0 and path:
+            if not os.path.isdir(path):
+                logging.critical('Tag path %s does not exist!' % path)
+                sys.exit(1)
+            # this handles entries where we don't have a dedicated updates directory
+            print 'Checking for removed files in %s tag entries from %s...' % (tag, path)
             # get the existing entries
-            query  = "SELECT DISTINCT p_record, p_tag, p_package, p_version, p_release FROM packages WHERE t_record = '%s'" % tag_id
+            query  = "SELECT DISTINCT p_record, p_tag, p_fullname FROM packages WHERE t_record = '%s'" % tag_id
             result = self.db.fetch_all(query)
             for row in result:
-                pname = '%s-%s-%s.src.rpm' % (row['p_package'], row['p_version'], row['p_release'])
-                logging.info('Checking for %s in %s...' % (pname, path))
-                if os.path.isfile(pname):
-                    logging.info('OK')
-                else:
-                    logging.info('Missing')
-                    to_remove.append(result['p_record'])
+                fullname = '%s/%s' % (path, row['p_fullname'])
+                if not os.path.isfile(fullname):
+                    logging.info('  SRPM missing: %s' % row['p_fullname'])
+                    to_remove.append(row['p_record'])
 
             src_list = glob(path + "/*.rpm")
             src_list.sort()
 
+            print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
-                logging.info('Checking for %s in database...' % src_rpm)
-                rtags   = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}' " + src_rpm.replace(' ', '\ '))
-                tlist   = rtags.split('|')
-                package = tlist[0].strip()
-                version = tlist[1].strip()
-                release = tlist[2].strip()
-
-                query   = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (
-                          tag_id,
-                          self.db.sanitize_string(package),
-                          self.db.sanitize_string(version),
-                          self.db.sanitize_string(release))
+                sfname = os.path.basename(src_rpm)
+                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s" % (
+                         tag_id,
+                         self.db.sanitize_string(sfname))
                 package = self.db.fetch_one(query)
-                if package:
-                    logging.info('OK')
-                else:
-                    logging.info('Adding')
+                if not package:
+                    logging.info('Scheduling %s to be added to database')
                     to_add.append(src_rpm)
-        else:
-            sys.stdout.write('No Tag entry found for tag: %s\n' % tag)
+
+        if updates == 1 and u_path:
+            # this is an entry with an updates path
+            if not os.path.isdir(u_path):
+                logging.critical('Tag updates path %s does not exist!' % u_path)
+                sys.exit(1)
+
+            # we do not remove files from update paths, just add, unless they were
+            # previously noted as an updated file
+
+            src_list = glob(path + "/*.rpm")
+            src_list.sort()
+
+            print 'Checking for added files in %s tag entries from %s...' % (tag, path)
+            for src_rpm in src_list:
+                sfname = os.path.basename(src_rpm)
+                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s" % (
+                         tag_id,
+                         self.db.sanitize_string(sfname))
+                package = self.db.fetch_one(query)
+                if not package:
+                    # this file does not exist in the database, but it's in the updates
+                    # directory. this means it is new, or previously existed and has a new
+                    # n-v-r; if it's new we need to just add it, if it has a previous n-v-r
+                    # we want to remove the old one and add this one
+                    pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}'" + src_rpm.replace(' ', '\ '))
+                    query   = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_updated = 1" % (
+                              tag_id,
+                              self.db.sanitize_string(src_rpm))
+                    pack    = self.db.fetch_one(query)
+                    if pack:
+                        logging.info('Found an already-updated record for %s (ID: %d)' % (src_rpm, pack))
+                        to_add.append(src_rpm)
+                        to_remove.append(pack)
+                    else:
+                        logging.info('Scheduling %s to be added to database')
+                        to_add.append(src_rpm)
 
         if to_remove:
-            logging.info('Removing tagged entries for tag: %s...' % tag)
-            if self.type == 'binary':
-                tables = ('packages', 'requires', 'provides', 'files')
+            r_count = 0
+            print 'Removing tagged entries for tag: %s...' % tag
+            #if self.type == 'binary':
+            #    tables = ('packages', 'requires', 'provides', 'files')
             if self.type == 'source':
-                tables = ('packages', 'sources')
+                tables = ('packages', 'sources', 'files', 'ctags', 'buildreqs')
             for rnum in to_remove:
+                r_count = r_count + 1
                 for table in tables:
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    result = self.db.do_query(query)
+                    print query
+                    #result = self.db.do_query(query)
+            print 'Removed %d files and associated entries' % r_count
 
         if to_add:
-            logging.info('Adding tagged entries for tag: %s...' % tag)
+            a_count = 0
+            print 'Adding tagged entries for tag: %s...' % tag
             for rpm in to_add:
-                ### this will have to come from another module XXX TODO XXX
-                record_add(tag_id, rpm, self.type)
+                a_count = a_count + 1
+                logging.info('Adding: %s' % rpm)
+                if self.type == 'binary':
+                    print 'Adding binary rpms is not supported yet!'
+                    sys.exit(1)
+                if self.type == 'source':
+                    rq.record_add(tag_id, rpm, 1) # the 1 is to indicate this is an update
+                    print 'rq.record.add'
+            print 'Added %d files and associated entries' % a_count
 
 
     def showdbstats(self, tag = 'all'):

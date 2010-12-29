@@ -646,11 +646,11 @@ class Source:
             self.record_add(tag_id, file)
 
 
-    def record_add(self, tag_id, file):
+    def record_add(self, tag_id, file, update=0):
         """
         Function to add a record to the database
         """
-        logging.debug('in Source.record_add(%s, %s)' % (tag_id, file))
+        logging.debug('in Source.record_add(%s, %s, %d)' % (tag_id, file, update))
 
         if os.path.isfile(file):
             path = os.path.abspath(os.path.dirname(file))
@@ -660,7 +660,7 @@ class Source:
 
         self.rcommon.file_rpm_check(file)
 
-        record = self.package_add_record(tag_id, file)
+        record = self.package_add_record(tag_id, file, update)
         if not record:
             return
 
@@ -688,11 +688,11 @@ class Source:
             sys.stdout.write('\n')
 
 
-    def package_add_record(self, tag_id, file):
+    def package_add_record(self, tag_id, file, update=0):
         """
         Function to add a package record
         """
-        logging.debug('in Source.package_add_record(%s, %s)' % (tag_id, file))
+        logging.debug('in Source.package_add_record(%s, %s, %d)' % (tag_id, file, update))
 
         fname   = os.path.basename(file)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(file))
@@ -720,14 +720,15 @@ class Source:
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_fullname) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
             tag_id,
             self.db.sanitize_string(tag),
             self.db.sanitize_string(package),
             self.db.sanitize_string(version),
             self.db.sanitize_string(release),
             self.db.sanitize_string(pdate),
-            self.db.sanitize_string(fname))
+            self.db.sanitize_string(fname),
+            update)
         result = self.db.do_query(query)
         self.rcommon.show_progress(fname)
 
