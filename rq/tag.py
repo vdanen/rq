@@ -195,7 +195,7 @@ class Tag:
             sys.stdout.write('No Tag entry found for tag: %s\n' % tag)
 
         if u_path:
-            log.info('Using associated updates path: %s' % u_path)
+            logging.info('Using associated updates path: %s' % u_path)
             path    = u_path
             updates = 1
 
@@ -220,7 +220,7 @@ class Tag:
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s" % (
+                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s'" % (
                          tag_id,
                          self.db.sanitize_string(sfname))
                 package = self.db.fetch_one(query)
@@ -243,7 +243,7 @@ class Tag:
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s" % (
+                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s'" % (
                          tag_id,
                          self.db.sanitize_string(sfname))
                 package = self.db.fetch_one(query)
@@ -252,8 +252,29 @@ class Tag:
                     # directory. this means it is new, or previously existed and has a new
                     # n-v-r; if it's new we need to just add it, if it has a previous n-v-r
                     # we want to remove the old one and add this one
+                    #
+                    # XXX TODO: need a new table here, like 'alreadyseen' where we can add the full
+                    # package name as a record of things we've seen, so when we decide something is
+                    # new it can't be in the packages table, nor can it be in the alreadyseen table;
+                    # if it is in alreadyseen and not packages it's old, if it's in both it's the
+                    # most recent version, if it is in neither, it's new and we can add it and delete
+                    # the old one
+
+                    # see file, look in packages and alreadyseen, if:
+                    #  not in packages, not in alreadyseen: new
+                    #  in packgaes, not in alreadyseen: release package
+                    #  in packages, in alreadyseen: should never happen
+                    #  not in packages, in alreadyseen: old package
+                    # if new, add it, delete old one from packages, add to alreadyseen
+
+                    # alreadyseen should be p_fullname
+
+                    # which is most efficient?
+                    # XXX TODO
+
+                    # this file is not in our db, so we need to see if this is an updated package
                     pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}'" + src_rpm.replace(' ', '\ '))
-                    query   = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_updated = 1" % (
+                    query   = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_update = 1" % (
                               tag_id,
                               self.db.sanitize_string(src_rpm))
                     pack    = self.db.fetch_one(query)

@@ -136,6 +136,9 @@ class Source:
 
 
     def query(self, type):
+        # XXX TODO: we need to add options to only search updates, only search releases, or omit either/or
+        # or we need to decide to filter out release packages and only show updates if both exist (maybe
+        # default to showing only updates with a --include-release option or something)
         """
         Function to run the query for source RPMs
         """
@@ -163,14 +166,14 @@ class Source:
             match_type = 'substring'
 
         if type == 'ctags':
-            query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
             orderby = "c_file"
             match_t = 'Ctags data'
         elif type == 'buildreqs':
-            query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req " % ignorecase
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req " % ignorecase
             match_t = '.spec BuildRequires'
         else:
-            query   = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE %s f_file " % ignorecase
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE %s f_file " % ignorecase
             orderby = "f_file"
             match_t = 'files'
 
@@ -208,6 +211,7 @@ class Source:
             ltag = ''
             lsrc = ''
             for row in result:
+                utype = ''
                 # for readability
                 fromdb_tag   = row['p_tag']
                 fromdb_rpm   = row['p_package']
@@ -225,6 +229,8 @@ class Source:
                     fromdb_ctype  = row['c_type']
                     fromdb_cline  = row['c_line']
                     fromdb_cextra = row['c_extra']
+                if row['p_update'] == 1:
+                    utype = '[update] '
 
                 if not ltag == fromdb_tag:
                     print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
@@ -255,7 +261,7 @@ class Source:
                             elif type == 'buildreqs':
                                 sys.stdout.write('%s: %s\n' % (srpm, fromdb_breq))
                             else:
-                                sys.stdout.write('%s: (%s) %s: %s\n' % (srpm, stype, fromdb_file, fromdb_sfile))
+                                sys.stdout.write('%s%s: (%s) %s: %s\n' % (utype, srpm, stype, fromdb_file, fromdb_sfile))
 
         else:
             if self.options.tag:
@@ -724,7 +730,7 @@ class Source:
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
             tag_id,
             self.db.sanitize_string(tag),
             self.db.sanitize_string(package),
