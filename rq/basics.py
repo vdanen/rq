@@ -16,10 +16,9 @@ class Common:
     define some common functions for use
     """
 
-    def __init__(self, options, rtag, rq_type):
+    def __init__(self, options, rq_type):
         self.pstate  = 1
         self.options = options
-        self.rtag    = rtag
         self.rq_type = rq_type
         self.lprefix = ''
 

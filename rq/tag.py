@@ -26,11 +26,11 @@ class Tag:
     Tag.showdbstats()    : show database statistics, by optional tag
     """
 
-    def __init__(self, rq_db, rq_type, config):
-        self.db     = rq_db
-        self.type   = rq_type
-        self.config = config
-
+    def __init__(self, rq_db, rq_type, config, rcommon):
+        self.db      = rq_db
+        self.type    = rq_type
+        self.config  = config
+        self.rcommon = rcommon
 
     def list(self):
         """
@@ -182,6 +182,7 @@ class Tag:
 
         to_remove = []
         to_add    = []
+        have_seen = []
         updates   = 0
 
         query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
@@ -234,31 +235,23 @@ class Tag:
                 logging.critical('Tag updates path %s does not exist!' % u_path)
                 sys.exit(1)
 
-            # we do not remove files from update paths, just add, unless they were
-            # previously noted as an updated file
-
             src_list = glob(path + "/*.rpm")
             src_list.sort()
 
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s'" % (
+                query  = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_fullname = '%s'" % (
                          tag_id,
                          self.db.sanitize_string(sfname))
                 package = self.db.fetch_one(query)
                 if not package:
-                    # this file does not exist in the database, but it's in the updates
-                    # directory. this means it is new, or previously existed and has a new
-                    # n-v-r; if it's new we need to just add it, if it has a previous n-v-r
-                    # we want to remove the old one and add this one
-                    #
-                    # XXX TODO: need a new table here, like 'alreadyseen' where we can add the full
-                    # package name as a record of things we've seen, so when we decide something is
-                    # new it can't be in the packages table, nor can it be in the alreadyseen table;
-                    # if it is in alreadyseen and not packages it's old, if it's in both it's the
-                    # most recent version, if it is in neither, it's new and we can add it and delete
-                    # the old one
+                    # first see if we have already seen and removed this file
+                    query = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s'" % self.db.sanitize_string(sfname)
+                    seen  = self.db.fetch_one(query)
+                    if not seen:
+                        # this is a new file that does not exist in the database, but it's
+                        # in the updates directory and we have not seen it before
 
                     # see file, look in packages and alreadyseen, if:
                     #  not in packages, not in alreadyseen: new
@@ -267,24 +260,24 @@ class Tag:
                     #  not in packages, in alreadyseen: old package
                     # if new, add it, delete old one from packages, add to alreadyseen
 
-                    # alreadyseen should be p_fullname
 
-                    # which is most efficient?
-                    # XXX TODO
-
-                    # this file is not in our db, so we need to see if this is an updated package
-                    pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}'" + src_rpm.replace(' ', '\ '))
-                    query   = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_update = 1" % (
-                              tag_id,
-                              self.db.sanitize_string(src_rpm))
-                    pack    = self.db.fetch_one(query)
-                    if pack:
-                        logging.info('Found an already-updated record for %s (ID: %d)' % (src_rpm, pack))
-                        to_add.append(src_rpm)
-                        to_remove.append(pack)
+                        # this file is not in our db, so we need to see if this is an updated package
+                        pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}' " + self.rcommon.clean_shell(src_rpm))
+                        query   = "SELECT p_record, p_fullname FROM packages WHERE t_record = '%s' AND p_package = '%s' LIMIT 1" % (
+                                  tag_id,
+                                  self.db.sanitize_string(pkgname))
+                        result  = self.db.fetch_all(query)
+                        for row in result:
+                            if row['p_record']:
+                                logging.info('Found an already-updated record for %s (ID: %d)' % (sfname, row['p_record']))
+                                to_add.append(src_rpm)
+                                to_remove.append(row['p_record'])
+                                have_seen.append(row['p_fullname'])
+                            else:
+                                logging.info('Scheduling %s to be added to database' % src_rpm)
+                                to_add.append(src_rpm)
                     else:
-                        logging.info('Scheduling %s to be added to database')
-                        to_add.append(src_rpm)
+                        logging.debug('We have already seen %s' % sfname)
 
         if to_remove:
             r_count = 0
@@ -297,9 +290,17 @@ class Tag:
                 r_count = r_count + 1
                 for table in tables:
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    print query
-                    #result = self.db.do_query(query)
+                    #print query
+                    result = self.db.do_query(query)
             print 'Removed %d files and associated entries' % r_count
+
+        if have_seen:
+            h_count = 0
+            for hseen in have_seen:
+                h_count = h_count + 1
+                query   = "INSERT INTO alreadyseen (p_fullname, t_record) VALUES ('%s', '%s')" % (hseen, tag_id)
+                result  = self.db.do_query(query)
+            logging.debug('Added %d records to alreadyseen table' % h_count)
 
         if to_add:
             a_count = 0
@@ -314,6 +315,8 @@ class Tag:
                     rq.record_add(tag_id, rpm, 1) # the 1 is to indicate this is an update
                     print 'rq.record.add'
             print 'Added %d files and associated entries' % a_count
+        else:
+            print 'No changes detected; nothing to do.'
 
 
     def showdbstats(self, tag = 'all'):

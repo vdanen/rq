@@ -127,3 +127,18 @@ CREATE TABLE IF NOT EXISTS `buildreqs` (
   KEY `rec` USING BTREE (`b_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `alreadyseen`
+--
+
+DROP TABLE IF EXISTS `alreadyseen`;
+CREATE TABLE IF NOT EXISTS `alreadyseen` (
+  `a_record` INT NOT NULL auto_increment,
+  `p_fullname` text NOT NULL,
+  `t_record` INT NOT NULL,
+  PRIMARY KEY  (`a_record`),
+  KEY `trec` USING BTREE (`t_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;

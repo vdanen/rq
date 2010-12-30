@@ -138,9 +138,9 @@ if __name__ == '__main__':
     # get the name of the database we want to talk to
     config['database'] = db.get_dbname()
 
-    rtag = rq.tag.Tag(db, RQ_TYPE, config)
+    rcommon = rq.basics.Common(options, RQ_TYPE)
 
-    rcommon = rq.basics.Common(options, rtag, RQ_TYPE)
+    rtag = rq.tag.Tag(db, RQ_TYPE, config, rcommon)
 
     rqs = rq.source.Source(db, config, options, rtag, rcommon)
 
