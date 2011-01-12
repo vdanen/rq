@@ -162,16 +162,23 @@ class Tag:
                 sys.stdout.write(' done\n')
 
                 if result > 500:
-                    sys.stdout.write('Optimizing database (this may take some time)... ')
-                    sys.stdout.flush()
-                    for table in tables:
-                        query = 'OPTIMIZE TABLE %s' % table
-                        self.db.do_query(query)
-                    sys.stdout.write(' done\n')
-                else:
-                    sys.stdout.write('Skipping database optimization, less than 500 package records removed.\n')
+                    self.optimize_db()
             else:
                 sys.stdout.write('No matching package tags to remove.\n')
+
+
+    def optimize_db(self):
+        """
+        Function to optimize the database
+        """
+        logging.debug('in Tag.optimize_db()')
+
+        sys.stdout.write('Optimizing database (this may take some time)... ')
+        sys.stdout.flush()
+        for table in tables:
+            query = 'OPTIMIZE TABLE %s' % table
+            self.db.do_query(query)
+        sys.stdout.write(' done\n')
 
 
     def update_source_entries(self, rq, tag):
@@ -279,8 +286,8 @@ class Tag:
                     else:
                         logging.debug('We have already seen %s' % sfname)
 
+        r_count = 0
         if to_remove:
-            r_count = 0
             print 'Removing tagged entries for tag: %s...' % tag
             #if self.type == 'binary':
             #    tables = ('packages', 'requires', 'provides', 'files')
@@ -317,6 +324,9 @@ class Tag:
             print 'Added %d files and associated entries' % a_count
         else:
             print 'No changes detected; nothing to do.'
+
+        if r_count > 500:
+            self.optimize_db()
 
 
     def showdbstats(self, tag = 'all'):
