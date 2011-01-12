@@ -40,11 +40,16 @@ class Tag:
         """
         logging.debug("in Tag.list()")
 
-        query   = 'SELECT tag, path, tdate FROM tags ORDER BY tag'
+        query   = 'SELECT t_record, tag, path, tdate FROM tags ORDER BY tag'
         results = self.db.fetch_all(query)
         if results:
             for row in results:
-                print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n' % (row['tag'], row['tdate'], row['path'])
+                query2  = "SELECT count(*) FROM packages WHERE t_record = %s" % row['t_record']
+                c_pkgs  = self.db.fetch_one(query2)
+                query2  = "SELECT count(*) FROM packages WHERE t_record = %s AND p_update = 1" % row['t_record']
+                c_upd   = self.db.fetch_one(query2)
+                print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n  Packages: %-15sUpdates: %s\n' % (row['tag'], row['tdate'], row['path'], c_pkgs, c_upd)
+
         else:
             print 'No tags exist in the database!\n'
 
@@ -274,15 +279,16 @@ class Tag:
                                   tag_id,
                                   self.db.sanitize_string(pkgname))
                         result  = self.db.fetch_all(query)
-                        for row in result:
-                            if row['p_record']:
-                                logging.info('Found an already-updated record for %s (ID: %d)' % (sfname, row['p_record']))
-                                to_add.append(src_rpm)
-                                to_remove.append(row['p_record'])
-                                have_seen.append(row['p_fullname'])
-                            else:
-                                logging.info('Scheduling %s to be added to database' % src_rpm)
-                                to_add.append(src_rpm)
+                        if result:
+                            for row in result:
+                                if row['p_record']:
+                                    logging.info('Found an already-updated record for %s (ID: %d)' % (sfname, row['p_record']))
+                                    to_add.append(src_rpm)
+                                    to_remove.append(row['p_record'])
+                                    have_seen.append(row['p_fullname'])
+                        else:
+                            logging.info('Scheduling %s to be added to database' % src_rpm)
+                            to_add.append(src_rpm)
                     else:
                         logging.debug('We have already seen %s' % sfname)
 
@@ -320,7 +326,6 @@ class Tag:
                     sys.exit(1)
                 if self.type == 'source':
                     rq.record_add(tag_id, rpm, 1) # the 1 is to indicate this is an update
-                    print 'rq.record.add'
             print 'Added %d files and associated entries' % a_count
         else:
             print 'No changes detected; nothing to do.'
