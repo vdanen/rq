@@ -139,10 +139,8 @@ if __name__ == '__main__':
     config['database'] = db.get_dbname()
 
     rcommon = rq.basics.Common(options, RQ_TYPE)
-
-    rtag = rq.tag.Tag(db, RQ_TYPE, config, rcommon)
-
-    rqs = rq.source.Source(db, config, options, rtag, rcommon)
+    rtag    = rq.tag.Tag(db, RQ_TYPE, config, rcommon)
+    rqs     = rq.source.Source(db, config, options, rtag, rcommon)
 
     # start doing useful things
     if options.list:
@@ -159,10 +157,6 @@ if __name__ == '__main__':
 
     if options.tagdelete:
         rtag.delete_entries(options.tagdelete)
-        sys.exit(0)
-
-    if options.tagupdate:
-        rtag.update_source_entries(rqs, options.tagupdate)
         sys.exit(0)
 
     if options.query:
@@ -243,6 +237,10 @@ if __name__ == '__main__':
 
         sys.stdout.write('Searching for rpms to import...\n\n')
         rqs.rpm_add_directory(options.tag, createpath, updatepath)
+        sys.exit(0)
+
+    if options.tagupdate:
+        rtag.update_source_entries(rqs, options.tagupdate)
         sys.exit(0)
 
     # if we get here, we have completely invalid arguments
