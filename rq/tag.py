@@ -26,11 +26,12 @@ class Tag:
     Tag.showdbstats()    : show database statistics, by optional tag
     """
 
-    def __init__(self, rq_db, rq_type, config, rcommon):
+    def __init__(self, rq_db, rq_type, config, rcommon, options):
         self.db      = rq_db
         self.type    = rq_type
         self.config  = config
         self.rcommon = rcommon
+        self.options = options
 
     def list(self):
         """
@@ -167,12 +168,12 @@ class Tag:
                 sys.stdout.write(' done\n')
 
                 if result > 500:
-                    self.optimize_db()
+                    self.optimize_db(tables)
             else:
                 sys.stdout.write('No matching package tags to remove.\n')
 
 
-    def optimize_db(self):
+    def optimize_db(self, tables):
         """
         Function to optimize the database
         """
@@ -272,6 +273,12 @@ class Tag:
                     #  not in packages, in alreadyseen: old package
                     # if new, add it, delete old one from packages, add to alreadyseen
 
+# XXX TODO
+# at some point here we need to examine the to_add list and see if there are packages
+# with the same name but a higher N-V-R otherwise we will end up adding the same package
+# multiple times (i.e. seamonkey or firefox); so we have our list and we should have a
+# function to compare names, check N-V-Rs and weed out the _lower_ versioned ones and
+# only keep the latest one
 
                         # this file is not in our db, so we need to see if this is an updated package
                         pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}' " + self.rcommon.clean_shell(src_rpm))
@@ -292,8 +299,11 @@ class Tag:
                     else:
                         logging.debug('We have already seen %s' % sfname)
 
+        print 'Found %d packages to add' % len(to_add)
+
         r_count = 0
         if to_remove:
+            print 'Found %d packages to remove' % len(to_remove)
             print 'Removing tagged entries for tag: %s...' % tag
             #if self.type == 'binary':
             #    tables = ('packages', 'requires', 'provides', 'files')
@@ -302,10 +312,18 @@ class Tag:
             for rnum in to_remove:
                 r_count = r_count + 1
                 for table in tables:
+                    # TODO: see if this makes things faster; it might for a full db
+                    #query  = "DELETE FROM %s USING %s INNER JOIN temptable ON %s.p_record = temptable.p_record WHERE p_record = %d" % (table, table, table, rnum)
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    #print query
                     result = self.db.do_query(query)
-            print 'Removed %d files and associated entries' % r_count
+                    self.rcommon.show_progress()
+            print '\nFiles and associated entries removed'
+
+            if r_count > 100:
+                # we could potentially be removing a lot of stuff here, so the package
+                # count needs to be set fairly low as we're dropping buildreqs, ctags,
+                # etc. so even 10 packages could have a few thousand records all told
+                self.optimize_db(tables)
 
         if have_seen:
             h_count = 0
@@ -328,10 +346,7 @@ class Tag:
                     rq.record_add(tag_id, rpm, 1) # the 1 is to indicate this is an update
             print 'Added %d files and associated entries' % a_count
         else:
-            print 'No changes detected; nothing to do.'
-
-        if r_count > 500:
-            self.optimize_db()
+            print 'No new packages to add.'
 
 
     def showdbstats(self, tag = 'all'):
