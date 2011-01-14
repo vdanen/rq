@@ -297,7 +297,7 @@ class Tag:
                             # we do NOT have a matching package record of the same name
                             # that makes this a new package to add, and there is nothing
                             # to remove
-                            print ' New package found: %s' % src_rpm
+                            print '  New package found: %s' % src_rpm
                             newpkgs = newpkgs + 1
                             to_add.append(src_rpm)
                     else:
@@ -319,7 +319,7 @@ class Tag:
 
         r_count = 0
         if to_remove:
-            print '  Removing tagged entries for tag: %s...' % tag
+            sys.stdout.write('\nRemoving tagged entries for tag: %s... ' % tag)
             #if self.type == 'binary':
             #    tables = ('packages', 'requires', 'provides', 'files')
             if self.type == 'source':
@@ -332,7 +332,7 @@ class Tag:
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
                     result = self.db.do_query(query)
                     self.rcommon.show_progress()
-            print '\n  Files and associated entries removed'
+            sys.stdout.write(' done\n')
 
             if r_count > 100:
                 # we could potentially be removing a lot of stuff here, so the package
@@ -349,7 +349,7 @@ class Tag:
             logging.debug('Added %d records to alreadyseen table' % h_count)
 
         if to_add:
-            print '  Adding tagged entries for tag: %s...' % tag
+            print 'Adding tagged entries for tag: %s:' % tag
             for a_rpm in to_add:
                 logging.info('Adding: %s' % a_rpm)
                 if self.type == 'binary':
