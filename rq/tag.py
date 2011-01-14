@@ -197,6 +197,7 @@ class Tag:
         to_add    = []
         have_seen = []
         updates   = 0
+        newpkgs   = 0
 
         query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
         path   = self.db.fetch_one(query)
@@ -259,26 +260,20 @@ class Tag:
                          self.db.sanitize_string(sfname))
                 package = self.db.fetch_one(query)
                 if not package:
-                    # first see if we have already seen and removed this file
+                    # this means we do not have this package currently in the database
+                    # so check if we have already seen and removed it
                     query = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s'" % self.db.sanitize_string(sfname)
                     seen  = self.db.fetch_one(query)
                     if not seen:
                         # this is a new file that does not exist in the database, but it's
                         # in the updates directory and we have not seen it before
 
-                    # see file, look in packages and alreadyseen, if:
-                    #  not in packages, not in alreadyseen: new
-                    #  in packgaes, not in alreadyseen: release package
-                    #  in packages, in alreadyseen: should never happen
-                    #  not in packages, in alreadyseen: old package
-                    # if new, add it, delete old one from packages, add to alreadyseen
-
-# XXX TODO
-# at some point here we need to examine the to_add list and see if there are packages
-# with the same name but a higher N-V-R otherwise we will end up adding the same package
-# multiple times (i.e. seamonkey or firefox); so we have our list and we should have a
-# function to compare names, check N-V-Rs and weed out the _lower_ versioned ones and
-# only keep the latest one
+# see file, look in packages and alreadyseen, if:
+#  not in packages, not in alreadyseen: new
+#  in packgaes, not in alreadyseen: release package
+#  in packages, in alreadyseen: should never happen
+#  not in packages, in alreadyseen: old package
+# if new, add it, delete old one from packages, add to alreadyseen
 
                         # this file is not in our db, so we need to see if this is an updated package
                         pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}' " + self.rcommon.clean_shell(src_rpm))
@@ -286,25 +281,45 @@ class Tag:
                                   tag_id,
                                   self.db.sanitize_string(pkgname))
                         result  = self.db.fetch_all(query)
+
                         if result:
+                            # we have a package record of the same name in the database
+                            # this means we need to mark the old package as seen, remove
+                            # the old package, and add this new package
                             for row in result:
                                 if row['p_record']:
                                     logging.info('Found an already-updated record for %s (ID: %d)' % (sfname, row['p_record']))
                                     to_add.append(src_rpm)
-                                    to_remove.append(row['p_record'])
+                                    if row['p_record'] not in to_remove:
+                                        to_remove.append(row['p_record'])
                                     have_seen.append(row['p_fullname'])
                         else:
-                            logging.info('Scheduling %s to be added to database' % src_rpm)
+                            # we do NOT have a matching package record of the same name
+                            # that makes this a new package to add, and there is nothing
+                            # to remove
+                            print ' New package found: %s' % src_rpm
+                            newpkgs = newpkgs + 1
                             to_add.append(src_rpm)
                     else:
                         logging.debug('We have already seen %s' % sfname)
 
-        print 'Found %d packages to add' % len(to_add)
+        # here we need to weed out any extras; in the case of first updating
+        # an updates directory with multiple similar packages (e.g multiple
+        # seamonkey packages) we only want the latest version
+        to_add = self.trim_update_list(to_add)
+
+        if to_remove:
+            removetext = ", removing %d packages" % len(to_remove)
+        else:
+            removetext = ''
+
+        if to_add:
+            existing = len(to_add) - newpkgs
+            print 'Updating %d packages, adding %d new packages%s (%d total updates)' % (existing, newpkgs, removetext, len(to_add))
 
         r_count = 0
         if to_remove:
-            print 'Found %d packages to remove' % len(to_remove)
-            print 'Removing tagged entries for tag: %s...' % tag
+            print '  Removing tagged entries for tag: %s...' % tag
             #if self.type == 'binary':
             #    tables = ('packages', 'requires', 'provides', 'files')
             if self.type == 'source':
@@ -317,7 +332,7 @@ class Tag:
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
                     result = self.db.do_query(query)
                     self.rcommon.show_progress()
-            print '\nFiles and associated entries removed'
+            print '\n  Files and associated entries removed'
 
             if r_count > 100:
                 # we could potentially be removing a lot of stuff here, so the package
@@ -334,19 +349,111 @@ class Tag:
             logging.debug('Added %d records to alreadyseen table' % h_count)
 
         if to_add:
-            a_count = 0
-            print 'Adding tagged entries for tag: %s...' % tag
-            for rpm in to_add:
-                a_count = a_count + 1
-                logging.info('Adding: %s' % rpm)
+            print '  Adding tagged entries for tag: %s...' % tag
+            for a_rpm in to_add:
+                logging.info('Adding: %s' % a_rpm)
                 if self.type == 'binary':
                     print 'Adding binary rpms is not supported yet!'
                     sys.exit(1)
                 if self.type == 'source':
-                    rq.record_add(tag_id, rpm, 1) # the 1 is to indicate this is an update
-            print 'Added %d files and associated entries' % a_count
+                    rq.record_add(tag_id, a_rpm, 1) # the 1 is to indicate this is an update
+
+        if not to_add and not to_remove:
+            print 'No changes detected.'
+
+
+    def trim_update_list(self, packagelist):
+        """
+        Function to examine a list of packages scheduled for addition to the
+        database and make sure they are unique by only taking the package with
+        the highest N-V-R, otherwise we may end up adding multiple copies of the
+        same package name, just with different versions
+        """
+        logging.debug("in Tag.trim_update_list(%s)" % packagelist)
+
+        templist = {}
+        newlist  = []
+        for pkg in packagelist:
+            rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(pkg))
+            tlist   = rpmtags.split('|')
+            logging.debug("tlist is %s " % tlist)
+            package = tlist[0].strip()
+            version = tlist[1].strip()
+            release = tlist[2].strip()
+            pdate   = tlist[3].strip()
+
+            try:
+                if not templist[package]:
+                    templist[package] = [version, release, pkg]
+                    logging.debug('Adding %s(%s, %s, %s) to templist' % (package, version, release, pkg))
+                else:
+                    bigger = self.nvr_compare(templist[package], version, release)
+                    if bigger == 1:
+                        templist[package] = [version, release, pkg]
+                        logging.debug('Adding replacement %s(%s, %s, %s) to templist' % (package, version, release, pkg))
+            except:
+                templist[package] = [version, release, pkg]
+                logging.debug('Adding %s(%s, %s, %s) to templist' % (package, version, release, pkg))
+
+        # reconstruct the old list to return, less what we don't want
+        for pkg in templist:
+            newlist.append(templist[pkg][2])
+
+        newlist.sort()
+        return(newlist)
+
+
+    def nvr_compare(self, oldpkg, version, release):
+        """
+        Function to compare version and release of two
+        different RPM packages to see which is bigger
+        """
+        def ncomp(old, new):
+            #print 'comparing old:%s and new:%s' % (old, new)
+            o = old.split('.')
+            n = new.split('.')
+            c = 0
+            b = 0
+            while c < len(o):
+                try:
+                    # first try comparing numerically, as by strings 3 > 15
+                    # which we don't want -- this is pretty simplistic though
+                    # as if we get 3a vs 15b we're hooped
+                    if int(n[c]) < int(o[c]):
+                        # immediately fail if smaller
+                        return(2)
+                    elif int(n[c]) > int(o[c]):
+                        b = 1
+                        c = c + 1
+                        break
+                except:
+                    # if that fails, compare as strings and hope for the best
+                    if n[c] < o[c]:
+                        # immediately fail if smaller
+                        return(2)
+                    if n[c] > o[c]:
+                        b = 1
+                        c = c + 1
+                        break
+                c = c + 1
+
+            return(b)
+
+        ver_is_bigger = ncomp(oldpkg[0], version)
+
+        if ver_is_bigger == 1:
+            return(1)
+        elif ver_is_bigger == 2:
+            # version is smaller, immediately fail
+            return(0)
         else:
-            print 'No new packages to add.'
+            # version is the same so check on release
+            rel_is_bigger = ncomp(oldpkg[1], release)
+            if rel_is_bigger == 1:
+                return(1)
+
+        # if we get here, neither the release nor the version are bigger
+        return(0)
 
 
     def showdbstats(self, tag = 'all'):
