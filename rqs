@@ -58,6 +58,8 @@ if __name__ == '__main__':
                  help="Show database statistics")
     p.add_option('-v', '--verbose', dest="verbose", default=False, action="store_true",
                  help="Verbose output")
+    p.add_option('', '--list-updates', dest="listupdates", default=False, action="store_true",
+                 help="List all updated packages")
     dbgroup = optparse.OptionGroup(p, "Database Options")
     dbgroup.add_option('-a', '--add', dest="addfile", metavar="FILE",
                        help="Add a " + RQ_TYPE + " rpm entry with TAG to the database")
@@ -151,6 +153,13 @@ if __name__ == '__main__':
             rtag.showdbstats(options.tag)
         else:
             rtag.showdbstats()
+
+    if options.listupdates:
+        if not options.tag:
+            logging.critical('The --list-updates option requires a tag entry!')
+            sys.exit(1)
+        rqs.list_updates(options.tag)
+        sys.exit(0)
 
     if options.tag:
         logging.debug('Tag:\t%s\n' % options.tag)

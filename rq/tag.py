@@ -41,7 +41,7 @@ class Tag:
         """
         logging.debug("in Tag.list()")
 
-        query   = 'SELECT t_record, tag, path, tdate FROM tags ORDER BY tag'
+        query   = 'SELECT t_record, tag, path, update_path, tdate FROM tags ORDER BY tag'
         results = self.db.fetch_all(query)
         if results:
             for row in results:
@@ -49,7 +49,7 @@ class Tag:
                 c_pkgs  = self.db.fetch_one(query2)
                 query2  = "SELECT count(*) FROM packages WHERE t_record = %s AND p_update = 1" % row['t_record']
                 c_upd   = self.db.fetch_one(query2)
-                print 'Tag: %-22sDate Added: %-18s\n  Path: %s\n  Packages: %-15sUpdates: %s\n' % (row['tag'], row['tdate'], row['path'], c_pkgs, c_upd)
+                print 'Tag: %-22sDate Added: %-18s\n  Path       : %s\n  Update Path: %s\n  Packages: %-15sUpdates: %s\n' % (row['tag'], row['tdate'], row['path'], row['update_path'], c_pkgs, c_upd)
 
         else:
             print 'No tags exist in the database!\n'
