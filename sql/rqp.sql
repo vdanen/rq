@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS `packages` (
   `p_date` text NOT NULL,
   `p_arch` varchar(10) NOT NULL,
   `p_srpm` text NOT NULL,
+  `p_fullname` text NOT NULL,
+  `p_update` tinyint DEFAULT 0,
   PRIMARY KEY  (`p_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
@@ -142,6 +144,21 @@ CREATE TABLE IF NOT EXISTS `tags` (
   `tag` varchar(128) NOT NULL,
   `path` varchar(256) NOT NULL,
   `tdate` text NOT NULL,
+  `update_path` varchar(256) NOT NULL,
   PRIMARY KEY  (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `alreadyseen`
+--
+
+DROP TABLE IF EXISTS `alreadyseen`;
+CREATE TABLE IF NOT EXISTS `alreadyseen` (
+  `a_record` INT NOT NULL auto_increment,
+  `p_fullname` text NOT NULL,
+  `t_record` INT NOT NULL,
+  PRIMARY KEY  (`a_record`),
+  KEY `trec` USING BTREE (`t_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
