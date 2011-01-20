@@ -577,3 +577,34 @@ class Binary:
         if results:
             for xrow in results:
                 print '%s' % xrow['p_fullname']
+        else:
+            print 'No results found.'
+
+
+    def show_sxid(self, type, tag):
+        """
+        Function to list all suid or sgid files per tag
+        """
+        logging.debug('in Binary.show_sxid(%s, %s)' % (type, tag))
+
+        print 'Searching for %s files in tag %s\n' % (type.upper(), tag)
+
+        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
+        tag_id  = self.db.fetch_one(query)
+
+        if not tag_id:
+            print 'Invalid tag: %s' % tag
+            sys.exit(1)
+
+        if type == 'suid':
+            db_col = 'f_is_suid'
+        elif type == 'sgid':
+            db_col = 'f_is_sgid'
+
+        query   = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON (files.p_record = packages.p_record) WHERE %s = 1 AND files.t_record = %s ORDER BY p_package ASC" % (db_col, tag_id)
+        results = self.db.fetch_all(query)
+        if results:
+            for xrow in results:
+                print '%s: %s [%s:%s mode %s]' % (xrow['p_package'], xrow['files'], xrow['f_user'], xrow['f_group'], xrow['f_perms'])
+        else:
+            print 'No results found.'
