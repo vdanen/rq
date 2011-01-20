@@ -30,7 +30,7 @@ if __name__ == '__main__':
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p|z] <substring>] [-t <tag>]")
     p.add_option('-n', '--config', dest="conffile", metavar="FILE",
                  help="Optional configuration file")
-    p.add_option('-C', '--count', dest="count", default=False, action="store_true",
+    p.add_option('-c', '--count', dest="count", default=False, action="store_true",
                  help="Only output the count of query matches")
     p.add_option('-d', '--debug', dest="debug", default=False, action="store_true",
                  help="Enable debugging output")
