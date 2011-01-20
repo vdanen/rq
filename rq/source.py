@@ -767,3 +767,5 @@ class Source:
         if results:
             for xrow in results:
                 print '%s' % xrow['p_fullname']
+        else:
+            print 'No results found.'
