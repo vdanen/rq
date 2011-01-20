@@ -59,7 +59,7 @@ if __name__ == '__main__':
     p.add_option('-v', '--verbose', dest="verbose", default=False, action="store_true",
                  help="Verbose output")
     p.add_option('', '--list-updates', dest="listupdates", default=False, action="store_true",
-                 help="List all updated packages")
+                 help="List all updated packages for tag")
     dbgroup = optparse.OptionGroup(p, "Database Options")
     dbgroup.add_option('-a', '--add', dest="addfile", metavar="FILE",
                        help="Add a " + RQ_TYPE + " rpm entry with TAG to the database")
