@@ -187,11 +187,11 @@ class Tag:
         sys.stdout.write(' done\n')
 
 
-    def update_source_entries(self, rq, tag):
+    def update_source_entries(self, rq, tag, listonly=False):
         """
         Function to update entries for a given tag (for rqs)
         """
-        logging.debug('in Tag.update_source_entries(%s)' % tag)
+        logging.debug('in Tag.update_source_entries(%s, %s)' % (tag, listonly))
 
         to_remove = []
         to_add    = []
@@ -297,7 +297,8 @@ class Tag:
                             # we do NOT have a matching package record of the same name
                             # that makes this a new package to add, and there is nothing
                             # to remove
-                            print '  New package found: %s' % src_rpm
+                            logging.debug('New package found: %s' % src_rpm)
+                            self.rcommon.show_progress()
                             newpkgs = newpkgs + 1
                             to_add.append(src_rpm)
                     else:
@@ -309,16 +310,22 @@ class Tag:
         to_add = self.trim_update_list(to_add)
 
         if to_remove:
-            removetext = ", removing %d packages" % len(to_remove)
+            if listonly:
+                removetext = ", would remove %d packages" % len(to_remove)
+            else:
+                removetext = ", removing %d packages" % len(to_remove)
         else:
             removetext = ''
 
         if to_add:
             existing = len(to_add) - newpkgs
-            print 'Updating %d packages, adding %d new packages%s (%d total updates)' % (existing, newpkgs, removetext, len(to_add))
+            if listonly:
+                print 'Would update %d packages, would add %d new packages%s (%d total potential updates)' % (existing, newpkgs, removetext, len(to_add))
+            else:
+                print 'Updating %d packages, adding %d new packages%s (%d total updates)' % (existing, newpkgs, removetext, len(to_add))
 
         r_count = 0
-        if to_remove:
+        if to_remove and not listonly:
             sys.stdout.write('\nRemoving tagged entries for tag: %s... ' % tag)
             #if self.type == 'binary':
             #    tables = ('packages', 'requires', 'provides', 'files')
@@ -340,7 +347,7 @@ class Tag:
                 # etc. so even 10 packages could have a few thousand records all told
                 self.optimize_db(tables)
 
-        if have_seen:
+        if have_seen and not listonly:
             h_count = 0
             for hseen in have_seen:
                 h_count = h_count + 1
@@ -349,14 +356,20 @@ class Tag:
             logging.debug('Added %d records to alreadyseen table' % h_count)
 
         if to_add:
-            print 'Adding tagged entries for tag: %s:' % tag
+            if listonly:
+                print 'Would add the following tagged entries for tag: %s\n' % tag
+            else:
+                print 'Adding tagged entries for tag: %s:' % tag
             for a_rpm in to_add:
-                logging.info('Adding: %s' % a_rpm)
-                if self.type == 'binary':
-                    print 'Adding binary rpms is not supported yet!'
-                    sys.exit(1)
-                if self.type == 'source':
-                    rq.record_add(tag_id, a_rpm, 1) # the 1 is to indicate this is an update
+                if listonly:
+                    print '%s' % a_rpm
+                else:
+                    logging.info('Adding: %s' % a_rpm)
+                    if self.type == 'binary':
+                        print 'Adding binary rpms is not supported yet!'
+                        sys.exit(1)
+                    if self.type == 'source':
+                        rq.record_add(tag_id, a_rpm, 1) # the 1 is to indicate this is an update
 
         if not to_add and not to_remove:
             print 'No changes detected.'

@@ -60,6 +60,8 @@ if __name__ == '__main__':
                  help="Verbose output")
     p.add_option('', '--list-updates', dest="listupdates", default=False, action="store_true",
                  help="List all updated packages for tag")
+    p.add_option('', '--list-to-update', dest="list_to_update", default=False, action="store_true",
+                 help="List all packages scheduled for update by tag")
     dbgroup = optparse.OptionGroup(p, "Database Options")
     dbgroup.add_option('-a', '--add', dest="addfile", metavar="FILE",
                        help="Add a " + RQ_TYPE + " rpm entry with TAG to the database")
@@ -250,6 +252,13 @@ if __name__ == '__main__':
 
     if options.tagupdate:
         rtag.update_source_entries(rqs, options.tagupdate)
+        sys.exit(0)
+
+    if options.list_to_update:
+        if not options.tag:
+            logging.critical('The --list-to-update option requires a tag entry!')
+            sys.exit(1)
+        rtag.update_source_entries(rqs, options.tag, options.list_to_update)
         sys.exit(0)
 
     # if we get here, we have completely invalid arguments
