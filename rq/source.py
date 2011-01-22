@@ -662,13 +662,10 @@ class Source:
         for file in file_list:
             if not os.path.isfile(file):
                 print 'File %s not found!\n' % file
-                next
-
-            if not self.re_srpm.search(file):
+            elif not self.re_srpm.search(file):
                 print 'File %s is not a source rpm!\n' % file
-                next
-
-            self.record_add(tag_id, file)
+            else:
+                self.record_add(tag_id, file)
 
 
     def record_add(self, tag_id, file, update=0):

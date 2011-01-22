@@ -100,13 +100,10 @@ class Binary:
         for file in file_list:
             if not os.path.isfile(file):
                 print 'File %s not found!\n' % file
-                next
-
-            if not self.re_brpm.search(file) or self.re_srpm.search(file):
+            elif not self.re_brpm.search(file):
                 print 'File %s is not a binary rpm!\n' % file
-                next
-
-            self.record_add(tag_id, file)
+            else:
+                self.record_add(tag_id, file)
 
 
     def record_add(self, tag_id, file):
