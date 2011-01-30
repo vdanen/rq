@@ -348,12 +348,11 @@ class Tag:
                 tables = ('packages', 'sources', 'files', 'ctags', 'buildreqs')
             for rnum in to_remove:
                 r_count = r_count + 1
-                for table in tables:
-                    # TODO: see if this makes things faster; it might for a full db
-                    #query  = "DELETE FROM %s USING %s INNER JOIN temptable ON %s.p_record = temptable.p_record WHERE p_record = %d" % (table, table, table, rnum)
-                    query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    result = self.db.do_query(query)
-                    self.rcommon.show_progress()
+                query = "DELETE FROM %s WHERE p_record = %d" % (",".join(tables), rnum)
+                # TODO: see if this makes things faster; it might for a full db
+                #query  = "DELETE FROM %s USING %s INNER JOIN temptable ON %s.p_record = temptable.p_record WHERE p_record = %d" % (table, table, table, rnum)
+                result = self.db.do_query(query)
+                self.rcommon.show_progress()
             sys.stdout.write(' done\n')
 
             if r_count > 100:
