@@ -303,7 +303,7 @@ class Tag:
                             # the old package, and add this new package
                             for row in result:
                                 if row['p_record']:
-                                    logging.info('Found an already-updated record for %s (ID: %d)' % (sfname, row['p_record']))
+                                    logging.info('Found an already-in-update status record for %s (ID: %d, %s)' % (sfname, row['p_record'], row['p_fullname']))
                                     to_add.append(src_rpm)
                                     if row['p_record'] not in to_remove:
                                         to_remove.append(row['p_record'])
@@ -346,13 +346,15 @@ class Tag:
             #    tables = ('packages', 'requires', 'provides', 'files')
             if self.type == 'source':
                 tables = ('packages', 'sources', 'files', 'ctags', 'buildreqs')
+
             for rnum in to_remove:
                 r_count = r_count + 1
-                query = "DELETE FROM %s WHERE p_record = %d" % (",".join(tables), rnum)
+                for table in tables:
+                    query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
+                    result = self.db.do_query(query)
+                    self.rcommon.show_progress()
                 # TODO: see if this makes things faster; it might for a full db
                 #query  = "DELETE FROM %s USING %s INNER JOIN temptable ON %s.p_record = temptable.p_record WHERE p_record = %d" % (table, table, table, rnum)
-                result = self.db.do_query(query)
-                self.rcommon.show_progress()
             sys.stdout.write(' done\n')
 
             if r_count > 100:
