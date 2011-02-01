@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS `ctags` (
   `c_line` varchar(64) NOT NULL,
   `c_file` text NOT NULL,
   PRIMARY KEY  (`c_record`),
-  KEY `rec` USING BTREE (`c_record`),
+  KEY `prec` USING BTREE (`p_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
