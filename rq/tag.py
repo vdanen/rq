@@ -389,6 +389,11 @@ class Tag:
 
         if not to_add and not to_remove:
             print 'No changes detected.'
+        else:
+            cur_date = datetime.datetime.now()
+            cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
+            query    = "UPDATE tags SET update_date = '%s' WHERE tag_id = '%s'" % (cur_date, tag_id)
+            result   = self.db.do_query(query)
 
 
     def trim_update_list(self, packagelist):
