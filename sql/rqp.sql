@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS `tags` (
   `path` varchar(256) NOT NULL,
   `tdate` varchar(26) NOT NULL,
   `update_path` varchar(256) NOT NULL,
-  `update_date` varchar(26) NOT NULL,
+  `update_date` varchar(26),
   PRIMARY KEY  (`t_record`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
