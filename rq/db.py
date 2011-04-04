@@ -120,7 +120,6 @@ class DB:
 
         try:
             cursor = self.db.cursor()
-            cursor.execute("set autocommit=0")
             cursor.execute(query)
             results = cursor.fetchall()
             cursor.close()
@@ -182,10 +181,48 @@ class DB:
             sys.exit(1)
 
 
+    def do_transactions(self, queries):
+        """
+        function DB.do_transcation(queries)
+
+        Function to a set of non-sequential transactions (usually DELETES) from the database
+        """
+        logging.debug('  in DB.do_transaction()')
+
+        if not queries:
+            logging.critical('Received empty set of queries: nothing to do!')
+            sys.exit(1)
+
+        try:
+            cursor = self.db.cursor()
+            cursor.execute("set autocommit=0")
+            cursor.execute("START TRANSACTION")
+        except MySQLdb.Error, e:
+            logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+            sys.exit(1)
+
+        for query in queries:
+            logging.debug('  => query is: %s' % query)
+            try:
+                cursor.execute(query)
+            except MySQLdb.Error, e:
+                logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+                sys.exit(1)
+
+        try:
+            self.db.commit()
+            cursor.close()
+        except MySQLdb.Error, e:
+            logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+            logging.critical('Rolling back the transaction!')
+            cursor.rollback()
+            sys.exit(1)
+
+
     def sanitize_string(self, string):
         """
         function DB.sanitize_string(string)
-        
+
         String to cleanup a string to remove characters that will cause problems
         with the database
         """

@@ -303,7 +303,7 @@ class Tag:
                             # the old package, and add this new package
                             for row in result:
                                 if row['p_record']:
-                                    logging.info('Found an already-in-update status record for %s (ID: %d, %s)' % (sfname, row['p_record'], row['p_fullname']))
+                                    logging.info('Found an already-in-updates record for %s (ID: %d, %s)' % (sfname, row['p_record'], row['p_fullname']))
                                     to_add.append(src_rpm)
                                     if row['p_record'] not in to_remove:
                                         to_remove.append(row['p_record'])
@@ -341,6 +341,7 @@ class Tag:
 
         r_count = 0
         if to_remove and not listonly:
+            queries =[]
             sys.stdout.write('\nRemoving tagged entries for tag: %s... ' % tag)
             #if self.type == 'binary':
             #    tables = ('packages', 'requires', 'provides', 'files')
@@ -351,10 +352,15 @@ class Tag:
                 r_count = r_count + 1
                 for table in tables:
                     query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    result = self.db.do_query(query)
-                    self.rcommon.show_progress()
+                    queries.append(query)
+                    #result = self.db.do_query(query)
+                    #self.rcommon.show_progress()
                 # TODO: see if this makes things faster; it might for a full db
                 #query  = "DELETE FROM %s USING %s INNER JOIN temptable ON %s.p_record = temptable.p_record WHERE p_record = %d" % (table, table, table, rnum)
+                #result = self.db.do_query(query)
+                #self.rcommon.show_progress()
+                #queries.append(query)
+            result = self.db.do_transactions(queries)
             sys.stdout.write(' done\n')
 
             if r_count > 100:
@@ -392,7 +398,7 @@ class Tag:
         else:
             cur_date = datetime.datetime.now()
             cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
-            query    = "UPDATE tags SET update_date = '%s' WHERE tag_id = '%s'" % (cur_date, tag_id)
+            query    = "UPDATE tags SET update_date = '%s' WHERE t_record = '%s'" % (cur_date, tag_id)
             result   = self.db.do_query(query)
 
 
