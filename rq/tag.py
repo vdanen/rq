@@ -202,17 +202,22 @@ class Tag:
         sys.stdout.write(' done\n')
 
 
-    def update_source_entries(self, rq, tag, listonly=False):
+    def update_entries(self, rq, tag, listonly=False):
         """
         Function to update entries for a given tag (for rqs)
         """
-        logging.debug('in Tag.update_source_entries(%s, %s)' % (tag, listonly))
+        logging.debug('in Tag.update_entries(%s, %s)' % (tag, listonly))
 
         to_remove = []
         to_add    = []
         have_seen = []
         updates   = 0
         newpkgs   = 0
+
+        if self.type == 'source':
+            pkg_type = 'SRPM'
+        elif self.type == 'binary':
+            pkg_type = 'RPM'
 
         query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
         path   = self.db.fetch_one(query)
@@ -241,7 +246,7 @@ class Tag:
             for row in result:
                 fullname = '%s/%s' % (path, row['p_fullname'])
                 if not os.path.isfile(fullname):
-                    logging.info('  SRPM missing: %s' % row['p_fullname'])
+                    logging.info('  %s missing: %s' % (pkg_type, row['p_fullname']))
                     to_remove.append(row['p_record'])
 
             src_list = glob(path + "/*.rpm")
@@ -343,8 +348,8 @@ class Tag:
         if to_remove and not listonly:
             queries =[]
             sys.stdout.write('\nRemoving tagged entries for tag: %s... ' % tag)
-            #if self.type == 'binary':
-            #    tables = ('packages', 'requires', 'provides', 'files')
+            if self.type == 'binary':
+                tables = ('packages', 'requires', 'provides', 'files')
             if self.type == 'source':
                 tables = ('packages', 'sources', 'files', 'ctags', 'buildreqs')
 
@@ -387,11 +392,7 @@ class Tag:
                     print '%s' % a_rpm
                 else:
                     logging.info('Adding: %s' % a_rpm)
-                    if self.type == 'binary':
-                        print 'Adding binary rpms is not supported yet!'
-                        sys.exit(1)
-                    if self.type == 'source':
-                        rq.record_add(tag_id, a_rpm, 1) # the 1 is to indicate this is an update
+                    rq.record_add(tag_id, a_rpm, 1) # the 1 is to indicate this is an update
 
         if not to_add and not to_remove:
             print 'No changes detected.'

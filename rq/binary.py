@@ -106,11 +106,11 @@ class Binary:
                 self.record_add(tag_id, file)
 
 
-    def record_add(self, tag_id, file):
+    def record_add(self, tag_id, file, update=0):
         """
         Function to add a record to the database
         """
-        logging.debug('in Binary.record_add(%s, %s)' % (tag_id, file))
+        logging.debug('in Binary.record_add(%s, %s, %d)' % (tag_id, file, update))
 
         if os.path.isfile(file):
             path = os.path.abspath(os.path.dirname(file))
@@ -120,7 +120,7 @@ class Binary:
 
         self.rcommon.file_rpm_check(file)
 
-        record = self.package_add_record(tag_id, file)
+        record = self.package_add_record(tag_id, file, update)
         if not record:
             return
 
@@ -138,11 +138,11 @@ class Binary:
             sys.stdout.write('\n')
 
 
-    def package_add_record(self, tag_id, file):
+    def package_add_record(self, tag_id, file, update=0):
         """
         Function to add a package record
         """
-        logging.debug('in Binary.package_add_record(%s, %s)' % (tag_id, file))
+        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tag_id, file, update))
 
         fname   = os.path.basename(file)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + self.rcommon.clean_shell(file))
@@ -173,7 +173,7 @@ class Binary:
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch, p_srpm, p_fullname) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
+        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch, p_srpm, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
             tag_id,
             self.db.sanitize_string(tag),
             self.db.sanitize_string(package),
@@ -182,7 +182,8 @@ class Binary:
             self.db.sanitize_string(pdate),
             self.db.sanitize_string(arch),
             self.db.sanitize_string(srpm),
-            self.db.sanitize_string(fname))
+            self.db.sanitize_string(fname),
+            update)
 
         result = self.db.do_query(query)
         self.rcommon.show_progress(fname)
@@ -232,12 +233,12 @@ class Binary:
             print 'Searching database records for %s match for %s (%s)' % (match_type, type, like_q)
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
         elif type == 'symbols':
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
         else:
             # query on type: provides, requires
-            query = "SELECT DISTINCT p_tag, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
                 type, type, type, ignorecase, type)
 
         if self.options.regexp:
@@ -264,6 +265,7 @@ class Binary:
             ltag = ''
             lsrc = ''
             for row in result:
+                utype = ''
                 # for readability
                 fromdb_tag  = row['p_tag']
                 fromdb_rpm  = row['p_package']
@@ -282,6 +284,9 @@ class Binary:
                     fromdb_fileid  = row['f_id']
                 if type == 'symbols':
                     fromdb_files   = row['files']
+
+                if row['p_update'] == 1:
+                    utype = '[update] '
 
                 if not ltag == fromdb_tag:
                     print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
@@ -304,7 +309,7 @@ class Binary:
                         elif type == 'symbols':
                             print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_type, fromdb_files)
                         else:
-                            print '%s (%s): %s' % (rpm, fromdb_srpm, fromdb_type)
+                            print '%s%s (%s): %s' % (utype, rpm, fromdb_srpm, fromdb_type)
 
                     if self.options.quiet:
                         lsrc = rpm

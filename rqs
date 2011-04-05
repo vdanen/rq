@@ -266,14 +266,14 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.tagupdate:
-        rtag.update_source_entries(rqs, options.tagupdate)
+        rtag.update_entries(rqs, options.tagupdate)
         sys.exit(0)
 
     if options.list_to_update:
         if not options.tag:
             logging.critical('The --list-to-update option requires a tag entry!')
             sys.exit(1)
-        rtag.update_source_entries(rqs, options.tag, options.list_to_update)
+        rtag.update_entries(rqs, options.tag, options.list_to_update)
         sys.exit(0)
 
     # if we get here, we have completely invalid arguments
