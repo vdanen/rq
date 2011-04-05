@@ -535,12 +535,13 @@ class Source:
                         #print '%s\n' % query
                 os.chdir(cpio_dir)
 
-                # have to put this in a try statement; who puts files and directories in a tarball all mode 0200?!?
+                logging.debug('Removing temporary directory: %s...' % tmpdir)
                 try:
-                    logging.debug('attempting to remove temporary directory: %s' % tmpdir)
                     shutil.rmtree(tmpdir)
                 except:
-                    logging.critical('Unable to remove directory: %s, most likely because the tarball has idiotic permissions' % tmpdir)
+                    # if we can't remove the directory, recursively chmod and try again
+                    os.system('chmod -R u+rwx ' + tmpdir)
+                    shutil.rmtree(tmpdir)
 
 
     def add_buildreq_records(self, tag_id, record, cpio_dir):

@@ -423,7 +423,12 @@ class Binary:
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
-            shutil.rmtree(cpio_dir)
+            try:
+                shutil.rmtree(cpio_dir)
+            except:
+                # if we can't remove the directory, recursively chmod and try again
+                os.system('chmod -R u+rwx ' + cpio_dir)
+                shutil.rmtree(cpio_dir)
 
 
     def get_binary_symbols(self, file):
