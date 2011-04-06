@@ -155,9 +155,6 @@ class Tag:
             sys.exit(1)
         else:
             print 'Removing tag (%s) from Tags...\n' % tag
-            query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id['id']
-            self.db.do_query(query)
-
             query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id['id']
             result = self.db.fetch_one(query)
             if result:
@@ -184,6 +181,10 @@ class Tag:
 
                 if result > 500:
                     self.optimize_db(tables)
+
+                # now delete the tag entry itself
+                query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id['id']
+                self.db.do_query(query)
             else:
                 sys.stdout.write('No matching package tags to remove.\n')
 
