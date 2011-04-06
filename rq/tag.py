@@ -172,9 +172,9 @@ class Tag:
                 sys.stdout.flush()
 
                 if self.type == 'binary':
-                    tables = ('packages', 'requires', 'provides', 'files', 'flags', 'symbols')
+                    tables = ('packages', 'requires', 'provides', 'files', 'flags', 'symbols', 'alreadyseen')
                 if self.type == 'source':
-                    tables = ('packages', 'sources', 'files', 'ctags')
+                    tables = ('packages', 'sources', 'files', 'ctags', 'alreadyseen')
 
                 for table in tables:
                     query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id['id'])
@@ -324,6 +324,7 @@ class Tag:
                                     to_add.append(src_rpm)
                                     if row['p_record'] not in to_remove:
                                         to_remove.append(row['p_record'])
+                                    logging.debug('Scheduling %s to be added to already-seen list' % row['p_fullname'])
                                     have_seen.append(row['p_fullname'])
                         else:
                             # we do NOT have a matching package record of the same name
@@ -339,7 +340,7 @@ class Tag:
         # here we need to weed out any extras; in the case of first updating
         # an updates directory with multiple similar packages (e.g multiple
         # seamonkey packages) we only want the latest version
-        to_add = self.trim_update_list(to_add)
+        (to_add, have_seen) = self.trim_update_list(to_add, have_seen)
 
         if to_remove:
             if listonly:
@@ -389,10 +390,15 @@ class Tag:
         if have_seen and not listonly:
             h_count = 0
             for hseen in have_seen:
-                h_count = h_count + 1
-                query   = "INSERT INTO alreadyseen (p_fullname, t_record) VALUES ('%s', '%s')" % (hseen, tag_id)
-                result  = self.db.do_query(query)
-            logging.debug('Added %d records to alreadyseen table' % h_count)
+                query  = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s' AND t_record = %d LIMIT 1" % (self.db.sanitize_string(sfname), tag_id)
+                exists = self.db.fetch_one(query)
+                if not exists:
+                    # only add this to the database if we've not seen it
+                    # TODO: this should be unnecessary, but seems like we might get dupes otherwise right now
+                    h_count = h_count + 1
+                    query   = "INSERT INTO alreadyseen (p_fullname, t_record) VALUES ('%s', '%s')" % (hseen, tag_id)
+                    result  = self.db.do_query(query)
+                    logging.debug('Added %d records to alreadyseen table' % h_count)
 
         if to_add:
             if listonly:
@@ -415,18 +421,21 @@ class Tag:
             result   = self.db.do_query(query)
 
 
-    def trim_update_list(self, packagelist):
+    def trim_update_list(self, packagelist, seenlist):
         """
         Function to examine a list of packages scheduled for addition to the
         database and make sure they are unique by only taking the package with
         the highest N-V-R, otherwise we may end up adding multiple copies of the
         same package name, just with different versions
         """
-        logging.debug("in Tag.trim_update_list(%s)" % packagelist)
+        logging.debug("in Tag.trim_update_list(%s, %s)" % (packagelist, seenlist))
 
         templist = {}
         newlist  = []
+        new_seen = []
+
         for pkg in packagelist:
+            sfname  = os.path.basename(pkg)
             rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + self.rcommon.clean_shell(pkg))
             tlist   = rpmtags.split('|')
             logging.debug("tlist is %s " % tlist)
@@ -437,28 +446,45 @@ class Tag:
             arch    = tlist[4].strip()
             uname   = '%s-%s' % (package, arch)
 
+            # first, add everything we see to the already-seen list; later we'll remove
+            # what gets stuffed into our updates list
+            seenlist.append(sfname)
+            logging.debug('Adding %s to the already-seen list' % sfname)
             try:
                 if not templist[uname]:
-                    templist[uname] = [version, release, pkg, arch]
-                    logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, arch))
+                    templist[uname] = [version, release, pkg, sfname]
+                    logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname))
                 else:
-                    bigger = self.nvr_compare(templist[uname], version, release, arch)
+                    bigger = self.nvr_compare(templist[uname], version, release)
                     if bigger == 1:
-                        templist[uname] = [version, release, pkg, arch]
-                        logging.debug('Adding replacement %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, arch))
+                        # this one has a higher nvr
+                        templist[uname] = [version, release, pkg, sfname]
+                        logging.debug('Adding replacement %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname))
             except:
-                templist[uname] = [version, release, pkg, arch]
-                logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, arch))
+                templist[uname] = [version, release, pkg, sfname]
+                logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname))
 
         # reconstruct the old list to return, less what we don't want
+        ns = []
         for pkg in templist:
             newlist.append(templist[pkg][2])
+            ns.append(templist[pkg][3])
+
+        # reconstruct the new_seen list so it does not contain what is in newlist
+        for pkg in seenlist:
+            if not pkg in ns:
+                # we want to remove all packages from the seenlist that are also
+                # in the newlist
+                new_seen.append(pkg)
+            else:
+                logging.debug("Removing %s from the already-seen list; it's in the new package list" % pkg)
 
         newlist.sort()
-        return(newlist)
+        new_seen.sort()
+        return(newlist, new_seen)
 
 
-    def nvr_compare(self, oldpkg, version, release, arch):
+    def nvr_compare(self, oldpkg, version, release):
         """
         Function to compare version and release of two
         different RPM packages to see which is bigger
