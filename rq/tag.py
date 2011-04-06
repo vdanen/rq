@@ -283,7 +283,7 @@ class Tag:
                 if not package:
                     # this means we do not have this package currently in the database
                     # so check if we have already seen and removed it
-                    query = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s'" % self.db.sanitize_string(sfname)
+                    query = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s' AND t_record = %d" % (self.db.sanitize_string(sfname), tag_id)
                     seen  = self.db.fetch_one(query)
                     if not seen:
                         # this is a new file that does not exist in the database, but it's
