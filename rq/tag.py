@@ -260,7 +260,7 @@ class Tag:
                          self.db.sanitize_string(sfname))
                 package = self.db.fetch_one(query)
                 if not package:
-                    logging.info('Scheduling %s to be added to database')
+                    logging.info('Scheduling %s to be added to database' % src_rpm)
                     to_add.append(src_rpm)
 
         if updates == 1 and u_path:
@@ -296,10 +296,22 @@ class Tag:
 # if new, add it, delete old one from packages, add to alreadyseen
 
                         # this file is not in our db, so we need to see if this is an updated package
-                        pkgname = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}' " + self.rcommon.clean_shell(src_rpm))
-                        query   = "SELECT p_record, p_fullname FROM packages WHERE t_record = '%s' AND p_package = '%s' LIMIT 1" % (
-                                  tag_id,
-                                  self.db.sanitize_string(pkgname))
+                        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{ARCH}' " + self.rcommon.clean_shell(src_rpm))
+                        tlist   = rpmtags.split('|')
+                        logging.debug("tlist is %s " % tlist)
+                        r_pkg  = tlist[0].strip()
+                        r_arch = tlist[1].strip()
+                        if self.type == 'source':
+                            query   = "SELECT p_record, p_fullname FROM packages WHERE t_record = '%s' AND p_package = '%s' LIMIT 1" % (
+                                      tag_id,
+                                      self.db.sanitize_string(r_pkg))
+                        elif self.type == 'binary':
+                            # when looking at binaries, we need to include the arch for uniqueness otherwise
+                            # we get the first hit, which might be i386 when we're looking at a new i686 pkg
+                            query   = "SELECT p_record, p_fullname FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_arch = '%s' LIMIT 1" % (
+                                      tag_id,
+                                      self.db.sanitize_string(r_pkg),
+                                      self.db.sanitize_string(r_arch))
                         result  = self.db.fetch_all(query)
 
                         if result:
@@ -415,26 +427,28 @@ class Tag:
         templist = {}
         newlist  = []
         for pkg in packagelist:
-            rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(pkg))
+            rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}' " + self.rcommon.clean_shell(pkg))
             tlist   = rpmtags.split('|')
             logging.debug("tlist is %s " % tlist)
             package = tlist[0].strip()
             version = tlist[1].strip()
             release = tlist[2].strip()
             pdate   = tlist[3].strip()
+            arch    = tlist[4].strip()
+            uname   = '%s-%s' % (package, arch)
 
             try:
-                if not templist[package]:
-                    templist[package] = [version, release, pkg]
-                    logging.debug('Adding %s(%s, %s, %s) to templist' % (package, version, release, pkg))
+                if not templist[uname]:
+                    templist[uname] = [version, release, pkg, arch]
+                    logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, arch))
                 else:
-                    bigger = self.nvr_compare(templist[package], version, release)
+                    bigger = self.nvr_compare(templist[uname], version, release, arch)
                     if bigger == 1:
-                        templist[package] = [version, release, pkg]
-                        logging.debug('Adding replacement %s(%s, %s, %s) to templist' % (package, version, release, pkg))
+                        templist[uname] = [version, release, pkg, arch]
+                        logging.debug('Adding replacement %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, arch))
             except:
-                templist[package] = [version, release, pkg]
-                logging.debug('Adding %s(%s, %s, %s) to templist' % (package, version, release, pkg))
+                templist[uname] = [version, release, pkg, arch]
+                logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, arch))
 
         # reconstruct the old list to return, less what we don't want
         for pkg in templist:
@@ -444,7 +458,7 @@ class Tag:
         return(newlist)
 
 
-    def nvr_compare(self, oldpkg, version, release):
+    def nvr_compare(self, oldpkg, version, release, arch):
         """
         Function to compare version and release of two
         different RPM packages to see which is bigger
