@@ -388,19 +388,6 @@ class Tag:
                 # etc. so even 10 packages could have a few thousand records all told
                 self.optimize_db(tables)
 
-        if have_seen and not listonly:
-            h_count = 0
-            for hseen in have_seen:
-                query  = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s' AND t_record = %d LIMIT 1" % (self.db.sanitize_string(sfname), tag_id)
-                exists = self.db.fetch_one(query)
-                if not exists:
-                    # only add this to the database if we've not seen it
-                    # TODO: this should be unnecessary, but seems like we might get dupes otherwise right now
-                    h_count = h_count + 1
-                    query   = "INSERT INTO alreadyseen (p_fullname, t_record) VALUES ('%s', '%s')" % (hseen, tag_id)
-                    result  = self.db.do_query(query)
-                    logging.debug('Added %d records to alreadyseen table' % h_count)
-
         if to_add:
             if listonly:
                 print 'Would add the following tagged entries for tag: %s\n' % tag
@@ -412,6 +399,28 @@ class Tag:
                 else:
                     logging.info('Adding: %s' % a_rpm)
                     rq.record_add(tag_id, a_rpm, 1) # the 1 is to indicate this is an update
+
+        if have_seen and not listonly:
+            # make have_seen unique
+            hs = []
+            for tmp in have_seen:
+                if tmp not in hs:
+                    hs.append(tmp)
+                else:
+                    logging.debug('Discarding duplicate entry: %s' % tmp)
+
+            h_count = 0
+            for hseen in hs:
+                exists = None
+                query  = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s' AND t_record = %d LIMIT 1" % (self.db.sanitize_string(sfname), tag_id)
+                exists = self.db.fetch_one(query)
+                if not exists:
+                    # only add this to the database if we've not seen it
+                    # TODO: this should be unnecessary, but seems like we might get dupes otherwise right now
+                    h_count = h_count + 1
+                    query   = "INSERT INTO alreadyseen (p_fullname, t_record) VALUES ('%s', '%s')" % (hseen, tag_id)
+                    result  = self.db.do_query(query)
+                    logging.debug('Added %d records to alreadyseen table' % h_count)
 
         if not to_add and not to_remove:
             print 'No changes detected.'
