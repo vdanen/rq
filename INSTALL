@@ -1,0 +1,29 @@
+Installation of the rq tools is simple:
+
+1) Copy rqrc to ~/.rqrc and edit:
+
+  username=rq
+  password=rq
+  hostspec=localhost
+  rpm_database=rqp
+  srpm_database=rqs
+
+2) Create the specified user noted in ~/.rqrc in MySQL, create the two
+specified databases, and give the user access to them:
+
+  mysql> CREATE DATABASE rqp;
+  mysql> CREATE DATABASE rqs;
+  mysql> CREATE USER rq@localhost IDENTIFIED BY 'rq';
+  mysql> GRANT ALL ON rqp.* TO rq@localhost;
+  mysql> GRANT ALL ON rqs.* TO rq@localhost;
+
+3) Import the SQL schemas for each database:
+
+  $ mysql -u rq -p rqs < sql/rqs.sql
+  $ mysql -u rq -p rqp < sql/rqp.sql
+
+4) Import your first set of RPMS and/or SRPMS:
+
+  $ ./rqp -C /srv/mirror/Fedora/releases/14/Everything/i386/os/Packages -U /srv/mirror/Fedora/updates/14/i386 -t f14_i386 -P
+
+5) Enjoy!

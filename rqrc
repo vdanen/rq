@@ -11,4 +11,4 @@ password=rq
 hostspec=localhost
 ; database name
 rpm_database=rqp
-srpm_database=rsq
+srpm_database=rqs
