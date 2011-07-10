@@ -223,6 +223,8 @@ class Binary:
             like_q = self.options.requires
         if type == 'symbols':
             like_q = self.options.symbols
+        if type == 'packages':
+            like_q = self.options.query
 
         if self.options.regexp:
             match_type = 'regexp'
@@ -236,6 +238,8 @@ class Binary:
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
         elif type == 'symbols':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
+        elif type == 'packages':
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm FROM packages WHERE %s p_package " % ignorecase
         else:
             # query on type: provides, requires
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
@@ -249,7 +253,11 @@ class Binary:
         if self.options.tag:
             query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
 
-        query  = query + " ORDER BY p_tag, p_package, " + type
+        if type == 'packages':
+            query  = query + " ORDER BY p_tag, p_package"
+        else:
+            query  = query + " ORDER BY p_tag, p_package, " + type
+
         result = self.db.fetch_all(query)
         if result:
             if self.options.count:
@@ -273,7 +281,8 @@ class Binary:
                 fromdb_rel  = row['p_release']
                 fromdb_date = row['p_date']
                 fromdb_srpm = row['p_srpm']
-                fromdb_type = row[type]
+                if not type == 'packages':
+                    fromdb_type = row[type]
 
                 if type == 'files':
                     fromdb_user    = row['f_user']
@@ -289,7 +298,8 @@ class Binary:
                     utype = '[update] '
 
                 if not ltag == fromdb_tag:
-                    print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
+                    if not type == 'packages':
+                        print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
                     ltag = fromdb_tag
 
                 if self.options.debug:
@@ -308,6 +318,8 @@ class Binary:
                             print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_type, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
                         elif type == 'symbols':
                             print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_type, fromdb_files)
+                        elif type == 'packages':
+                            print '%s/%s %s' % (ltag, rpm, utype)
                         else:
                             print '%s%s (%s): %s' % (utype, rpm, fromdb_srpm, fromdb_type)
 

@@ -74,6 +74,8 @@ if __name__ == '__main__':
                  help="List all updated packages for tag")
     p.add_option('', '--list-to-update', dest="list_to_update", default=False, action="store_true",
                  help="List all packages scheduled for update by tag")
+    p.add_option('', '--show-current', dest="show_current", default=False, action="store_true",
+                 help="Show current package version/release information from database")
     p.add_option('', '--show-suid', dest="showsuid", default=False, action="store_true",
                  help="List all setuid files for tag")
     p.add_option('', '--show-sgid', dest="showsgid", default=False, action="store_true",
@@ -96,7 +98,7 @@ if __name__ == '__main__':
     group.add_option('-p', '--provides', dest="provides", metavar="STRING",
                      help="Query database for substring match on provides")
     group.add_option('-q', '--query', dest="query", metavar="STRING",
-                     help="Query database for substring match on files")
+                     help="Query database for substring match on files, or packages when used with --show-current")
     group.add_option('-r', '--requires', dest="requires", metavar="STRING",
                      help="Query database for substring match on requires")
     group.add_option('-z', '--symbols', dest="symbols", metavar="STRING",
@@ -212,7 +214,10 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.query:
-        rqp.query('files')
+        if options.show_current:
+            rqp.query('packages')
+        else:
+            rqp.query('files')
         sys.exit(0)
 
     if options.provides:
