@@ -210,6 +210,9 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.tagupdate:
+        if options.list_to_update:
+            logging.critical('The --list-to-update option cannot be used with -u, use -t instead!')
+            sys.exit(1)
         rtag.update_entries(rqp, options.tagupdate)
         sys.exit(0)
 
