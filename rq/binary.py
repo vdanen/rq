@@ -578,7 +578,7 @@ class Binary:
         if flags['f_ssp'] == 1:
             newflags['ssp'] = "found"
         else:
-            newflags['f_ssp'] = "not found"
+            newflags['ssp'] = "not found"
 
         if flags['f_nx'] == 1:
             newflags['nx'] = "enabled"
