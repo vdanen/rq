@@ -180,22 +180,22 @@ class Source:
         else:
             match_type = 'substring'
 
+        if self.options.regexp:
+            qlike = "RLIKE '" + self.db.sanitize_string(like_q) + "'"
+        else:
+            qlike = "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
+
         if type == 'ctags':
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name " % ignorecase
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name %s" % (ignorecase, qlike)
             orderby = "c_file"
             match_t = 'Ctags data'
         elif type == 'buildreqs':
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req " % ignorecase
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req %s" % (ignorecase, qlike)
             match_t = '.spec BuildRequires'
         else:
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE %s f_file " % ignorecase
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE (%s f_file %s) OR (%s s_file %s)" % (ignorecase, qlike, ignorecase, qlike)
             orderby = "f_file"
             match_t = 'files'
-
-        if self.options.regexp:
-            query = query + "RLIKE '" + self.db.sanitize_string(like_q) + "'"
-        else:
-            query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
 
         if self.options.sourceonly:
             query = query + " AND s_type = 'S'"
@@ -212,6 +212,20 @@ class Source:
             print 'Searching database records for %s match on %s ("%s")' % (match_type, match_t, like_q)
 
         result = self.db.fetch_all(query)
+
+        # TODO: if the match is a source file (e.g. a patch) we should constrain on it's uniqueness; for instance
+        # a search on mgetty-1.1.33-167830.patch results in:
+        #
+        # mgetty-1.1.36-7.fc14: (patch) mgetty-1.1.33-167830.patch: mgetty-1.1.36/login.c
+        # mgetty-1.1.36-7.fc14: (patch) mgetty-1.1.33-167830.patch: mgetty-1.1.36/mgetty.c
+        #
+        # the match here is on s_file, not f_file, and since we don't care about f_file we should do two things:
+        #
+        # 1) remove f_file from the output
+        # 2) not duplicate the information show (just show: mgetty-1.1.36-7.fc14: (patch) mgetty-1.1.33-167830.patch)
+        #
+        # we could do this with different command-line options to search either files or patches, but then we have
+        # a lot of silly options, so we can make the program smart enough to figure this out eventually
         if result:
             if self.options.count:
                 if self.options.quiet:
