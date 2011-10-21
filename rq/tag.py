@@ -516,7 +516,7 @@ class Tag:
             # elements than n which makes python mad
             len_o = len(o)
             len_n = len(n)
-            if len_o > len(n):
+            if len_o > len_n:
                 num = len_o - len_n
                 x = 0
                 while x < num:
