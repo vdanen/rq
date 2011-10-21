@@ -505,10 +505,30 @@ class Tag:
         Function to compare version and release of two
         different RPM packages to see which is bigger
         """
-        def ncomp(old, new):
-            #print 'comparing old:%s and new:%s' % (old, new)
+        def ncomp(old, new, type):
+            logging.debug('comparing %s old:%s and new:%s' % (type, old, new))
             o = old.split('.')
             n = new.split('.')
+
+            # need to make the array lengths the same, but we don't want to use 0's here
+            # otherwise 9.1.0 may not be higher than 9.1, which it should be, so use empty
+            # values instead to prevent the try statement below failing because o has more
+            # elements than n which makes python mad
+            len_o = len(o)
+            len_n = len(n)
+            if len_o > len(n):
+                num = len_o - len_n
+                x = 0
+                while x < num:
+                    n.append('')
+                    x = x + 1
+            elif len_n > len_o:
+                num = len_n - len_o
+                x = 0
+                while x < num:
+                    o.append('')
+                    x = x + 1
+
             c = 0
             b = 0
             while c < len(o):
@@ -536,7 +556,7 @@ class Tag:
 
             return(b)
 
-        ver_is_bigger = ncomp(oldpkg[0], version)
+        ver_is_bigger = ncomp(oldpkg[0], version, "version")
 
         if ver_is_bigger == 1:
             return(1)
@@ -545,7 +565,7 @@ class Tag:
             return(0)
         else:
             # version is the same so check on release
-            rel_is_bigger = ncomp(oldpkg[1], release)
+            rel_is_bigger = ncomp(oldpkg[1], release, "release")
             if rel_is_bigger == 1:
                 return(1)
 
