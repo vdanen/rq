@@ -456,7 +456,10 @@ class Tag:
             version = tlist[1].strip()
             release = tlist[2].strip()
             pdate   = tlist[3].strip()
-            arch    = tlist[4].strip()
+            if self.type == 'source':
+                arch    = 'src'
+            else:
+                arch    = tlist[4].strip()
             uname   = '%s-%s' % (package, arch)
 
             # first, add everything we see to the already-seen list; later we'll remove
@@ -466,13 +469,13 @@ class Tag:
             try:
                 if not templist[uname]:
                     templist[uname] = [version, release, pkg, sfname]
-                    logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname))
+                    logging.debug('Adding %s(%s, %s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname, arch))
                 else:
                     bigger = self.nvr_compare(templist[uname], version, release)
                     if bigger == 1:
                         # this one has a higher nvr
                         templist[uname] = [version, release, pkg, sfname]
-                        logging.debug('Adding replacement %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname))
+                        logging.debug('Adding replacement %s(%s, %s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname, arch))
             except:
                 templist[uname] = [version, release, pkg, sfname]
                 logging.debug('Adding %s(%s, %s, %s, %s) to templist' % (package, version, release, pkg, sfname))
