@@ -20,8 +20,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
-
-$Id$
 """
 
 RQ_VERSION = '0.6'
@@ -36,7 +34,7 @@ import rq.binary
 
 
 if __name__ == '__main__':
-    sys.stdout.write("%s %s ($Id$)\n\n" % (RQ_PROG, RQ_VERSION))
+    sys.stdout.write("%s %s\n\n" % (RQ_PROG, RQ_VERSION))
     # TODO: add options to search files by ownership and sgid/suid status
 
     p = optparse.OptionParser(description="RPM package query tool",
