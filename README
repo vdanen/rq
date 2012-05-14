@@ -1,6 +1,7 @@
-= Overview =
+Overview
+========
 
-This is the code from "rq".  See https://fedorahosted.org/rq
+This is the code from "rq".  See https://github.com/vdanen/rq
 
 rq is a set of tools that import binary and source RPM packages into a
 database for later querying.  It provides various bits of information to be
@@ -22,7 +23,8 @@ so that the information doesn't become stale.  It also handles multiple
 distributions via tags (i.e. rhel4 or rhel5_i386).
 
 
-= TODO =
+TODO
+====
 
 The following are a list of features in no order, with no priority, and no
 guarantees, but would be neat things to see in the future:
