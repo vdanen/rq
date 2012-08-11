@@ -577,6 +577,8 @@ class Source:
             logging.critical('No specfile found, unable to process buildrequirements')
             sys.exit(1)
 
+# TODO: expand macros; gtkhtml2-devel >= %{gtkhtml2_version} doesn't do us much good
+
         for line in open(specfile):
             reqs  = {}
             count = 0
@@ -584,8 +586,10 @@ class Source:
                 words = line.split()
                 for c in words:
                     if not c.startswith('Build'):
-                        reqs[count] = c.strip()
-                        count += 1
+                        # handle BuildRequires: foo,bar,baz
+                        for x in c.split(','):
+                            reqs[count] = x.strip()
+                            count += 1
 
             # if there is more than one item on this line
             if len(reqs) > 1:
