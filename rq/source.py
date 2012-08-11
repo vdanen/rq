@@ -32,11 +32,12 @@ class Source:
     """
 
     def __init__(self, db, config, options, rtag, rcommon):
-        self.db      = db
-        self.config  = config
-        self.options = options
-        self.rtag    = rtag
-        self.rcommon = rcommon
+        self.db         = db
+        self.config     = config
+        self.options    = options
+        self.rtag       = rtag
+        self.rcommon    = rcommon
+        self.breq_cache = {}
 
         self.re_srpm    = re.compile(r'\.src\.rpm$')
         self.re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
@@ -188,7 +189,7 @@ class Source:
             orderby = "c_file"
             match_t = 'Ctags data'
         elif type == 'buildreqs':
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, b_req FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) WHERE %s b_req %s" % (ignorecase, qlike)
+            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, b_name FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) JOIN breq_name ON (breq_name.n_record = buildreqs.n_record) WHERE %s b_name %s" % (ignorecase, qlike)
             match_t = '.spec BuildRequires'
         else:
             query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE (%s f_file %s) OR (%s s_file %s)" % (ignorecase, qlike, ignorecase, qlike)
@@ -247,7 +248,7 @@ class Source:
                 fromdb_date  = row['p_date']
                 if type == 'buildreqs':
                     fromdb_type  = 'S'
-                    fromdb_breq  = row['b_req']
+                    fromdb_breq  = row['b_name']
                 else:
                     fromdb_type  = row['s_type']
                     fromdb_file  = row['s_file']
@@ -641,13 +642,53 @@ class Source:
         for require in r:
             # now iterate through each item and add them to the database
             self.rcommon.show_progress()
+
+            n_rec = self.get_buildreq_record(require)
+
             # record == p_record
-            query = "INSERT INTO buildreqs (t_record, p_record, b_req) VALUES ('%s', '%s', '%s')" % (
+            query = "INSERT INTO buildreqs (t_record, p_record, n_record) VALUES ('%s', '%s', '%s')" % (
                             tag_id,
                             record,
-                            self.db.sanitize_string(require))
+                            n_rec)
             result = self.db.do_query(query)
             #print '%s\n' % query
+
+
+    def cache_get_buildreq(self, name):
+        """
+        Function to look up the n_record and add it to the cache for buildreqs
+        """
+        query = "SELECT n_record FROM breq_name WHERE b_name = '%s'" % name
+        n_rec = self.db.fetch_one(query)
+        if n_rec:
+            # add to the cache
+            self.breq_cache[name] = n_rec
+            return n_rec
+        else:
+            return False
+
+
+    def get_buildreq_record(self, require):
+        """
+        Function to lookup, add, and cache buildrequires info
+        """
+        name = self.db.sanitize_string(require)
+
+        # first check the cache
+        if name in self.breq_cache:
+            return self.breq_cache[name]
+
+        # not cached, check the database
+        n_rec = self.cache_get_buildreq(name)
+        if n_rec:
+            return n_rec
+
+        # not cached, not in the db, add it
+        query  = "INSERT INTO breq_name (n_record, b_name) VALUES (NULL, '%s')" % name
+        result = self.db.do_query(query)
+        n_rec  = self.cache_get_buildreq(name)
+        if n_rec:
+            return n_rec
 
 
     def rpm_add_directory(self, tag, path, updatepath):

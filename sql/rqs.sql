@@ -123,12 +123,26 @@ CREATE TABLE IF NOT EXISTS `buildreqs` (
   `b_record` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `t_record` INT NOT NULL,
-  `b_req` text NOT NULL,
+  `n_record` INT NOT NULL,
   PRIMARY KEY  (`b_record`),
   KEY `rec` USING BTREE (`b_record`),
-  KEY `trec` USING BTREE (`t_record`)
+  KEY `trec` USING BTREE (`t_record`),
+  KEY `nrec` USING BTREE (`n_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `breq_name`
+--
+
+DROP TABLE IF EXISTS `breq_name`;
+CREATE TABLE IF NOT EXISTS `breq_name` (
+  `n_record` INT NOT NULL auto_increment,
+  `b_name` text NOT NULL,
+  PRIMARY KEY  (`n_record`),
+  KEY `rec` USING BTREE (`n_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 -- --------------------------------------------------------
 
 --
