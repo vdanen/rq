@@ -660,12 +660,22 @@ class Source:
             print 'Path (%s) is not a valid directory!' % updatepath
             sys.exit(1)
 
-        file_list = glob(path + "/*.src.rpm")
-        file_list.sort()
+        file_list = []
+        file_list.extend(glob(path + "/*.src.rpm"))
 
-        if not file_list:
+        if len(file_list) == 0:
+            print 'No files found in %s, checking subdirectories...' % path
+            # newer versions of Fedora have packages in subdirectories
+            subdirs = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+            for s in subdirs:
+                npath = '%s/%s' % (path, s)
+                file_list.extend(glob(npath + "/*.rpm"))
+
+        if len(file_list) == 0:
             print 'No files found to import in directory: %s' % path
             sys.exit(1)
+
+        file_list.sort()
 
         tag_id = self.rtag.add_record(tag, path, updatepath)
         if tag_id == 0:
