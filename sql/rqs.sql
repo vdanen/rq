@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS `ctags` (
   `t_record` INT NOT NULL,
   `c_name` varchar(256) NOT NULL,
   `c_extra` text NOT NULL,
-  `c_type` varchar(64) NOT NULL,
+  `c_type` TINYINT NOT NULL,
   `c_line` varchar(64) NOT NULL,
   `c_file` text NOT NULL,
   PRIMARY KEY  (`c_record`),

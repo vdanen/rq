@@ -47,6 +47,11 @@ class Source:
         self.re_patchgz = re.compile(r'\.(patch|diff|dif)(\.gz)$')
         self.re_patchbz = re.compile(r'\.(patch|diff|dif)(\.bz2)$')
 
+        self.ctag_map   = {'function'  : 0,
+                           'subroutine': 1,
+                           'class'     : 2,
+                           'method'    : 3}
+
 
     def patch_list(self, file):
         """
@@ -254,7 +259,7 @@ class Source:
                     fromdb_file  = row['s_file']
                     fromdb_sfile = row[orderby]
                 if type == 'ctags':
-                    fromdb_ctype  = row['c_type']
+                    fromdb_ctype  = [k for k, v in self.ctag_map.iteritems() if v == row['c_type']][0]
                     fromdb_cline  = row['c_line']
                     fromdb_cextra = row['c_extra']
                 if row['p_update'] == 1:
@@ -532,15 +537,14 @@ class Source:
                         continue
 
                     # only store some ctags info, not all of it
-                    wanted = ['function', 'macro', 'subroutine', 'class', 'method']
-                    if type in wanted:
+                    if type in self.ctag_map:
                         self.rcommon.show_progress()
                         query = "INSERT INTO ctags (t_record, p_record, s_record, c_name, c_type, c_line, c_file, c_extra) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
                             tag_id,
                             record,
                             db_srec,
                             self.db.sanitize_string(name),
-                            self.db.sanitize_string(type),
+                            self.ctag_map[type],
                             self.db.sanitize_string(line),
                             self.db.sanitize_string(path),
                             self.db.sanitize_string(extra))
