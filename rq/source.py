@@ -606,7 +606,7 @@ class Source:
                     new = ''
 
                     if skip == 0 and x+1 in reqs.keys():
-                        if re.search('(>|<|=)', reqs[x+1]):
+                        if re.search('^(>|<|=|>=|<=)$', reqs[x+1]):
                             # construct the new string based on N+1 (equality) and N+2 (nvr)
                             new = '%s %s %s' % (reqs[x], reqs[x+1], reqs[x+2])
                             # tell it to skip the next item since we grabbed it
