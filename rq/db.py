@@ -46,37 +46,51 @@ class DB:
 
         self.db     = ''    # db connection
         self.dbname = ''    # srpm or rpm database name depending on how called
+        self.config = config
 
-        if config['hostspec'] == '':
+        if self.config['hostspec'] == '':
             logging.critical('Missing hostspec in the configuration!')
             sys.exit(1)
-        if config['username'] == '':
+        if self.config['username'] == '':
             logging.critical('Missing username in the configuration!')
             sys.exit(1)
-        if config['password'] == '':
+        if self.config['password'] == '':
             logging.critical('Missing password in the configuration!')
             sys.exit(1)
 
         if type == 'binary':
-            if (config['rpm_database'] == ''):
+            if (self.config['rpm_database'] == ''):
                 logging.critical('Missing rpm_database in the configuration!')
                 sys.exit(1)
             else:
-                self.dbname = config['rpm_database']
+                self.dbname = self.config['rpm_database']
 
         if type == 'source':
-            if (config['srpm_database'] == ''):
+            if (self.config['srpm_database'] == ''):
                 logging.critical('Missing srpm_database in the configuration!')
                 sys.exit(1)
             else:
-                self.dbname = config['srpm_database']
+                self.dbname = self.config['srpm_database']
 
-        logging.debug('Using host=>%s, user=>%s, db=>%s' % (config['hostspec'], config['username'], self.dbname))
+        logging.debug('Using host=>%s, user=>%s, db=>%s' % (self.config['hostspec'], self.config['username'], self.dbname))
+        self.db_connect('initial connection')
+
+
+    def db_connect(self, msg):
+        """
+        Connect to the database
+        """
+        logging.debug('  => DB.db_connect: %s' % msg)
+
+        if self.db:
+            # if we have an open connection, close it first
+            self.close()
+            self.db = ''
 
         try:
-            self.db = MySQLdb.connect(host=config['hostspec'],
-                                      user=config['username'],
-                                      passwd=config['password'],
+            self.db = MySQLdb.connect(host=self.config['hostspec'],
+                                      user=self.config['username'],
+                                      passwd=self.config['password'],
                                       db=self.dbname,
                                       cursorclass=MySQLdb.cursors.DictCursor)
         except MySQLdb.Error, e:
@@ -175,8 +189,20 @@ class DB:
             cursor.execute(query)
             cursor.close()
         except MySQLdb.Error, e:
-            logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
-            sys.exit(1)
+            # catch the ever-elusive "MySQL error 2006: MySQL server has gone away" and attempt to reconnect
+            # to the database -- this should probably live somewhere else though
+            if e.args[0] == 2006:
+                logging.debug('We caught the exception! %d: %s' % (e.args[0], e.args[1]))
+                self.db_connect('server went away, attempting reconnect')
+
+                # try again
+                try:
+                    cursor = self.db.cursor()
+                    cursor.execute(query)
+                    cursor.close()
+                except MySQLdb.Error, e:
+                    logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+                    sys.exit(1)
 
 
     def do_transactions(self, queries):
