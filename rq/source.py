@@ -384,13 +384,13 @@ class Source:
                 for xrow in results:
                     print '  %s' % xrow['s_file']
 
-            query   = "SELECT b_req FROM buildreqs WHERE p_record = '%s' ORDER BY b_req ASC" % row['p_record']
+            query   = "SELECT b_name FROM buildreqs JOIN breq_name ON (breq_name.n_record = buildreqs.n_record) WHERE p_record = '%s' ORDER BY b_name ASC" % row['p_record']
             results = self.db.fetch_all(query)
             if results:
                 print ''
                 print '  Source RPM has the following BuildRequires:'
                 for xrow in results:
-                    print '  %s' % xrow['b_req']
+                    print '  %s' % xrow['b_name']
             print ''
 
 
