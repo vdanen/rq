@@ -68,6 +68,9 @@ class Binary:
                                  'strnlen', 'strrchr', 'strstr', 'strtol', 'textdomain', 'time', 'umask',
                                  'unlink', 'Version', 'version_etc_copyright', 'waitpid', 'write', '__xstat']
 
+        # caches
+        self.symbol_cache = {}
+
 
     def rpm_add_directory(self, tag, path, updatepath):
         """
@@ -208,6 +211,8 @@ class Binary:
     def query(self, type):
         """
         Function to run the query for binary RPMs
+
+        Valid types are: files, provides, requires, symbols, packages
         """
         logging.debug('in Binary.query(%s)' % type)
 
@@ -245,7 +250,7 @@ class Binary:
         if type == 'files':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
         elif type == 'symbols':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, s_name, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) JOIN symbol_names ON (symbol_names.s_record = symbols.s_record) WHERE %s s_name " % ignorecase
         elif type == 'packages':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm FROM packages WHERE %s p_package " % ignorecase
         else:
@@ -263,6 +268,8 @@ class Binary:
 
         if type == 'packages':
             query  = query + " ORDER BY p_tag, p_package"
+        if type == 'symbols':
+            query = query + " ORDER BY s_name"
         else:
             query  = query + " ORDER BY p_tag, p_package, " + type
 
@@ -289,7 +296,9 @@ class Binary:
                 fromdb_rel  = row['p_release']
                 fromdb_date = row['p_date']
                 fromdb_srpm = row['p_srpm']
-                if not type == 'packages':
+
+                if not type == 'packages' and not type == 'symbols':
+                    # only provides, requires, files
                     fromdb_type = row[type]
 
                 if type == 'files':
@@ -299,8 +308,10 @@ class Binary:
                     fromdb_is_sgid = row['f_is_sgid']
                     fromdb_perms   = row['f_perms']
                     fromdb_fileid  = row['f_id']
+
                 if type == 'symbols':
                     fromdb_files   = row['files']
+                    fromdb_s_name  = row['s_name']
 
                 if row['p_update'] == 1:
                     utype = '[update] '
@@ -325,7 +336,7 @@ class Binary:
                                 is_sgid = '*'
                             print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_type, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
                         elif type == 'symbols':
-                            print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_type, fromdb_files)
+                            print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_s_name, fromdb_files)
                         elif type == 'packages':
                             print '%s/%s %s' % (ltag, rpm, utype)
                         else:
@@ -554,6 +565,43 @@ class Binary:
         result = self.db.do_query(query)
 
 
+    def cache_get_symbol(self, name):
+        """
+        Function to look up the s_record and add it to the cache for symbols
+        """
+        query = "SELECT s_record FROM symbol_names WHERE s_name = '%s'" % name
+        s_rec = self.db.fetch_one(query)
+        if s_rec:
+            # add to the cache
+            self.symbol_cache[name] = s_rec
+            return s_rec
+        else:
+            return False
+
+
+    def get_symbol_record(self, symbol):
+        """
+        Function to lookup, add, and cache symbols info
+        """
+        name = self.db.sanitize_string(symbol)
+
+        # first check the cache
+        if name in self.symbol_cache:
+            return self.symbol_cache[name]
+
+        # not cached, check the database
+        s_rec = self.cache_get_symbol(name)
+        if s_rec:
+            return s_rec
+
+        # not cached, not in the db, add it
+        query  = "INSERT INTO symbol_names (s_record, s_name) VALUES (NULL, '%s')" % name
+        result = self.db.do_query(query)
+        s_rec  = self.cache_get_symbol(name)
+        if s_rec:
+            return s_rec
+
+
     def add_symbol_records(self, tag_id, file_id, record, symbols):
         """
         Function to add symbol records to the database
@@ -561,11 +609,12 @@ class Binary:
         logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tag_id, file_id, record, symbols))
 
         for symbol in symbols:
-            query  = "INSERT INTO symbols (t_record, p_record, f_id, symbols) VALUES ('%s', '%s', '%s', '%s')" % (
+            s_rec = self.get_symbol_record(symbol)
+            query  = "INSERT INTO symbols (t_record, p_record, f_id, s_record) VALUES ('%s', '%s', '%s', '%s')" % (
                 tag_id,
                 record,
                 file_id,
-                self.db.sanitize_string(symbol))
+                s_rec)
             result = self.db.do_query(query)
 
 
