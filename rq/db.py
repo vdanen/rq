@@ -143,6 +143,7 @@ class DB:
 
         except MySQLdb.Error, e:
             logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+            logging.critical('query was: %s' % query)
             sys.exit(1)
 
 
@@ -172,6 +173,7 @@ class DB:
 
         except MySQLdb.Error, e:
             logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+            logging.critical('query was: %s' % query)
             sys.exit(1)
 
 
@@ -202,6 +204,7 @@ class DB:
                     cursor.close()
                 except MySQLdb.Error, e:
                     logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
+                    logging.critical('query was: %s' % query)
                     sys.exit(1)
 
 
