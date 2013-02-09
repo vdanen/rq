@@ -177,7 +177,7 @@ class DB:
             sys.exit(1)
 
 
-    def do_query(self, query):
+    def do_query(self, query, get_update_id = False):
         """
         function DB.do_query(query)
 
@@ -189,6 +189,7 @@ class DB:
         try:
             cursor = self.db.cursor()
             cursor.execute(query)
+            last_id = cursor.lastrowid
             cursor.close()
         except MySQLdb.Error, e:
             # catch the ever-elusive "MySQL error 2006: MySQL server has gone away" and attempt to reconnect
@@ -201,11 +202,15 @@ class DB:
                 try:
                     cursor = self.db.cursor()
                     cursor.execute(query)
+                    last_id = cursor.lastrowid
                     cursor.close()
                 except MySQLdb.Error, e:
                     logging.critical('MySQL error %d: %s' % (e.args[0], e.args[1]))
                     logging.critical('query was: %s' % query)
                     sys.exit(1)
+
+        if get_update_id:
+            return last_id
 
 
     def do_transactions(self, queries):

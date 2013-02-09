@@ -411,10 +411,11 @@ class Binary:
             return u_rec
 
         # not cached, not in the db, add it
-        query  = "INSERT INTO user_names (u_record, f_user) VALUES (NULL, '%s')" % name
-        result = self.db.do_query(query)
-        u_rec  = self.cache_get_user(name)
+        query = "INSERT INTO user_names (u_record, f_user) VALUES (NULL, '%s')" % name
+        u_rec = self.db.do_query(query, True)
         if u_rec:
+            # add to the cache
+            self.user_cache[name] = u_rec
             return u_rec
 
 
@@ -448,10 +449,11 @@ class Binary:
             return g_rec
 
         # not cached, not in the db, add it
-        query  = "INSERT INTO group_names (g_record, f_group) VALUES (NULL, '%s')" % name
-        result = self.db.do_query(query)
-        g_rec  = self.cache_get_group(name)
+        query = "INSERT INTO group_names (g_record, f_group) VALUES (NULL, '%s')" % name
+        g_rec = self.db.do_query(query, True)
         if g_rec:
+            # add to the cache
+            self.group_cache[name] = g_rec
             return g_rec
 
 
@@ -486,9 +488,10 @@ class Binary:
 
         # not cached, not in the db, add it
         query  = "INSERT INTO requires_names (rq_record, rq_name) VALUES (NULL, '%s')" % name
-        result = self.db.do_query(query)
-        rq_rec  = self.cache_get_requires(name)
+        rq_rec = self.db.do_query(query, True)
         if rq_rec:
+            # add to the cache
+            self.requires_cache[name] = rq_rec
             return rq_rec
 
 
@@ -541,9 +544,10 @@ class Binary:
 
         # not cached, not in the db, add it
         query  = "INSERT INTO provides_names (pv_record, pv_name) VALUES (NULL, '%s')" % name
-        result = self.db.do_query(query)
-        pv_rec  = self.cache_get_provides(name)
+        pv_rec = self.db.do_query(query, True)
         if pv_rec:
+            # add to the cache
+            self.provides_cache[name] = pv_rec
             return pv_rec
 
 
@@ -759,10 +763,11 @@ class Binary:
             return s_rec
 
         # not cached, not in the db, add it
-        query  = "INSERT INTO symbol_names (s_record, s_name) VALUES (NULL, '%s')" % name
-        result = self.db.do_query(query)
-        s_rec  = self.cache_get_symbol(name)
+        query = "INSERT INTO symbol_names (s_record, s_name) VALUES (NULL, '%s')" % name
+        s_rec = self.db.do_query(query, True)
         if s_rec:
+            # add to the cache
+            self.symbol_cache[name] = s_rec
             return s_rec
 
 
