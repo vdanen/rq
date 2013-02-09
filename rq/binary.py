@@ -72,6 +72,8 @@ class Binary:
         self.symbol_cache   = {}
         self.provides_cache = {}
         self.requires_cache = {}
+        self.group_cache    = {}
+        self.user_cache     = {}
 
 
     def rpm_add_directory(self, tag, path, updatepath):
@@ -250,7 +252,7 @@ class Binary:
             print 'Searching database records for %s match for %s (%s)' % (match_type, type, like_q)
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) WHERE %s files " % ignorecase
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s files " % ignorecase
         elif type == 'symbols':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, s_name, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) JOIN symbol_names ON (symbol_names.s_record = symbols.s_record) WHERE %s s_name " % ignorecase
         elif type == 'packages':
@@ -379,6 +381,80 @@ class Binary:
                 print 'No matches in database for %s (%s)' % (match_type, like_q)
 
 
+    def cache_get_user(self, name):
+        """
+        Function to look up the u_record and add it to the cache for users
+        """
+        query = "SELECT u_record FROM user_names WHERE f_user = '%s'" % name
+        u_rec = self.db.fetch_one(query)
+        if u_rec:
+            # add to the cache
+            self.user_cache[name] = u_rec
+            return u_rec
+        else:
+            return False
+
+
+    def get_user_record(self, user):
+        """
+        Function to lookup, add, and cache user info
+        """
+        name = self.db.sanitize_string(user)
+
+        # first check the cache
+        if name in self.user_cache:
+            return self.user_cache[name]
+
+        # not cached, check the database
+        u_rec = self.cache_get_user(name)
+        if u_rec:
+            return u_rec
+
+        # not cached, not in the db, add it
+        query  = "INSERT INTO user_names (u_record, f_user) VALUES (NULL, '%s')" % name
+        result = self.db.do_query(query)
+        u_rec  = self.cache_get_user(name)
+        if u_rec:
+            return u_rec
+
+
+    def cache_get_group(self, name):
+        """
+        Function to look up the g_record and add it to the cache for groups
+        """
+        query = "SELECT g_record FROM group_names WHERE f_group = '%s'" % name
+        g_rec = self.db.fetch_one(query)
+        if g_rec:
+            # add to the cache
+            self.group_cache[name] = g_rec
+            return g_rec
+        else:
+            return False
+
+
+    def get_group_record(self, group):
+        """
+        Function to lookup, add, and cache group info
+        """
+        name = self.db.sanitize_string(group)
+
+        # first check the cache
+        if name in self.group_cache:
+            return self.group_cache[name]
+
+        # not cached, check the database
+        g_rec = self.cache_get_group(name)
+        if g_rec:
+            return g_rec
+
+        # not cached, not in the db, add it
+        query  = "INSERT INTO group_names (g_record, f_group) VALUES (NULL, '%s')" % name
+        result = self.db.do_query(query)
+        g_rec  = self.cache_get_group(name)
+        if g_rec:
+            return g_rec
+
+
     def cache_get_requires(self, name):
         """
         Function to look up the rq_record and add it to the cache for requires
@@ -499,12 +575,12 @@ class Binary:
             self.rcommon.show_progress()
             if self.options.verbose:
                 print 'File: %s' % file_list[x]['file']
-            query  = "INSERT INTO files (t_record, p_record, files, f_user, f_group, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
+            query  = "INSERT INTO files (t_record, p_record, u_record, g_record, files, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
                 tag_id,
                 record,
+                self.get_user_record(file_list[x]['user']),
+                self.get_group_record(file_list[x]['group']),
                 self.db.sanitize_string(file_list[x]['file'].strip()),
-                self.db.sanitize_string(file_list[x]['user']),
-                self.db.sanitize_string(file_list[x]['group']),
                 file_list[x]['is_suid'],
                 file_list[x]['is_sgid'],
                 file_list[x]['perms'])

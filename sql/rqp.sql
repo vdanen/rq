@@ -24,9 +24,9 @@ CREATE TABLE `files` (
   `f_id` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `t_record` INT NOT NULL,
+  `u_record` INT NOT NULL,
+  `g_record` INT NOT NULL,
   `files` text NOT NULL,
-  `f_user` varchar(16) NOT NULL,
-  `f_group` varchar(16) NOT NULL,
   `f_is_suid` tinyint DEFAULT 0,
   `f_is_sgid` tinyint DEFAULT 0,
   `f_perms` varchar(4) NOT NULL,
@@ -34,6 +34,34 @@ CREATE TABLE `files` (
   KEY `rec` USING BTREE (`p_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1 ;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_names`
+--
+
+DROP TABLE IF EXISTS `user_names`;
+CREATE TABLE IF NOT EXISTS `user_names` (
+  `u_record` INT NOT NULL auto_increment,
+  `f_user` varchar(16) NOT NULL,
+  PRIMARY KEY (`u_record`),
+  KEY `rec` USING BTREE (`u_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_names`
+--
+
+DROP TABLE IF EXISTS `group_names`;
+CREATE TABLE IF NOT EXISTS `group_names` (
+  `g_record` INT NOT NULL auto_increment,
+  `f_group` varchar(16) NOT NULL,
+  PRIMARY KEY (`g_record`),
+  KEY `rec` USING BTREE (`g_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
