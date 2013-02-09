@@ -688,10 +688,11 @@ class Source:
             return n_rec
 
         # not cached, not in the db, add it
-        query  = "INSERT INTO breq_name (n_record, b_name) VALUES (NULL, '%s')" % name
-        result = self.db.do_query(query)
-        n_rec  = self.cache_get_buildreq(name)
+        query = "INSERT INTO breq_name (n_record, b_name) VALUES (NULL, '%s')" % name
+        n_rec = self.db.do_query(query, True)
         if n_rec:
+            # add to the cache
+            self.breq_cache[name] = n_rec
             return n_rec
 
 
