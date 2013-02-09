@@ -69,10 +69,25 @@ CREATE TABLE IF NOT EXISTS `provides` (
   `p_id` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `t_record` INT NOT NULL,
-  `provides` text NOT NULL,
+  `pv_record` INT NOT NULL,
   PRIMARY KEY  (`p_id`),
   KEY `rec` USING BTREE (`p_record`),
-  KEY `trec` USING BTREE (`t_record`)
+  KEY `trec` USING BTREE (`t_record`),
+  KEY `pvrec` USING BTREE (`pv_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `provides_names`
+--
+
+DROP TABLE IF EXISTS `provides_names`;
+CREATE TABLE IF NOT EXISTS `provides_names` (
+  `pv_record` INT NOT NULL auto_increment,
+  `pv_name` text NOT NULL,
+  PRIMARY KEY (`pv_record`),
+  KEY `rec` USING BTREE (`pv_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -86,10 +101,25 @@ CREATE TABLE IF NOT EXISTS `requires` (
   `r_id` INT NOT NULL auto_increment,
   `p_record` INT NOT NULL,
   `t_record` INT NOT NULL,
-  `requires` text NOT NULL,
+  `rq_record` INT NOT NULL,
   PRIMARY KEY  (`r_id`),
   KEY `rec` USING BTREE (`p_record`),
-  KEY `trec` USING BTREE (`t_record`)
+  KEY `trec` USING BTREE (`t_record`),
+  KEY `rqrec` USING BTREE (`rq_record`)
+) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `requires_names`
+--
+
+DROP TABLE IF EXISTS `requires_names`;
+CREATE TABLE IF NOT EXISTS `requires_names` (
+  `rq_record` INT NOT NULL auto_increment,
+  `rq_name` text NOT NULL,
+  PRIMARY KEY (`rq_record`),
+  KEY `rec` USING BTREE (`rq_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -114,7 +144,7 @@ CREATE TABLE IF NOT EXISTS `symbols` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `symbol_name`
+-- Table structure for table `symbol_names`
 --
 
 DROP TABLE IF EXISTS `symbol_names`;
@@ -178,4 +208,3 @@ CREATE TABLE IF NOT EXISTS `alreadyseen` (
   PRIMARY KEY  (`a_record`),
   KEY `trec` USING BTREE (`t_record`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
-

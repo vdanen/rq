@@ -69,7 +69,9 @@ class Binary:
                                  'unlink', 'Version', 'version_etc_copyright', 'waitpid', 'write', '__xstat']
 
         # caches
-        self.symbol_cache = {}
+        self.symbol_cache   = {}
+        self.provides_cache = {}
+        self.requires_cache = {}
 
 
     def rpm_add_directory(self, tag, path, updatepath):
@@ -253,10 +255,10 @@ class Binary:
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, s_name, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) JOIN symbol_names ON (symbol_names.s_record = symbols.s_record) WHERE %s s_name " % ignorecase
         elif type == 'packages':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm FROM packages WHERE %s p_package " % ignorecase
-        else:
-            # query on type: provides, requires
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, %s FROM %s LEFT JOIN packages ON (packages.p_record = %s.p_record) WHERE %s %s " % (
-                type, type, type, ignorecase, type)
+        elif type == 'provides':
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, pv_name FROM provides LEFT JOIN packages ON (packages.p_record = provides.p_record) JOIN provides_names ON (provides_names.pv_record = provides.pv_record) WHERE %s pv_name " % ignorecase
+        elif type == 'requires':
+            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, rq_name FROM requires LEFT JOIN packages ON (packages.p_record = requires.p_record) JOIN requires_names ON (requires_names.rq_record = requires.rq_record) WHERE %s rq_name " % ignorecase
 
         if self.options.regexp:
             query = query + "RLIKE '" + self.db.sanitize_string(like_q) + "'"
@@ -268,8 +270,12 @@ class Binary:
 
         if type == 'packages':
             query  = query + " ORDER BY p_tag, p_package"
-        if type == 'symbols':
+        elif type == 'symbols':
             query = query + " ORDER BY s_name"
+        elif type == 'provides':
+            query = query + " ORDER BY pv_name"
+        elif type == 'requires':
+            query = query + " ORDER BY rq_name"
         else:
             query  = query + " ORDER BY p_tag, p_package, " + type
 
@@ -297,9 +303,15 @@ class Binary:
                 fromdb_date = row['p_date']
                 fromdb_srpm = row['p_srpm']
 
-                if not type == 'packages' and not type == 'symbols':
+                if type == 'provides':
+                    fromdb_type = row['pv_name']
+
+                if type == 'requires':
+                    fromdb_type = row['rq_name']
+
+                if type == 'files':
                     # only provides, requires, files
-                    fromdb_type = row[type]
+                    fromdb_type = row['files']
 
                 if type == 'files':
                     fromdb_user    = row['f_user']
@@ -367,6 +379,43 @@ class Binary:
                 print 'No matches in database for %s (%s)' % (match_type, like_q)
 
 
+    def cache_get_requires(self, name):
+        """
+        Function to look up the rq_record and add it to the cache for requires
+        """
+        query = "SELECT rq_record FROM requires_names WHERE rq_name = '%s'" % name
+        rq_rec = self.db.fetch_one(query)
+        if rq_rec:
+            # add to the cache
+            self.requires_cache[name] = rq_rec
+            return rq_rec
+        else:
+            return False
+
+
+    def get_requires_record(self, requires):
+        """
+        Function to lookup, add, and cache requires info
+        """
+        name = self.db.sanitize_string(requires)
+
+        # first check the cache
+        if name in self.requires_cache:
+            return self.requires_cache[name]
+
+        # not cached, check the database
+        rq_rec = self.cache_get_requires(name)
+        if rq_rec:
+            return rq_rec
+
+        # not cached, not in the db, add it
+        query  = "INSERT INTO requires_names (rq_record, rq_name) VALUES (NULL, '%s')" % name
+        result = self.db.do_query(query)
+        rq_rec  = self.cache_get_requires(name)
+        if rq_rec:
+            return rq_rec
+
+
     def add_requires(self, tag_id, record, file):
         """
         Function to add requires to the database
@@ -380,8 +429,46 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Dependency: %s' % dep
-                query  = "INSERT INTO requires (t_record, p_record, requires) VALUES ('%s', '%s', '%s')" % (tag_id, record, self.db.sanitize_string(dep.strip()))
+                rq_rec = self.get_requires_record(dep.strip())
+                query  = "INSERT INTO requires (t_record, p_record, rq_record) VALUES ('%s', '%s', '%s')" % (tag_id, record, rq_rec)
                 result = self.db.do_query(query)
+
+
+    def cache_get_provides(self, name):
+        """
+        Function to look up the pv_record and add it to the cache for provides
+        """
+        query = "SELECT pv_record FROM provides_names WHERE pv_name = '%s'" % name
+        pv_rec = self.db.fetch_one(query)
+        if pv_rec:
+            # add to the cache
+            self.provides_cache[name] = pv_rec
+            return pv_rec
+        else:
+            return False
+
+
+    def get_provides_record(self, provides):
+        """
+        Function to lookup, add, and cache provides info
+        """
+        name = self.db.sanitize_string(provides)
+
+        # first check the cache
+        if name in self.provides_cache:
+            return self.provides_cache[name]
+
+        # not cached, check the database
+        pv_rec = self.cache_get_provides(name)
+        if pv_rec:
+            return pv_rec
+
+        # not cached, not in the db, add it
+        query  = "INSERT INTO provides_names (pv_record, pv_name) VALUES (NULL, '%s')" % name
+        result = self.db.do_query(query)
+        pv_rec  = self.cache_get_provides(name)
+        if pv_rec:
+            return pv_rec
 
 
     def add_provides(self, tag_id, record, file):
@@ -397,7 +484,8 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Provides: %s' % prov
-                query  = "INSERT INTO provides (t_record, p_record, provides) VALUES ('%s', '%s', '%s')" % (tag_id, record, self.db.sanitize_string(prov.strip()))
+                pv_rec = self.get_provides_record(prov.strip())
+                query  = "INSERT INTO provides (t_record, p_record, pv_record) VALUES ('%s', '%s', '%s')" % (tag_id, record, pv_rec)
                 result = self.db.do_query(query)
 
 
