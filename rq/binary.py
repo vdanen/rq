@@ -827,7 +827,7 @@ class Binary:
         elif type == 'sgid':
             db_col = 'f_is_sgid'
 
-        query   = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON (files.p_record = packages.p_record) WHERE %s = 1 AND files.t_record = %s ORDER BY p_package ASC" % (db_col, tag_id)
+        query   = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s ORDER BY p_package ASC" % (db_col, tag_id)
         results = self.db.fetch_all(query)
         if results:
             for xrow in results:
