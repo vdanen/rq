@@ -243,6 +243,7 @@ class Source:
 
             ltag = ''
             lsrc = ''
+            last = ''
             for row in result:
                 utype = ''
                 # for readability
@@ -290,11 +291,14 @@ class Source:
                             print '%-16s%-30s' % ("Source Path:", fromdb_sfile)
                         else:
                             if type == 'ctags':
-                                sys.stdout.write('%s: (%s) %s\n\tFound matching %s in %s:%s: %s\n' % (srpm, stype, fromdb_file, fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
+                                if fromdb_file != last:
+                                    sys.stdout.write('%s: (%s) %s\n' % (srpm, stype, fromdb_file))
+                                sys.stdout.write('\tFound matching %s in %s:%s: %s\n' % (fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
                             elif type == 'buildreqs':
                                 sys.stdout.write('%s: %s\n' % (srpm, fromdb_breq))
                             else:
                                 sys.stdout.write('%s%s: (%s) %s: %s\n' % (utype, srpm, stype, fromdb_file, fromdb_sfile))
+                last = fromdb_file
 
         else:
             if self.options.tag:
