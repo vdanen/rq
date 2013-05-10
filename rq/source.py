@@ -278,8 +278,7 @@ class Source:
 
                     if self.options.quiet:
                         lsrc = srpm
-                        sys.stdout.write('%s\n' % srpm)
-                        sys.stdout.flush()
+                        print srpm
                     else:
                         if fromdb_type == 'P':
                             stype = 'patch'
@@ -292,13 +291,14 @@ class Source:
                         else:
                             if type == 'ctags':
                                 if fromdb_file != last:
-                                    sys.stdout.write('%s: (%s) %s\n' % (srpm, stype, fromdb_file))
-                                sys.stdout.write('\tFound matching %s in %s:%s: %s\n' % (fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra))
+                                    print '%s: (%s) %s' % (srpm, stype, fromdb_file)
+                                print '\tFound matching %s in %s:%s: %s' % (fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra)
                             elif type == 'buildreqs':
-                                sys.stdout.write('%s: %s\n' % (srpm, fromdb_breq))
+                                print '%s: %s' % (srpm, fromdb_breq)
                             else:
-                                sys.stdout.write('%s%s: (%s) %s: %s\n' % (utype, srpm, stype, fromdb_file, fromdb_sfile))
-                last = fromdb_file
+                                print '%s%s: (%s) %s: %s' % (utype, srpm, stype, fromdb_file, fromdb_sfile)
+                if type == 'ctags':
+                    last = fromdb_file
 
         else:
             if self.options.tag:

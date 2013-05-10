@@ -229,7 +229,7 @@ class Tag:
         u_path = self.db.fetch_one(query)
 
         if not tag_id:
-            sys.stdout.write('No Tag entry found for tag: %s\n' % tag)
+            print 'No Tag entry found for tag: %s\n' % tag
 
         if u_path:
             logging.info('Using associated updates path: %s' % u_path)
