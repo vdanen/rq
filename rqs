@@ -34,7 +34,7 @@ import rq.source
 
 
 if __name__ == '__main__':
-    sys.stdout.write("%s %s\n\n" % (RQ_PROG, RQ_VERSION))
+    print '%s %s\n' % (RQ_PROG, RQ_VERSION)
     # TODO: add options to search files by ownership and sgid/suid status
 
     p = optparse.OptionParser(description="RPM package query tool",
@@ -250,7 +250,7 @@ if __name__ == '__main__':
         createpath = os.path.abspath(options.createpath)
         logging.debug('Dir:\t%s' % createpath)
         if not options.tag:
-            sys.stdout.write('The --createpath option requires a tag entry!\n')
+            print 'The --createpath option requires a tag entry!'
             sys.exit(1)
 
         if not options.updatepath:
@@ -259,7 +259,7 @@ if __name__ == '__main__':
 
         updatepath = os.path.abspath(options.updatepath)
 
-        sys.stdout.write('Searching for rpms to import...\n\n')
+        print 'Searching for rpms to import...\n'
         rqs.rpm_add_directory(options.tag, createpath, updatepath)
         sys.exit(0)
 
