@@ -556,6 +556,9 @@ class Source:
                         #print '%s\n' % query
                 os.chdir(cpio_dir)
 
+                # make sure this is empty or it will eat lots of memory
+                output = None
+
                 logging.debug('Removing temporary directory: %s...' % tmpdir)
                 try:
                     shutil.rmtree(tmpdir)
@@ -661,6 +664,9 @@ class Source:
             result = self.db.do_query(query)
             #print '%s\n' % query
 
+        # make sure its empty
+        del r[:]
+
 
     def cache_get_buildreq(self, name):
         """
@@ -743,6 +749,9 @@ class Source:
                 print 'File %s is not a source rpm!\n' % file
             else:
                 self.record_add(tag_id, file)
+
+        # make sure its empty
+        del file_list[:]
 
 
     def record_add(self, tag_id, file, update=0):
