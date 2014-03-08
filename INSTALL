@@ -22,8 +22,12 @@ specified databases, and give the user access to them:
   $ mysql -u rq -p rqs < sql/rqs.sql
   $ mysql -u rq -p rqp < sql/rqp.sql
 
-4) Import your first set of RPMS and/or SRPMS:
+4) Copy ctags-dotfile to ~/.ctags (especially important for the account you
+will be importing files with usually, and especially if you have rpms with
+crazy javascript files)
+
+5) Import your first set of RPMS and/or SRPMS:
 
   $ ./rqp -C /srv/mirror/Fedora/releases/14/Everything/i386/os/Packages -U /srv/mirror/Fedora/updates/14/i386 -t f14_i386 -P
 
-5) Enjoy!
+6) Enjoy!
