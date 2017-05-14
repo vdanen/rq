@@ -4,15 +4,12 @@ from playhouse.db_url import connect
 
 
 database    = connect(DATABASE_URI)
-rpm_tables  = [RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_ProvidesIndex,
-               RPM_ProvidesName, RPM_RequiresIndex, RPM_RequiresName,
-               RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen]
-srpm_tables = []
-db_tables   = sorted(rpm_tables + srpm_tables)
 
 def create_tables():
     database.connect()
-    database.create_tables(db_tables, True) # only create if it doesn't already exist
+    database.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_ProvidesIndex,
+               RPM_ProvidesName, RPM_RequiresIndex, RPM_RequiresName,
+               RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen], True) # only create if it doesn't already exist
 
 
 class BaseModel(Model):

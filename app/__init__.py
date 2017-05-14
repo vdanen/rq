@@ -12,7 +12,6 @@ app.jinja_env.trim_blocks = True
 app.jinja_env.lstrip_blocks = True
 
 DATABASE_URI = app.config['DATABASE']
-GCAL = app.config['GCAL']
 DATADIR = app.config['DATADIR']
 
 @app.errorhandler(404)
@@ -27,7 +26,7 @@ def after_request(response):
 
 
 from app.models import database
-from app import views
+#from app import views
 
 @app.before_request
 def before_request():

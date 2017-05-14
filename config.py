@@ -8,7 +8,7 @@ BASEDIR = os.path.abspath(os.path.dirname(__file__))
 if os.path.isfile(BASEDIR + '/local.cfg'):
     os.environ['LOCALCONFIG'] = BASEDIR + '/local.cfg'
 
-HOMEDIR = '/home/rq'
+HOMEDIR = '/srv/www/rq'
 DATADIR = '%s/flask/data' % HOMEDIR
 
 # read the ~/.my.cnf to get our password
