@@ -20,9 +20,9 @@
   - name: Install development tools
     yum: name=gcc,gcc-c++
   - name: Install development packages
-    yum: name=mariadb-devel,postgresql-devel,freetype-devel,libpng-devel,libffi-devel state=latest
+    yum: name=python-devel,mariadb-devel,postgresql-devel,freetype-devel,libpng-devel,libffi-devel state=latest
   - name: Install python modules
-    yum: name=python34-virtualenv,python34-pip,python34-requests,python34-simplejson state=latest
+    yum: name=python,python-pip,MySQL-python state=latest
 
   - name: State firewalld
     service: name=firewalld state=started
@@ -70,10 +70,14 @@
   - name: Create rq/.my.cnf
     template: src={{ playbook_dir }}/my.cnf.j2 dest={{ rq_home }}/.my.cnf owner=rq group=rq mode=0600
 
+  - name: Install python virtualenv
+    pip: name=virtualenv executable=pip
   - name: Upgrade pip 
     pip: virtualenv={{ app_dir }}/flask name=pip version=9.0.1 chdir={{ app_dir }} virtualenv_site_packages=yes
   - name: Setup flask virtual environment
     pip: virtualenv={{ app_dir }}/flask requirements=requirements.txt chdir={{ app_dir }} virtualenv_site_packages=yes
+  - name: Install mysql-python in virtual environment
+    pip: virtualenv={{ app_dir }}/flask name=mysql-python chdir={{ app_dir }} virtualenv_site_packages=yes
 
   - name: Copy rq service file
     copy: src={{ app_dir }}/config/rq.service dest=/etc/systemd/system/rq.service remote_src=True
