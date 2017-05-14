@@ -21,8 +21,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
-import os, sys, re, commands, logging, tempfile, shutil, datetime
+import os
+import sys
+import re
+import commands
+import logging
+import tempfile
+import shutil
+import datetime
 from glob import glob
+from app.models import RPM_Tag, RPM_Package
 import rq.db
 import rq.basics
 
@@ -31,7 +39,7 @@ class Binary:
     Class to handle working with source files
     """
 
-    def __init__(self, db, config, options, rtag, rcommon):
+    def __init__(self, database, config, options, rtag, rcommon):
         self.db      = db
         self.config  = config
         self.options = options
@@ -170,18 +178,9 @@ class Binary:
         arch    = tlist[4].strip()
         srpm    = self.re_srpmname.sub(r'\1', tlist[5].strip())
 
-        query = "SELECT tag FROM tags WHERE t_record = '%s' LIMIT 1" % tag_id
-        tag   = self.db.fetch_one(query)
+        tag = RPM_Tag.get_tag(tag_id)
 
-        query = "SELECT t_record, p_package, p_version, p_release, p_arch FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (
-            tag_id,
-            self.db.sanitize_string(package),
-            self.db.sanitize_string(version),
-            self.db.sanitize_string(release),
-            self.db.sanitize_string(arch))
-        result = self.db.fetch_all(query)
-
-        if result:
+        if RPM_Package.in_db(tag_id, package, version, release, arch):
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
             return(0)
 

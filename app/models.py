@@ -61,6 +61,28 @@ class RPM_Package(BaseModel):
     fullname = TextField(null=False)  # p_fullname
     update   = IntegerField(default=0)  # p_update
 
+    @classmethod
+    def in_db(cls, tag_id, package, version, release, arch):
+        """
+        Returns whether or not this package exists in the database
+        :param tag_id: integer of tag id to search in
+        :param package: package name
+        :param version: package version
+        :param release: package release
+        :param arch: package arch
+        :return: boolean
+        """
+        if RPM_Package.select().where(
+            (RPM_Package.tag_id == tag_id) &
+            (RPM_Package.package == package) &
+            (RPM_Package.version == version) &
+            (RPM_Package.release == release) &
+            (RPM_Package.arch == arch)
+            ):
+            return True
+        return False
+
+
     def __repr__(self):
         return '<RPM Package {self.package}>'.format(self=self)
 
@@ -125,6 +147,16 @@ class RPM_Tag(BaseModel):  # tags
     tdate       = CharField(null=False)
     update_path = CharField(null=False)
     update_date = CharField(null=False)
+
+    @classmethod
+    def get_tag(cls, id):
+        """
+        Returns the tag name when provided the tag id
+        :param id: integer of tag id to look up
+        :return: string
+        """
+        t = RPM_Tag.get(RPM_Tag.id == id)
+        return t.tag
 
     def __repr__(self):
         return '<RPM Tag {self.tag}>'.format(self=self)
