@@ -14,9 +14,9 @@ Vagrant.configure(2) do |config|
   # `vagrant box outdated`. This is not recommended.
   # config.vm.box_check_update = false
 
-  # forward port 5000 on the localhost to port 5000 in the guest
-  config.vm.network "forwarded_port", guest: 80, host: 5000
-  config.vm.network "forwarded_port", guest: 3306, host: 3306
+  # forward port 5020 on the localhost to port 80 in the guest
+  config.vm.network "forwarded_port", guest: 80, host: 5020
+  #config.vm.network "forwarded_port", guest: 3306, host: 3306
 
   # Share an additional folder to the guest VM. The first argument is
   # the path on the host to the actual folder. The second argument is
