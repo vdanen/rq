@@ -419,12 +419,11 @@ class Binary:
         """
         Function to look up the g_record and add it to the cache for groups
         """
-        query = "SELECT g_record FROM group_names WHERE f_group = '%s'" % name
-        g_rec = self.db.fetch_one(query)
-        if g_rec:
+        gid = RPM_Group.get_groupid(name)
+        if gid:
             # add to the cache
-            self.group_cache[name] = g_rec
-            return g_rec
+            self.group_cache[name] = gid
+            return gid
         else:
             return False
 

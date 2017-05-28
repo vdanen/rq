@@ -54,6 +54,16 @@ class RPM_User(BaseModel):
 class RPM_Group(BaseModel):
     group = CharField(null=False)  # f_group
 
+    @classmethod
+    def get_groupid(cls, name):
+        """
+        Returns the group id for the provided group name
+        :param name: the name to lookup
+        :return: int
+        """
+        group = RPM_Group.get(RPM_Group.group == name)
+        return group.id
+
     def __repr__(self):
         return '<RPM Group {self.group}>'.format(self=self)
 
