@@ -380,8 +380,7 @@ class Binary:
         """
         Function to look up the u_record and add it to the cache for users
         """
-        query = "SELECT u_record FROM user_names WHERE f_user = '%s'" % name
-        u_rec = self.db.fetch_one(query)
+        u_rec = RPM_User.get_userid(name)
         if u_rec:
             # add to the cache
             self.user_cache[name] = u_rec

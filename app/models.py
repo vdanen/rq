@@ -36,6 +36,16 @@ class RPM_File(BaseModel):
 class RPM_User(BaseModel):
     user = CharField(null=False)  # f_user
 
+    @classmethod
+    def get_userid(cls, name):
+        """
+        Returns the user id for the provided user name
+        :param name: the name to lookup
+        :return: int
+        """
+        user = RPM_User.get(RPM_User.user == name)
+        return user.id
+
     def __repr__(self):
         return '<RPM User {self.user}>'.format(self=self)
 
