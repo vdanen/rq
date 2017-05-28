@@ -187,27 +187,23 @@ class Binary:
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch, p_srpm, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
-            tag_id,
-            self.db.sanitize_string(tag),
-            self.db.sanitize_string(package),
-            self.db.sanitize_string(version),
-            self.db.sanitize_string(release),
-            self.db.sanitize_string(pdate),
-            self.db.sanitize_string(arch),
-            self.db.sanitize_string(srpm),
-            self.db.sanitize_string(fname),
-            update)
-
-        result = self.db.do_query(query)
         self.rcommon.show_progress(fname)
-
-        query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, self.db.sanitize_string(package))
-        p_record = self.db.fetch_one(query)
-        if p_record:
-            return(p_record)
-        else:
-            print 'Adding file %s failed!\n' % file
+        try:
+            p = RPM_Package.Create(
+                tag_id   = tag_id,
+                tag      = tag,
+                package  = package,
+                version  = version,
+                release  = release,
+                date     = pdate,
+                arch     = arch,
+                srpm     = srpm,
+                fullname = fname,
+                update   = update
+            )
+            return p.id
+        except Exception, e:
+            logging.error('Adding file %s failed!\n%s', file, e)
             return(0)
 
 
