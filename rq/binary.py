@@ -380,11 +380,11 @@ class Binary:
         """
         Function to look up the u_record and add it to the cache for users
         """
-        u_rec = RPM_User.get_userid(name)
-        if u_rec:
+        uid = RPM_User.get_userid(name)
+        if uid:
             # add to the cache
-            self.user_cache[name] = u_rec
-            return u_rec
+            self.user_cache[name] = uid
+            return uid
         else:
             return False
 
@@ -400,9 +400,9 @@ class Binary:
             return self.user_cache[name]
 
         # not cached, check the database
-        u_rec = self.cache_get_user(name)
-        if u_rec:
-            return u_rec
+        uid = self.cache_get_user(name)
+        if uid:
+            return uid
 
         # not cached, not in the db, add it
         try:
