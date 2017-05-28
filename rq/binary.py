@@ -405,12 +405,14 @@ class Binary:
             return u_rec
 
         # not cached, not in the db, add it
-        query = "INSERT INTO user_names (u_record, f_user) VALUES (NULL, '%s')" % name
-        u_rec = self.db.do_query(query, True)
-        if u_rec:
+        try:
+            u = RPM_User.create(user = name)
+        except Exception, e:
+            logging.error('Failed to add %s to the database!\n%s', name, e)
+        if u:
             # add to the cache
-            self.user_cache[name] = u_rec
-            return u_rec
+            self.user_cache[name] = u.id
+            return u.id
 
 
     def cache_get_group(self, name):
