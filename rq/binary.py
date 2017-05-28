@@ -31,7 +31,7 @@ import shutil
 import datetime
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, \
-    RPM_ProvidesName, RPM_ProvidesIndex
+    RPM_ProvidesName, RPM_ProvidesIndex, RPM_File
 import rq.db
 import rq.basics
 
@@ -636,8 +636,7 @@ class Binary:
                         symbols = self.get_binary_symbols(file)
                         # need to change ./usr/sbin/foo to /usr/sbin/foo and look up the file record
                         nfile   = file[1:]
-                        query   = "SELECT f_id FROM files WHERE t_record = %s AND p_record = %s AND files = '%s'" % (tag_id, record, nfile)
-                        file_id = self.db.fetch_one(query)
+                        file_id = RPM_File.get_id(nfile, tag_id, record)
                         self.add_flag_records(tag_id, file_id, record, flags)
                         self.add_symbol_records(tag_id, file_id, record, symbols)
             os.chdir(current_dir)

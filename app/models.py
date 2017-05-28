@@ -28,6 +28,18 @@ class RPM_File(BaseModel):
     is_sgid    = IntegerField(default=0)  # f_is_sgid
     perms      = CharField()     # f_perms
 
+    @classmethod
+    def get_id(cls, file, tag_id, package_id):
+        """
+        Returns the file id for the provided file name, package record and tag record
+        :param file: the file to lookup
+        :param tag_id: the tag id to lookup
+        :param package_id: the package id to lookup
+        :return: int
+        """
+        file = RPM_File.get((RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
+        return file.id
+
     def __repr__(self):
         return '<RPM File {self.file}>'.format(self=self)
 
