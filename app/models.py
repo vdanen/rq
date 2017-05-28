@@ -37,7 +37,7 @@ class RPM_User(BaseModel):
     user = CharField(null=False)  # f_user
 
     @classmethod
-    def get_userid(cls, name):
+    def get_id(cls, name):
         """
         Returns the user id for the provided user name
         :param name: the name to lookup
@@ -55,7 +55,7 @@ class RPM_Group(BaseModel):
     group = CharField(null=False)  # f_group
 
     @classmethod
-    def get_groupid(cls, name):
+    def get_id(cls, name):
         """
         Returns the group id for the provided group name
         :param name: the name to lookup
@@ -144,7 +144,7 @@ class RPM_RequiresName(BaseModel):  # requires_names
     name = TextField(null=False)  # rq_name
 
     @classmethod
-    def get_requiresid(cls, name):
+    def get_id(cls, name):
         """
         Returns the requires id for the provided requires name
         :param name: the name to lookup

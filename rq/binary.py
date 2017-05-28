@@ -380,7 +380,7 @@ class Binary:
         """
         Function to look up the u_record and add it to the cache for users
         """
-        uid = RPM_User.get_userid(name)
+        uid = RPM_User.get_id(name)
         if uid:
             # add to the cache
             self.user_cache[name] = uid
@@ -419,7 +419,7 @@ class Binary:
         """
         Function to look up the g_record and add it to the cache for groups
         """
-        gid = RPM_Group.get_groupid(name)
+        gid = RPM_Group.get_id(name)
         if gid:
             # add to the cache
             self.group_cache[name] = gid
@@ -458,7 +458,7 @@ class Binary:
         """
         Function to look up the rq_record and add it to the cache for requires
         """
-        rid = RPM_RequiresName.get_requiresid(name)
+        rid = RPM_RequiresName.get_id(name)
         if rid:
             # add to the cache
             self.requires_cache[name] = rid
