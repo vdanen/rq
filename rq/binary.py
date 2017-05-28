@@ -30,7 +30,8 @@ import tempfile
 import shutil
 import datetime
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, RPM_ProvidesName
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, \
+    RPM_ProvidesName, RPM_ProvidesIndex
 import rq.db
 import rq.basics
 
@@ -569,9 +570,15 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Provides: %s' % prov
-                pv_rec = self.get_provides_record(prov.strip())
-                query  = "INSERT INTO provides (t_record, p_record, pv_record) VALUES ('%s', '%s', '%s')" % (tag_id, record, pv_rec)
-                result = self.db.do_query(query)
+                pid = self.get_provides_record(prov.strip())
+                try:
+                    p = RPM_ProvidesIndex.create(
+                        package_id     = record,
+                        tag_id         = tag_id,
+                        providename_id = pid
+                    )
+                except Exception, e:
+                    logging.error('Failed to add provides %s to the database!\n%s', file, e)
 
 
     def add_records(self, tag_id, record, file_list):
