@@ -30,7 +30,7 @@ import tempfile
 import shutil
 import datetime
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName
 import rq.db
 import rq.basics
 
@@ -458,12 +458,11 @@ class Binary:
         """
         Function to look up the rq_record and add it to the cache for requires
         """
-        query = "SELECT rq_record FROM requires_names WHERE rq_name = '%s'" % name
-        rq_rec = self.db.fetch_one(query)
-        if rq_rec:
+        rid = RPM_RequiresName.get_requiresid(name)
+        if rid:
             # add to the cache
-            self.requires_cache[name] = rq_rec
-            return rq_rec
+            self.requires_cache[name] = rid
+            return rid
         else:
             return False
 

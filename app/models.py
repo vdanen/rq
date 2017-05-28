@@ -133,6 +133,16 @@ class RPM_RequiresIndex(BaseModel):  # requires
 class RPM_RequiresName(BaseModel):  # requires_names
     name = TextField(null=False)  # rq_name
 
+    @classmethod
+    def get_requiresid(cls, name):
+        """
+        Returns the requires id for the provided requires name
+        :param name: the name to lookup
+        :return: int
+        """
+        rid = RPM_RequiresName.get(RPM_RequiresName.name == name)
+        return rid.id
+
     def __repr__(self):
         return '<RPM RequiresName {self.name}>'.format(self=self)
 
