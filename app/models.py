@@ -118,6 +118,16 @@ class RPM_ProvidesIndex(BaseModel):  # provides
 class RPM_ProvidesName(BaseModel):  # provides_names
     name = TextField(null=False)  # pv_name
 
+    @classmethod
+    def get_id(cls, name):
+        """
+        Returns the provides id for the provided provides name
+        :param name: the name to lookup
+        :return: int
+        """
+        pid = RPM_ProvidesName.get(RPM_ProvidesName.name == name)
+        return pid.id
+
     def __repr__(self):
         return '<RPM ProvidesName {self.name}>'.format(self=self)
 

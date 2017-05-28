@@ -521,12 +521,11 @@ class Binary:
         """
         Function to look up the pv_record and add it to the cache for provides
         """
-        query = "SELECT pv_record FROM provides_names WHERE pv_name = '%s'" % name
-        pv_rec = self.db.fetch_one(query)
-        if pv_rec:
+        pid = RPM_ProvidesName.get_id(name)
+        if pid:
             # add to the cache
-            self.provides_cache[name] = pv_rec
-            return pv_rec
+            self.provides_cache[name] = pid
+            return pid
         else:
             return False
 
