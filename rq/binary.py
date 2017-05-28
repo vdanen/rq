@@ -725,16 +725,20 @@ class Binary:
         logging.debug('in Binary.add_flag_records(%s, %s, %s, %s)' % (tag_id, file_id, record, flags))
 
         logging.debug('flags: %s' % flags)
-        query  = "INSERT INTO flags (t_record, p_record, f_id, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', '%s', %d, %d, %d, %d, %d)" % (
-            tag_id,
-            record,
-            file_id,
-            flags['relro'],
-            flags['ssp'],
-            flags['pie'],
-            flags['fortify_source'],
-            flags['nx'])
-        result = self.db.do_query(query)
+
+        try:
+            f = RPM_Flags.create(
+                tag_id     = tag_id,
+                package_id = record,
+                file_id    = file_id,
+                relro      = flags['relro'],
+                ssp        = flags['ssp'],
+                pie        = flags['pie'],
+                fortify    = flags['fortify_source'],
+                nx         = flags['nx']
+            )
+        except Exception, e:
+            logging.error('Adding flags for file_id %d failed!\n%s', file_id, e)
 
 
     def add_symbol_records(self, tag_id, file_id, record, symbols):
