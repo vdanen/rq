@@ -30,7 +30,7 @@ import tempfile
 import shutil
 import datetime
 from glob import glob
-from app.models import RPM_Tag, RPM_Package
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group
 import rq.db
 import rq.basics
 
