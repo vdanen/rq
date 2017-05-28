@@ -30,7 +30,7 @@ import tempfile
 import shutil
 import datetime
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, RPM_ProvidesName
 import rq.db
 import rq.basics
 
@@ -546,12 +546,14 @@ class Binary:
             return pv_rec
 
         # not cached, not in the db, add it
-        query  = "INSERT INTO provides_names (pv_record, pv_name) VALUES (NULL, '%s')" % name
-        pv_rec = self.db.do_query(query, True)
-        if pv_rec:
+        try:
+            p = RPM_ProvidesName(name = name)
+        except Exception, e:
+            logging.error('Failed to add provides %s to the database!\n%s', file, e)
+        if p:
             # add to the cache
-            self.provides_cache[name] = pv_rec
-            return pv_rec
+            self.provides_cache[name] = p.id
+            return p.id
 
 
     def add_provides(self, tag_id, record, file):
