@@ -404,11 +404,11 @@ class Binary:
         if uid:
             return uid
 
-        # not cached, not in the db, add it
+        # not cached, so not in the db, add it
         try:
             u = RPM_User.create(user = name)
         except Exception, e:
-            logging.error('Failed to add %s to the database!\n%s', name, e)
+            logging.error('Failed to add user %s to the database!\n%s', name, e)
         if u:
             # add to the cache
             self.user_cache[name] = u.id
@@ -439,17 +439,19 @@ class Binary:
             return self.group_cache[name]
 
         # not cached, check the database
-        g_rec = self.cache_get_group(name)
-        if g_rec:
-            return g_rec
+        gid = self.cache_get_group(name)
+        if gid:
+            return gid
 
-        # not cached, not in the db, add it
-        query = "INSERT INTO group_names (g_record, f_group) VALUES (NULL, '%s')" % name
-        g_rec = self.db.do_query(query, True)
-        if g_rec:
+        # not cached, so not in the db, add it
+        try:
+            g = RPM_Group.create(group = name)
+        except Exception, e:
+            logging.error('Failed to add group %s to the database!\n%s', name, e)
+        if g:
             # add to the cache
-            self.group_cache[name] = g_rec
-            return g_rec
+            self.group_cache[name] = g.id
+            return g.id
 
 
     def cache_get_requires(self, name):
