@@ -674,7 +674,8 @@ class Binary:
         """
         Function to get binary flags from a file
         """
-        flags = {'relro': 0, 'ssp': 0, 'nx': 0, 'pie': 0, 'fortify_source': 0}
+        # set all bits to their defaults
+        flags = {'relro': 0, 'ssp': 0, 'nx': 1, 'pie': 0, 'fortify_source': 0}
 
         self.rcommon.show_progress()
 
@@ -690,23 +691,14 @@ class Binary:
             else:
                 # partial RELRO
                 flags['relro'] = 2
-        else:
-            # no RELRO
-            flags['relro'] = 0
 
         if re.search('__stack_chk_fail', readelf_s):
             # found
             flags['ssp'] = 1
-        else:
-            # none
-            flags['ssp'] = 0
 
         if re.search('GNU_STACK.*RWE', readelf_l):
             # disabled
             flags['nx'] = 0
-        else:
-            # enabled
-            flags['nx'] = 1
 
         if re.search('Type:( )+EXEC', readelf_h):
             # none
@@ -722,9 +714,6 @@ class Binary:
         if re.search('_chk@GLIBC', readelf_s):
             # found
             flags['fortify_source'] = 1
-        else:
-            # not found
-            flags['fortify_source'] = 0
 
         return flags
 
