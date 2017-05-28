@@ -478,17 +478,19 @@ class Binary:
             return self.requires_cache[name]
 
         # not cached, check the database
-        rq_rec = self.cache_get_requires(name)
-        if rq_rec:
-            return rq_rec
+        rid = self.cache_get_requires(name)
+        if rid:
+            return rid
 
-        # not cached, not in the db, add it
-        query  = "INSERT INTO requires_names (rq_record, rq_name) VALUES (NULL, '%s')" % name
-        rq_rec = self.db.do_query(query, True)
-        if rq_rec:
+        # not cached, so not in the db, add it
+        try:
+            r = RPM_RequiresName.create(name = name)
+        except Exception, e:
+            logging.error('Failed to add requires %s to the database!\n%s', name, e)
+        if r:
             # add to the cache
-            self.requires_cache[name] = rq_rec
-            return rq_rec
+            self.requires_cache[name] = r.id
+            return r.id
 
 
     def add_requires(self, tag_id, record, file):
