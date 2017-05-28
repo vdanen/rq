@@ -30,7 +30,7 @@ import tempfile
 import shutil
 import datetime
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex
 import rq.db
 import rq.basics
 
@@ -506,9 +506,15 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Dependency: %s' % dep
-                rq_rec = self.get_requires_record(dep.strip())
-                query  = "INSERT INTO requires (t_record, p_record, rq_record) VALUES ('%s', '%s', '%s')" % (tag_id, record, rq_rec)
-                result = self.db.do_query(query)
+                rid = self.get_requires_record(dep.strip())
+                try:
+                    r = RPM_RequiresIndex.create(
+                        package_id     = record,
+                        tag_id         = tag_id,
+                        requirename_id = rid
+                    )
+                except Exception, e:
+                    logging.error('Failed to add requires %s to the database!\n%s', file, e)
 
 
     def cache_get_provides(self, name):
