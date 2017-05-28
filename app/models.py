@@ -1,6 +1,7 @@
 from peewee import *
 from app import DATABASE_URI
 from playhouse.db_url import connect
+from collections import namedtuple
 
 
 database    = connect(DATABASE_URI)
@@ -191,6 +192,39 @@ class RPM_Flags(BaseModel):  # flags
     fortify    = IntegerField(default=0)  # f_fortify
     nx         = IntegerField(default=0)  # f_nx
 
+    @classmethod
+    def get_named(cls, id):
+        """
+        Returns described flags rather than their numerical values we return what the values mean
+        :param id: integer of flag id to look up
+        :return: object
+        """
+        f = RPM_Flags.get(RPM_Flags.id == id)
+
+        # these are the default values
+        newflags = namedtuple('newflags', 'relro ssp nx pie fortify')
+        flag = newflags(relro='none', ssp='not found', nx='disabled', pie='none', fortify='not found')
+
+        if f.relro == 1:
+            flag.relro = 'full'
+        elif f.relro == 2:
+            flag.relro = 'partial'
+
+        if f.ssp == 1:
+            flag.ssp = 'found'
+
+        if f.nx == 1:
+            flag.nx = 'enabled'
+
+        if f.pie == 2:
+            flag.pie = 'DSO'
+        elif f.pie == 1:
+            flag.pie = 'enabled'
+
+        if f.fortify == 1:
+            flag.fortify = 'found'
+
+        return flag
 
 # the binary rpm tag model
 class RPM_Tag(BaseModel):  # tags

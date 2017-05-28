@@ -358,17 +358,12 @@ class Binary:
                         flag_result = None
                         if self.options.extrainfo:
                             if type == 'files':
-                                query       = 'SELECT * FROM flags WHERE f_id = %d LIMIT 1' % fromdb_fileid
-                                flag_result = self.db.fetch_all(query)
-                                if flag_result:
-                                    for x in flag_result:
-                                        #fetch_all returns a tuple containing a dict, so...
-                                        flags = self.convert_flags(x)
+                                flags = RPM_Flags.get_named(fromdb_fileid)
                             rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
                             if flag_result:
                                 print '  %-10s%s' % ("Date :", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
-                                print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags['relro'], "SSP:", flags['ssp'], "PIE:", flags['pie'])
-                                print '  %-10s%-10s%-12s%-10s%s' % ("", "FORTIFY:", flags['fortify'], "NX :", flags['nx'])
+                                print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags.relro, "SSP:", flags.ssp, "PIE:", flags.pie)
+                                print '  %-10s%-10s%-12s%-10s%s' % ("", "FORTIFY:", flags.fortify, "NX :", flags.nx)
 
         else:
             if self.options.tag:
@@ -757,45 +752,6 @@ class Binary:
                 )
             except Exception, e:
                 logging.error('Adding symbol for file_id %d failed!\n%s', file_id, e)
-
-
-    def convert_flags(self, flags):
-        """
-        Convert numeric representation of flags (from the database) to human
-        readable form, dropping the prefix (i.e. f_relro becomes relro)
-        """
-        newflags = {}
-
-        if flags['f_relro'] == 1:
-            newflags['relro'] = "full"
-        elif flags['f_relro'] == 2:
-            newflags['relro'] = "partial"
-        else:
-            newflags['relro'] = "none"
-
-        if flags['f_ssp'] == 1:
-            newflags['ssp'] = "found"
-        else:
-            newflags['ssp'] = "not found"
-
-        if flags['f_nx'] == 1:
-            newflags['nx'] = "enabled"
-        else:
-            newflags['nx'] = "disabled"
-
-        if flags['f_pie'] == 2:
-            newflags['pie'] = "DSO"
-        elif flags['f_pie'] == 1:
-            newflags['pie'] = "enabled"
-        else:
-            newflags['pie'] = "none"
-
-        if flags['f_fortify'] == 1:
-            newflags['fortify'] = "found"
-        else:
-            newflags['fortify'] = "not found"
-
-        return(newflags)
 
 
     def list_updates(self, tag):
