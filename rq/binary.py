@@ -190,7 +190,7 @@ class Binary:
 
         self.rcommon.show_progress(fname)
         try:
-            p = RPM_Package.Create(
+            p = RPM_Package.create(
                 tag_id   = tag_id,
                 tag      = tag,
                 package  = package,
@@ -591,16 +591,20 @@ class Binary:
             self.rcommon.show_progress()
             if self.options.verbose:
                 print 'File: %s' % file_list[x]['file']
-            query  = "INSERT INTO files (t_record, p_record, u_record, g_record, files, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
-                tag_id,
-                record,
-                self.get_user_record(file_list[x]['user']),
-                self.get_group_record(file_list[x]['group']),
-                self.db.sanitize_string(file_list[x]['file'].strip()),
-                file_list[x]['is_suid'],
-                file_list[x]['is_sgid'],
-                file_list[x]['perms'])
-            result = self.db.do_query(query)
+
+            try:
+                f = RPM_File.create(
+                    tag_id     = tag_id,
+                    package_id = record,
+                    user_id    = file_list[x]['user'],
+                    group_id   = file_list[x]['group'],
+                    file       = file_list[x]['file'].strip(),
+                    is_suid    = file_list[x]['is_suid'],
+                    is_sgid    = file_list[x]['is_sgid'],
+                    perms      = file_list[x]['perms']
+                )
+            except Exception, e:
+                logging.error('Adding file %s failed!\n%s', file, e)
 
 
     def add_binary_records(self, tag_id, record, rpm):
