@@ -115,6 +115,17 @@ class RPM_Package(BaseModel):
             return True
         return False
 
+    @classmethod
+    def list_updates(cls, tag):
+        """
+        Returns a list of packages for which an update exists
+        :param tag: the named tag
+        :return: list
+        """
+        t = RPM_Tag.get(RPM_Tag.tag == tag)
+        return RPM_Package.select(RPM_Package.fullname).where((RPM_Package.tag_id == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
+
+
 
     def __repr__(self):
         return '<RPM Package {self.package}>'.format(self=self)
@@ -225,6 +236,7 @@ class RPM_Flags(BaseModel):  # flags
             flag.fortify = 'found'
 
         return flag
+
 
 # the binary rpm tag model
 class RPM_Tag(BaseModel):  # tags

@@ -762,14 +762,10 @@ class Binary:
 
         print 'Updated packages in tag %s:\n' % tag
 
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id  = self.db.fetch_one(query)
-
-        query   = "SELECT p_fullname FROM packages WHERE t_record = %s AND p_update = 1 ORDER BY p_fullname ASC" % tag_id
-        results = self.db.fetch_all(query)
+        results = RPM_Package.list_updates(tag)
         if results:
             for xrow in results:
-                print '%s' % xrow['p_fullname']
+                print '%s' % xrow.fullname
         else:
             print 'No results found.'
 
