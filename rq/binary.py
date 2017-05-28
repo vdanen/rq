@@ -31,7 +31,7 @@ import shutil
 import datetime
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, \
-    RPM_ProvidesName, RPM_ProvidesIndex, RPM_File
+    RPM_ProvidesName, RPM_ProvidesIndex, RPM_File, RPM_Flags, RPM_Symbols
 import rq.db
 import rq.basics
 
@@ -748,12 +748,15 @@ class Binary:
         logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tag_id, file_id, record, symbols))
 
         for symbol in symbols:
-            query  = "INSERT INTO symbols (t_record, p_record, f_id, symbols) VALUES ('%s', '%s', '%s', '%s')" % (
-                tag_id,
-                record,
-                file_id,
-                self.db.sanitize_string(symbol))
-            result = self.db.do_query(query)
+            try:
+                s = RPM_Symbols.create(
+                    package_id = record,
+                    tag_id     = tag_id,
+                    file_id    = file_id,
+                    symbols    = symbol
+                )
+            except Exception, e:
+                logging.error('Adding symbol for file_id %d failed!\n%s', file_id, e)
 
 
     def convert_flags(self, flags):
