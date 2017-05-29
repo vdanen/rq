@@ -778,8 +778,7 @@ class Binary:
 
         print 'Searching for %s files in tag %s\n' % (type.upper(), tag)
 
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id  = self.db.fetch_one(query)
+        tag_id = RPM_Tag.get_id(tag)
 
         if not tag_id:
             print 'Invalid tag: %s' % tag

@@ -256,6 +256,16 @@ class RPM_Tag(BaseModel):  # tags
         t = RPM_Tag.get(RPM_Tag.id == id)
         return t.tag
 
+    @classmethod
+    def get_id(cls, name):
+        """
+        Returns the tag id for the provided tag name
+        :param name: the name to lookup
+        :return: int
+        """
+        tid = RPM_Tag.get(RPM_Tag.tag == name)
+        return tid.id
+
     def __repr__(self):
         return '<RPM Tag {self.tag}>'.format(self=self)
 
