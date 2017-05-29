@@ -3,7 +3,6 @@ from app import DATABASE_URI
 from playhouse.db_url import connect
 from collections import namedtuple
 
-
 database    = connect(DATABASE_URI)
 
 def create_tables():
@@ -40,6 +39,32 @@ class RPM_File(BaseModel):
         """
         file = RPM_File.get((RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
         return file.id
+
+    @classmethod
+    def get_sxid(cls, tag_id, db_col):
+        """
+        Function to return a list of files that are either suid or sgid, per tag
+        :param tag_id: the tag id to reference
+        :param db_col: the database column to use (either is_suid or is_sgid)
+        :return: list
+        """
+        if db_col == 'is_suid':
+            query = (RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
+                RPM_Package).where((RPM_File.is_suid == 1) & (RPM_File.tag_id == tag_id)).order_by(
+                RPM_Package.package.asc()))
+        elif db_col == 'is_sgid':
+            query = (RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
+                RPM_Package).where((RPM_File.is_sgid == 1) & (RPM_File.tag_id == tag_id)).order_by(
+                RPM_Package.package.asc()))
+
+        return query
+        #TODO return RPM_File.select().where((Entry.published == True) & (Entry.type == 'page') & (Entry.timestamp <= now)).order_by(Entry.timestamp.desc()).limit(numdisplay)
+    #query = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON \
+    # (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) \
+    # LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s \
+    # ORDER BY p_package ASC" % (db_col, tag_id)
+    #results = self.db.fetch_all(query)
+
 
     def __repr__(self):
         return '<RPM File {self.file}>'.format(self=self)

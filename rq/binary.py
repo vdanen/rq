@@ -785,14 +785,20 @@ class Binary:
             sys.exit(1)
 
         if type == 'suid':
-            db_col = 'f_is_suid'
+            db_col = 'is_suid'
         elif type == 'sgid':
-            db_col = 'f_is_sgid'
+            db_col = 'is_sgid'
+        else:
+            print 'Invalid value, looking for suid or sgid, received: %s' % type
+            sys.exit(1)
 
-        query   = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s ORDER BY p_package ASC" % (db_col, tag_id)
-        results = self.db.fetch_all(query)
+        results = RPM_File.get_sxid(tag_id, db_col)
         if results:
             for xrow in results:
-                print '%s: %s [%s:%s mode %s]' % (xrow['p_package'], xrow['files'], xrow['f_user'], xrow['f_group'], xrow['f_perms'])
+                print '%s: %s [%s:%s mode %s]' % (xrow.rpm_package.package,
+                                                  xrow.rpm_file.file,
+                                                  xrow.rpm_user.user,
+                                                  xrow.rpm_group.group,
+                                                  xrow.rpm_file.perms)
         else:
             print 'No results found.'
