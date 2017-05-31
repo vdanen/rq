@@ -17,59 +17,6 @@ class BaseModel(Model):
         database = database
 
 
-# the binary rpm files model
-class RPM_File(BaseModel):
-    package_id = IntegerField()  # p_record
-    tag_id     = IntegerField()  # t_record
-    user_id    = IntegerField()  # u_record
-    group_id   = IntegerField()  # g_record
-    file       = TextField()     # files
-    is_suid    = IntegerField(default=0)  # f_is_suid
-    is_sgid    = IntegerField(default=0)  # f_is_sgid
-    perms      = CharField()     # f_perms
-
-    @classmethod
-    def get_id(cls, file, tag_id, package_id):
-        """
-        Returns the file id for the provided file name, package record and tag record
-        :param file: the file to lookup
-        :param tag_id: the tag id to lookup
-        :param package_id: the package id to lookup
-        :return: int
-        """
-        file = RPM_File.get((RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
-        return file.id
-
-    @classmethod
-    def get_sxid(cls, tag_id, db_col):
-        """
-        Function to return a list of files that are either suid or sgid, per tag
-        :param tag_id: the tag id to reference
-        :param db_col: the database column to use (either is_suid or is_sgid)
-        :return: list
-        """
-        if db_col == 'is_suid':
-            query = (RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
-                RPM_Package).where((RPM_File.is_suid == 1) & (RPM_File.tag_id == tag_id)).order_by(
-                RPM_Package.package.asc()))
-        elif db_col == 'is_sgid':
-            query = (RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
-                RPM_Package).where((RPM_File.is_sgid == 1) & (RPM_File.tag_id == tag_id)).order_by(
-                RPM_Package.package.asc()))
-
-        return query
-        #TODO return RPM_File.select().where((Entry.published == True) & (Entry.type == 'page') & (Entry.timestamp <= now)).order_by(Entry.timestamp.desc()).limit(numdisplay)
-    #query = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON \
-    # (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) \
-    # LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s \
-    # ORDER BY p_package ASC" % (db_col, tag_id)
-    #results = self.db.fetch_all(query)
-
-
-    def __repr__(self):
-        return '<RPM File {self.file}>'.format(self=self)
-
-
 # the binary rpm user model
 class RPM_User(BaseModel):
     user = CharField(null=False)  # f_user
@@ -106,18 +53,51 @@ class RPM_Group(BaseModel):
         return '<RPM Group {self.group}>'.format(self=self)
 
 
+# the binary rpm tag model
+class RPM_Tag(BaseModel):  # tags
+    tag         = CharField(null=False)
+    path        = CharField(null=False)
+    tdate       = CharField(null=False)
+    update_path = CharField(null=False)
+    update_date = CharField(null=False)
+
+    @classmethod
+    def get_tag(cls, id):
+        """
+        Returns the tag name when provided the tag id
+        :param id: integer of tag id to look up
+        :return: string
+        """
+        t = RPM_Tag.get(RPM_Tag.id == id)
+        return t.tag
+
+    @classmethod
+    def get_id(cls, name):
+        """
+        Returns the tag id for the provided tag name
+        :param name: the name to lookup
+        :return: int
+        """
+        tid = RPM_Tag.get(RPM_Tag.tag == name)
+        return tid.id
+
+    def __repr__(self):
+        return '<RPM Tag {self.tag}>'.format(self=self)
+
+
 # the binary rpm package model
 class RPM_Package(BaseModel):
-    tag_id   = CharField(null=False)  # t_record
-    tag      = TextField(null=False)  # p_tag
-    package  = TextField(null=False)  # p_package
-    version  = TextField(null=False)  # p_version
-    release  = TextField(null=False)  # p_release
-    date     = TextField(null=False)  # p_date
-    arch     = CharField(null=False)  # p_arch
-    srpm     = TextField(null=False)  # p_srpm
+    tag_id = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
+    # IntegerField()  # t_record
+    tag = TextField(null=False)  # p_tag
+    package = TextField(null=False)  # p_package
+    version = TextField(null=False)  # p_version
+    release = TextField(null=False)  # p_release
+    date = TextField(null=False)  # p_date
+    arch = CharField(null=False)  # p_arch
+    srpm = TextField(null=False)  # p_srpm
     fullname = TextField(null=False)  # p_fullname
-    update   = IntegerField(default=0)  # p_update
+    update = IntegerField(default=0)  # p_update
 
     @classmethod
     def in_db(cls, tag_id, package, version, release, arch):
@@ -130,13 +110,12 @@ class RPM_Package(BaseModel):
         :param arch: package arch
         :return: boolean
         """
-        if RPM_Package.select().where(
-            (RPM_Package.tag_id == tag_id) &
-            (RPM_Package.package == package) &
-            (RPM_Package.version == version) &
-            (RPM_Package.release == release) &
-            (RPM_Package.arch == arch)
-            ):
+        if RPM_Package.select().where((RPM_Package.tag_id == tag_id) &
+                                    (RPM_Package.package == package) &
+                                    (RPM_Package.version == version) &
+                                    (RPM_Package.release == release) &
+                                    (RPM_Package.arch == arch)
+        ):
             return True
         return False
 
@@ -148,9 +127,8 @@ class RPM_Package(BaseModel):
         :return: list
         """
         t = RPM_Tag.get(RPM_Tag.tag == tag)
-        return RPM_Package.select(RPM_Package.fullname).where((RPM_Package.tag_id == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
-
-
+        return RPM_Package.select(RPM_Package.fullname).where(
+            (RPM_Package.tag_id == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
 
     def __repr__(self):
         return '<RPM Package {self.package}>'.format(self=self)
@@ -158,8 +136,10 @@ class RPM_Package(BaseModel):
 
 # the binary rpm provides index model
 class RPM_ProvidesIndex(BaseModel):  # provides
-    package_id     = IntegerField()  # p_record
-    tag_id         = IntegerField()  # t_record
+    package_id = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
+    # IntegerField()  # p_record
+    tag_id = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
+    # IntegerField()  # t_record
     providename_id = IntegerField()  # pv_record
 
 
@@ -183,8 +163,10 @@ class RPM_ProvidesName(BaseModel):  # provides_names
 
 # the binary rpm requires index model
 class RPM_RequiresIndex(BaseModel):  # requires
-    package_id     = IntegerField()  # p_record
-    tag_id         = IntegerField()  # t_record
+    package_id = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
+    # IntegerField()  # p_record
+    tag_id = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
+    # IntegerField()  # t_record
     requirename_id = IntegerField()  # rq_record
 
 
@@ -206,11 +188,75 @@ class RPM_RequiresName(BaseModel):  # requires_names
         return '<RPM RequiresName {self.name}>'.format(self=self)
 
 
+# the binary rpm files model
+class RPM_File(BaseModel):
+    package_id = ForeignKeyField(RPM_Package, related_name='file')  # p_record
+    # IntegerField()  # p_record
+    tag_id = ForeignKeyField(RPM_Tag, related_name='file')  # t_record
+    # IntegerField()  # t_record
+    user_id = ForeignKeyField(RPM_User, related_name='file')  # u_record
+    # IntegerField()  # u_record
+    group_id = ForeignKeyField(RPM_Group, related_name='file')  # g_record
+    # IntegerField()  # g_record
+    file = TextField()  # files
+    is_suid = IntegerField(default=0)  # f_is_suid
+    is_sgid = IntegerField(default=0)  # f_is_sgid
+    perms = CharField()  # f_perms
+
+    @classmethod
+    def get_id(cls, file, tag_id, package_id):
+        """
+        Returns the file id for the provided file name, package record and tag record
+        :param file: the file to lookup
+        :param tag_id: the tag id to lookup
+        :param package_id: the package id to lookup
+        :return: int
+        """
+        file = RPM_File.get(
+            (RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
+        return file.id
+
+    @classmethod
+    def get_sxid(cls, tag_id, db_col):
+        """
+        Function to return a list of files that are either suid or sgid, per tag
+        :param tag_id: the tag id to reference
+        :param db_col: the database column to use (either is_suid or is_sgid)
+        :return: list
+        """
+        if db_col == 'is_suid':
+            query = (
+            RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
+                RPM_Package).where((RPM_File.is_suid == 1) & (RPM_File.tag_id == tag_id)).order_by(
+                RPM_Package.package.asc()))
+        elif db_col == 'is_sgid':
+            query = (
+            RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
+                RPM_Package).where((RPM_File.is_sgid == 1) & (RPM_File.tag_id == tag_id)).order_by(
+                RPM_Package.package.asc()))
+
+        return query
+        # TODO return RPM_File.select().where((Entry.published == True) & (Entry.type == 'page') & (Entry.timestamp <= now)).order_by(Entry.timestamp.desc()).limit(numdisplay)
+
+        # query = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON \
+        # (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) \
+        # LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s \
+        # ORDER BY p_package ASC" % (db_col, tag_id)
+        # results = self.db.fetch_all(query)
+
+
+    def __repr__(self):
+        return '<RPM File {self.file}>'.format(self=self)
+
+
 # the binary rpm symbols model
 class RPM_Symbols(BaseModel):  # symbols
-    package_id = IntegerField()  # p_record
-    tag_id     = IntegerField()  # t_record
-    file_id    = IntegerField()  # f_id
+    package_id = ForeignKeyField(RPM_Package, related_name='symbols') # p_record
+    #IntegerField()  # p_record
+    tag_id     = ForeignKeyField(RPM_Tag, related_name='symbols') # t_record
+    #IntegerField()  # t_record
+    file_id    = ForeignKeyField(RPM_File, related_name='symbols') # f_id
+    #IntegerField()  # f_id
     symbols    = TextField(null=False)
 
     def __repr__(self):
@@ -219,14 +265,17 @@ class RPM_Symbols(BaseModel):  # symbols
 
 # the binary rpm flags model
 class RPM_Flags(BaseModel):  # flags
-    package_id = IntegerField()  # p_record
-    tag_id     = IntegerField()  # t_record
-    file_id    = IntegerField()  # f_id
-    relro      = IntegerField(default=0)  # f_relro
-    ssp        = IntegerField(default=0)  # f_ssp
-    pie        = IntegerField(default=0)  # f_pie
-    fortify    = IntegerField(default=0)  # f_fortify
-    nx         = IntegerField(default=0)  # f_nx
+    package_id = ForeignKeyField(RPM_Package, related_name='flags')  # p_record
+    # IntegerField()  # p_record
+    tag_id = ForeignKeyField(RPM_Tag, related_name='flags')  # t_record
+    # IntegerField()  # t_record
+    file_id = ForeignKeyField(RPM_File, related_name='flags')  # f_id
+    # IntegerField()  # f_id
+    relro = IntegerField(default=0)  # f_relro
+    ssp = IntegerField(default=0)  # f_ssp
+    pie = IntegerField(default=0)  # f_pie
+    fortify = IntegerField(default=0)  # f_fortify
+    nx = IntegerField(default=0)  # f_nx
 
     @classmethod
     def get_named(cls, id):
@@ -261,38 +310,6 @@ class RPM_Flags(BaseModel):  # flags
             flag.fortify = 'found'
 
         return flag
-
-
-# the binary rpm tag model
-class RPM_Tag(BaseModel):  # tags
-    tag         = CharField(null=False)
-    path        = CharField(null=False)
-    tdate       = CharField(null=False)
-    update_path = CharField(null=False)
-    update_date = CharField(null=False)
-
-    @classmethod
-    def get_tag(cls, id):
-        """
-        Returns the tag name when provided the tag id
-        :param id: integer of tag id to look up
-        :return: string
-        """
-        t = RPM_Tag.get(RPM_Tag.id == id)
-        return t.tag
-
-    @classmethod
-    def get_id(cls, name):
-        """
-        Returns the tag id for the provided tag name
-        :param name: the name to lookup
-        :return: int
-        """
-        tid = RPM_Tag.get(RPM_Tag.tag == name)
-        return tid.id
-
-    def __repr__(self):
-        return '<RPM Tag {self.tag}>'.format(self=self)
 
 
 # the binary alreadyseen model
