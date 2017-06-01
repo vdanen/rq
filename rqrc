@@ -7,6 +7,6 @@ username=rq
 password=rq
 ; connection to use to the database
 hostspec=localhost
-; database name
-rpm_database=rqp
-srpm_database=rqs
+; database URI
+; mysql://USER:PASS@HOST:PORT/DBNAME
+database='mysql://rq:rq@localhost:3306/rq'
