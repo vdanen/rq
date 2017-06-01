@@ -93,9 +93,9 @@ class RPM_Tag(BaseModel):  # tags
     def info(cls, tag):
         """
         Return information on this tag
-        :return: dict (id, path)
+        :return: dict (id, path) or False
         """
-        t = RPM_Tag.select(RPM_Tag.id, RPM_Tag.path).where(RPM_Tag.tag == tag).limit(1)
+        t = RPM_Tag.get(RPM_Tag.tag == tag)
         if t:
             return {'id': t.id, 'path': t.path}
         else:
@@ -179,6 +179,17 @@ class RPM_Package(BaseModel):
         return RPM_Package.select(RPM_Package.fullname).where(
             (RPM_Package.tag_id == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
 
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete packages with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of packages removed)
+        """
+        query   = RPM_Package.delete().where(RPM_Package.tag_id == tag_id)
+        removed = query.execute()
+        return removed
+
     def __repr__(self):
         return '<RPM Package {self.package}>'.format(self=self)
 
@@ -190,6 +201,17 @@ class RPM_ProvidesIndex(BaseModel):  # provides
     tag_id = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
     # IntegerField()  # t_record
     providename_id = IntegerField()  # pv_record
+
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete provides with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of provides entries removed)
+        """
+        query   = RPM_ProvidesIndex.delete().where(RPM_ProvidesIndex.tag_id == tag_id)
+        removed = query.execute()
+        return removed
 
 
 # the binary rpm provides model
@@ -217,6 +239,17 @@ class RPM_RequiresIndex(BaseModel):  # requires
     tag_id = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
     # IntegerField()  # t_record
     requirename_id = IntegerField()  # rq_record
+
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete requires with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of requires entries removed)
+        """
+        query   = RPM_RequiresIndex.delete().where(RPM_RequiresIndex.tag_id == tag_id)
+        removed = query.execute()
+        return removed
 
 
 # the binary rpm requires model
@@ -293,6 +326,17 @@ class RPM_File(BaseModel):
         # ORDER BY p_package ASC" % (db_col, tag_id)
         # results = self.db.fetch_all(query)
 
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete files with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of files removed)
+        """
+        query   = RPM_File.delete().where(RPM_File.tag_id == tag_id)
+        removed = query.execute()
+        return removed
+
 
     def __repr__(self):
         return '<RPM File {self.file}>'.format(self=self)
@@ -307,6 +351,17 @@ class RPM_Symbols(BaseModel):  # symbols
     file_id    = ForeignKeyField(RPM_File, related_name='symbols') # f_id
     #IntegerField()  # f_id
     symbols    = TextField(null=False)
+
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete symbols with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of symbols removed)
+        """
+        query   = RPM_Symbols.delete().where(RPM_Symbols.tag_id == tag_id)
+        removed = query.execute()
+        return removed
 
     def __repr__(self):
         return '<RPM Symbol {self.symbols}>'.format(self=self)
@@ -360,8 +415,32 @@ class RPM_Flags(BaseModel):  # flags
 
         return flag
 
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete flags with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of flag entries removed)
+        """
+        query   = RPM_Flags.delete().where(RPM_Flags.tag_id == tag_id)
+        removed = query.execute()
+        return removed
+
+
 
 # the binary alreadyseen model
 class RPM_AlreadySeen(BaseModel):
     fullname = TextField(null=False)
-    tag_id   = IntegerField()  # t_record
+    tag_id = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
+    # IntegerField()  # t_record
+
+    @classmethod
+    def delete_tags(cls, tag_id):
+        """
+        Delete alreadyseen items with this tag_id
+        :param tag_id: tag_id to remove
+        :return: int (number of alreadyseen entries removed)
+        """
+        query   = RPM_AlreadySeen.delete().where(RPM_AlreadySeen.tag_id == tag_id)
+        removed = query.execute()
+        return removed

@@ -27,7 +27,8 @@ import logging
 import os
 import commands
 from glob import glob
-from app.models import RPM_Tag
+from app.models import RPM_Tag, RPM_Package, RPM_RequiresIndex, RPM_ProvidesIndex, RPM_File, RPM_Flags, RPM_Symbols, RPM_AlreadySeen
+
 
 class Tag:
     """
@@ -121,19 +122,68 @@ class Tag:
             print 'Tag (%s) already exists in the database!\n' % tag
             sys.exit(1)
 
-        query = "INSERT INTO tags (t_record, tag, path, update_path, tdate) VALUES (NULL,'%s', '%s', '%s', '%s')" % (
-                self.db.sanitize_string(tag.strip()),
-                self.db.sanitize_string(path.strip()),
-                self.db.sanitize_string(updatepath.strip()),
-                cur_date)
-        self.db.do_query(query)
-
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id  = self.db.fetch_one(query)
-        if tag_id:
-            return(tag_id)
-        else:
+        try:
+            t = RPM_Tag.create(
+                tag = tag.strip(),
+                path = path.strip(),
+                update_path = updatepath.strip(),
+                tdate = cur_date
+            )
+            return t.id
+        except Exception, e:
+            logging.error('Adding tag %s failed!\n%s', tag, e)
             return(0)
+
+
+    def delete_rpms(self, tag_id):
+        """
+        Function to delete rpm-based tags
+        :param tag_id: tag_id to delete
+        :return: boolean
+        """
+        #('packages', 'requires', 'provides', 'files', 'flags', 'symbols', 'alreadyseen')
+        pa = RPM_Package.delete_tags(tag_id)
+        logging.debug('Deleted %d records from package table', pa)
+        req = RPM_RequiresIndex.delete_tags(tag_id)
+        logging.debug('Deleted %d records from requires table', req)
+        pr = RPM_ProvidesIndex.delete_tags(tag_id)
+        logging.debug('Deleted %d records from provides table', pr)
+        fi = RPM_File.delete_tags(tag_id)
+        logging.debug('Deleted %d records from file table', fi)
+        fl = RPM_Flags.delete_tags(tag_id)
+        logging.debug('Deleted %d records from flags table', fl)
+        sy = RPM_Symbols.delete_tags(tag_id)
+        logging.debug('Deleted %d records from symbols table', sy)
+        al = RPM_AlreadySeen.delete_tags(tag_id)
+        logging.debug('Deleted %d records from alreadyseen table', al)
+        return
+
+
+    def delete_srpms(self, tag_id):
+        """
+        Function to delete srpm-based tags
+        :param tag_id: tag_id to delete
+        :return: boolean
+        """
+        #tables = ('packages', 'sources', 'files', 'ctags', 'alreadyseen')
+        #TODO not yet ready for the srpms
+        """
+        pa = RPM_Package.delete_tags(tag_id)
+        logging.debug('Deleted %d records from package table', pa)
+        req = RPM_RequiresIndex.delete_tags(tag_id)
+        logging.debug('Deleted %d records from requires table', req)
+        pr = RPM_ProvidesIndex.delete_tags(tag_id)
+        logging.debug('Deleted %d records from provides table', pr)
+        fi = RPM_File.delete_tags(tag_id)
+        logging.debug('Deleted %d records from file table', fi)
+        fl = RPM_Flags.delete_tags(tag_id)
+        logging.debug('Deleted %d records from flags table', fl)
+        sy = RPM_Symbols.delete_tags(tag_id)
+        logging.debug('Deleted %d records from symbols table', sy)
+        al = RPM_AlreadySeen.delete_tags(tag_id)
+        logging.debug('Deleted %d records from alreadyseen table', al)
+        """
+        return
 
 
     def delete_entries(self, tag):
@@ -154,8 +204,8 @@ class Tag:
             sys.exit(1)
         else:
             print 'Removing tag (%s) from Tags...\n' % tag
-            query  = "SELECT count(*) FROM packages WHERE t_record = '%s'" % tag_id['id']
-            result = self.db.fetch_one(query)
+            t = RPM_Tag.get(RPM_Tag.tag == tag)
+            result = t.package_count
             if result:
                 if result == 1:
                     word_package = 'Package'
@@ -167,14 +217,11 @@ class Tag:
                 sys.stdout.write('Removing %s tagged %s %s for %s... ' % (result, word_package, word_entry, tag))
                 sys.stdout.flush()
 
+                #TODO if the below TODO works, we can drop these functions
                 if self.type == 'binary':
-                    tables = ('packages', 'requires', 'provides', 'files', 'flags', 'symbols', 'alreadyseen')
+                    self.delete_rpms(t.id)
                 if self.type == 'source':
-                    tables = ('packages', 'sources', 'files', 'ctags', 'alreadyseen')
-
-                for table in tables:
-                    query = "DELETE FROM %s WHERE t_record = '%s'" % (table, tag_id['id'])
-                    self.db.do_query(query)
+                    self.delete_srpms(t.id)
 
                 sys.stdout.write(' done\n')
 
@@ -182,8 +229,13 @@ class Tag:
                     self.optimize_db(tables)
 
                 # now delete the tag entry itself
-                query = "DELETE FROM tags WHERE t_record = '%s'" % tag_id['id']
-                self.db.do_query(query)
+                t.delete_instance() #(recursive=True)
+                #TODO look at http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.delete_instance
+                #as we may be able to do a recursive one-shot delete =)
+                #might require monkeying with the db though, as I see:
+                #('DELETE FROM `rpm_symbols` WHERE (`tag_id_id` = %s)', [3])
+                #('DELETE FROM `rpm_package` WHERE (`tag_id_id` = %s)', [3])
+                #seems tag_id turns into tag_id_id here which means 'tag_id' should be 'tag'
             else:
                 sys.stdout.write('No matching package tags to remove.\n')
 
