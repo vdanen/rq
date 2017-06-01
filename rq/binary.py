@@ -32,8 +32,7 @@ import datetime
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, \
     RPM_ProvidesName, RPM_ProvidesIndex, RPM_File, RPM_Flags, RPM_Symbols
-import rq.db
-import rq.basics
+
 
 class Binary:
     """

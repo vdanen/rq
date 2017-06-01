@@ -21,9 +21,13 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
-import sys, datetime, logging, os, commands
-import rq.db
+import sys
+import datetime
+import logging
+import os
+import commands
 from glob import glob
+from app.models import RPM_Tag
 
 class Tag:
     """
