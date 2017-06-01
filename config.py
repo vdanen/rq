@@ -8,11 +8,12 @@ BASEDIR = os.path.abspath(os.path.dirname(__file__))
 if os.path.isfile(BASEDIR + '/local.cfg'):
     os.environ['LOCALCONFIG'] = BASEDIR + '/local.cfg'
 
+USERHOME = '/home/vagrant'
 HOMEDIR = '/srv/www/rq'
 DATADIR = '%s/flask/data' % HOMEDIR
 
 # read the ~/.my.cnf to get our password
-with open(HOMEDIR + '/.my.cnf') as f:
+with open(USERHOME + '/.my.cnf') as f:
     content = [x.strip('\n') for x in f.readlines()]
 for line in content:
     if line.startswith('password'):

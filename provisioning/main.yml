@@ -56,19 +56,11 @@
   - name: Create rq MariaDB user
     mysql_user: name=rq password=rq priv='rq.*:ALL' state=present
 
-  - name: Create rq group
-    group: name=rq gid=2001
-  - name: Create rq user
-    user: name=rq shell=/bin/bash uid=2001 group=rq home={{ rq_home }}
-
-  - name: Create rq directory
-    file: path={{ rq_home }} state=directory mode=0755 owner=rq group=rq
-
   - name: Remove binary flask directory if exists
     file: path={{ app_dir }}/flask state=absent
 
-  - name: Create rq/.my.cnf
-    template: src={{ playbook_dir }}/my.cnf.j2 dest={{ rq_home }}/.my.cnf owner=rq group=rq mode=0600
+  - name: Create /home/vagrant/.my.cnf
+    template: src={{ playbook_dir }}/my.cnf.j2 dest={{ vagrant_home }}/.my.cnf owner=vagrant group=vagrant mode=0600
 
   - name: Install python virtualenv
     pip: name=virtualenv executable=pip
@@ -86,6 +78,8 @@
   - name: Copy rq tmpfile file
     copy: src={{ app_dir }}/config/tmpfiles.d-rq.conf dest=/etc/tmpfiles.d/rq.conf remote_src=True
 
+  - name: Reload systemd units
+    command: systemctl daemon-reload
   - name: Create rq temporary files
     command: systemd-tmpfiles --create
   - name: Enable rq service

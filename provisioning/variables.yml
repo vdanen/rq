@@ -3,7 +3,7 @@
 mysql_root_pw: foo
 # MariaDB rq user password
 mysql_rq_pw: rq
-# Path to rq's home directory
-rq_home: /srv/www/rq
+# Path to vagrant's home directory
+vagrant_home: /home/vagrant
 # Path to the base application directory
-app_dir: /srv/www/rq/rq
+app_dir: /srv/www/rq
