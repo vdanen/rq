@@ -11,3 +11,6 @@ rq.restart
 rq.log
 config/logrotate.status
 app/static/uploads/*
+/build
+/rq.egg-info
+*.log
