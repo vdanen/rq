@@ -43,8 +43,7 @@ class Tag:
     Tag.showdbstats()    : show database statistics, by optional tag
     """
 
-    def __init__(self, rq_db, rq_type, config, rcommon, options):
-        self.db      = rq_db
+    def __init__(self, rq_type, config, rcommon, options):
         self.type    = rq_type
         self.config  = config
         self.rcommon = rcommon

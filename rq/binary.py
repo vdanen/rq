@@ -39,8 +39,7 @@ class Binary:
     Class to handle working with source files
     """
 
-    def __init__(self, database, config, options, rtag, rcommon):
-        self.db      = db
+    def __init__(self, config, options, rtag, rcommon):
         self.config  = config
         self.options = options
         self.rtag    = rtag
