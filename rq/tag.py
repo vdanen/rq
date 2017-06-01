@@ -57,23 +57,27 @@ class Tag:
         """
         logging.debug("in Tag.list()")
 
-        query   = 'SELECT t_record, tag, path, update_path, tdate, update_date FROM tags ORDER BY tag'
-        results = self.db.fetch_all(query)
+        results = RPM_Tag.get_list()
         if results:
             for row in results:
                 updated = ''
-                query2  = "SELECT count(*) FROM packages WHERE t_record = %s" % row['t_record']
-                c_pkgs  = self.db.fetch_one(query2)
-                query2  = "SELECT count(*) FROM packages WHERE t_record = %s AND p_update = 1" % row['t_record']
-                c_upd   = self.db.fetch_one(query2)
-                if row['update_date']:
-                    updated = ' / Updated: %s' % row['update_date']
-                print 'Tag: %-22sPackages: %-15sUpdates: %s\n  Added: %-18s%s\n  Path       : %s\n  Update Path: %s\n' % (row['tag'], c_pkgs, c_upd, row['tdate'], updated, row['path'], row['update_path'])
+                c_pkgs  = row.package_count
+                c_upd   = row.update_count
+                if row.update_date:
+                    updated = ' / Updated: %s' % row.update_date
+                print 'Tag: %-22sPackages: %-15sUpdates: %s\n  Added: %-18s%s\n  Path       : %s\n  Update Path: %s\n' % (
+                    row.tag,
+                    c_pkgs,
+                    c_upd,
+                    row.tdate,
+                    updated,
+                    row.path,
+                    row.update_path
+                )
 
         else:
             print 'No tags exist in the database!\n'
 
-        self.db.close()
         sys.exit(0)
 
 
@@ -88,15 +92,7 @@ class Tag:
         """
         logging.debug('in Tag.lookup(%s)' % tag)
 
-        query  = "SELECT t_record, path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        result = self.db.fetch_all(query)
-
-        if result:
-            for row in result:
-                return_tag = {'id': row['t_record'], 'path': row['path']}
-            return(return_tag)
-        else:
-            return False
+        return RPM_Tag.info(tag)
 
 
     def add_record(self, tag, path_to_tag, updatepath):
@@ -120,8 +116,7 @@ class Tag:
         else:
             path = os.path.abspath(path_to_tag)
         # we can have multiple similar paths, but not multiple similar tags
-        query = "SELECT tag FROM tags WHERE tag = '%s'" % self.db.sanitize_string(tag)
-        dbtag = self.db.fetch_one(query)
+        dbtag = RPM_Tag.exists(tag)
         if dbtag:
             print 'Tag (%s) already exists in the database!\n' % tag
             sys.exit(1)

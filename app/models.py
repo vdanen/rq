@@ -81,6 +81,55 @@ class RPM_Tag(BaseModel):  # tags
         tid = RPM_Tag.get(RPM_Tag.tag == name)
         return tid.id
 
+    @classmethod
+    def get_list(cls):
+        """
+        Returns a list of tags
+        :return: list
+        """
+        return RPM_Tag.select().order_by(RPM_Tag.tag)
+
+    @classmethod
+    def info(cls, tag):
+        """
+        Return information on this tag
+        :return: dict (id, path)
+        """
+        t = RPM_Tag.select(RPM_Tag.id, RPM_Tag.path).where(RPM_Tag.tag == tag).limit(1)
+        if t:
+            return {'id': t.id, 'path': t.path}
+        else:
+            return False
+
+    @classmethod
+    def exists(cls, tag):
+        """
+        Return True if this tag exists, False otherwise
+        :param tag: tag name to lookup
+        :return: bool
+        """
+        t = RPM_Tag.select().where(RPM_Tag.tag == tag).limit(1)
+        if t:
+            return True
+        return False
+
+    @property
+    def package_count(self):
+        """
+        Return the number of packages
+        :return: int
+        """
+        return RPM_Package.select().where(RPM_Package.tag_id == self.id).count()
+
+    @property
+    def update_count(self):
+        """
+        Return the number of updates packages
+        :return: int
+        """
+        return RPM_Package.select().where((RPM_Package.tag_id == self.id) & (RPM_Package.update == 1)).count()
+
+
     def __repr__(self):
         return '<RPM Tag {self.tag}>'.format(self=self)
 
