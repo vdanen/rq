@@ -13,5 +13,5 @@ fi
 
 virtualenv flask
 flask/bin/pip install -r requirements.txt
-#flask/bin/pip install mysql-python
+flask/bin/pip install mysql-python
 
