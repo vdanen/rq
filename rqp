@@ -22,7 +22,6 @@ You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-RQ_VERSION = '0.8'
 RQ_PROG    = 'rqp'
 RQ_TYPE    = 'binary'
 
@@ -30,19 +29,17 @@ import optparse
 import os
 import sys
 import logging
-import rq.basics
-import rq.tag
-import rq.binary
+import rq
 from app import *
 
 
 if __name__ == '__main__':
-    print '%s %s\n' % (RQ_PROG, RQ_VERSION)
+    print '%s %s\n' % (RQ_PROG, rq.__version__)
     # TODO: add options to search files by ownership and sgid/suid status
 
     p = optparse.OptionParser(description="RPM package query tool",
                               prog=RQ_PROG,
-                              version="%prog " + RQ_VERSION,
+                              version="%prog " + rq.__version__,
                               usage="%prog [-h] [-v] [-c <directory>] [-[q|r|p|z] <substring>] [-t <tag>]")
     p.add_option('-n', '--config', dest="conffile", metavar="FILE",
                  help="Optional configuration file")
@@ -164,12 +161,9 @@ if __name__ == '__main__':
 
     config  = rq.basics.Config(options.conffile)
 
-    # get the name of the database we want to talk to
-    config['database'] = database
-
     rcommon = rq.basics.Common(options, RQ_TYPE)
-    rtag    = rq.tag.Tag(database, RQ_TYPE, config, rcommon, options)
-    rqp     = rq.binary.Binary(database, config, options, rtag, rcommon)
+    rtag    = rq.tag.Tag(RQ_TYPE, config, rcommon, options)
+    rqp     = rq.binary.Binary(config, options, rtag, rcommon)
 
     # start doing useful things
     if options.list:
