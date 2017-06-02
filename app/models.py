@@ -28,8 +28,11 @@ class RPM_User(BaseModel):
         :param name: the name to lookup
         :return: int
         """
-        user = RPM_User.get(RPM_User.user == name)
-        return user.id
+        try:
+            user = RPM_User.get(RPM_User.user == name)
+            return user.id
+        except:
+            return None
 
     def __repr__(self):
         return '<RPM User {self.user}>'.format(self=self)
@@ -46,8 +49,11 @@ class RPM_Group(BaseModel):
         :param name: the name to lookup
         :return: int
         """
-        group = RPM_Group.get(RPM_Group.group == name)
-        return group.id
+        try:
+            group = RPM_Group.get(RPM_Group.group == name)
+            return group.id
+        except:
+            return None
 
     def __repr__(self):
         return '<RPM Group {self.group}>'.format(self=self)
@@ -78,8 +84,11 @@ class RPM_Tag(BaseModel):  # tags
         :param name: the name to lookup
         :return: int
         """
-        tid = RPM_Tag.get(RPM_Tag.tag == name)
-        return tid.id
+        try:
+            tid = RPM_Tag.get(RPM_Tag.tag == name)
+            return tid.id
+        except:
+            return None
 
     @classmethod
     def get_list(cls):
@@ -225,8 +234,11 @@ class RPM_ProvidesName(BaseModel):  # provides_names
         :param name: the name to lookup
         :return: int
         """
-        pid = RPM_ProvidesName.get(RPM_ProvidesName.name == name)
-        return pid.id
+        try:
+            pid = RPM_ProvidesName.get(RPM_ProvidesName.name == name)
+            return pid.id
+        except:
+            return None
 
     def __repr__(self):
         return '<RPM ProvidesName {self.name}>'.format(self=self)
@@ -261,10 +273,13 @@ class RPM_RequiresName(BaseModel):  # requires_names
         """
         Returns the requires id for the provided requires name
         :param name: the name to lookup
-        :return: int
+        :return: int or None
         """
-        rid = RPM_RequiresName.get(RPM_RequiresName.name == name)
-        return rid.id
+        try:
+            rid = RPM_RequiresName.get(RPM_RequiresName.name == name)
+            return rid.id
+        except:
+            return None
 
     def __repr__(self):
         return '<RPM RequiresName {self.name}>'.format(self=self)
@@ -294,9 +309,12 @@ class RPM_File(BaseModel):
         :param package_id: the package id to lookup
         :return: int
         """
-        file = RPM_File.get(
-            (RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
-        return file.id
+        try:
+            file = RPM_File.get(
+                (RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
+            return file.id
+        except:
+            return None
 
     @classmethod
     def get_sxid(cls, tag_id, db_col):
