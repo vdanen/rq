@@ -214,6 +214,7 @@ class Binary:
         """
         logging.debug('in Binary.query(%s)' % type)
 
+#TODO
         tag_id = self.rtag.lookup(self.options.tag)
         if self.options.tag and not tag_id:
             print 'Tag %s is not a known tag!\n' % self.options.tag
@@ -383,11 +384,10 @@ class Binary:
             return False
 
 
-    def get_user_record(self, user):
+    def get_user_record(self, name):
         """
         Function to lookup, add, and cache user info
         """
-        name = self.db.sanitize_string(user)
 
         # first check the cache
         if name in self.user_cache:
@@ -422,11 +422,10 @@ class Binary:
             return False
 
 
-    def get_group_record(self, group):
+    def get_group_record(self, name):
         """
         Function to lookup, add, and cache group info
         """
-        name = self.db.sanitize_string(group)
 
         # first check the cache
         if name in self.group_cache:
@@ -461,11 +460,10 @@ class Binary:
             return False
 
 
-    def get_requires_record(self, requires):
+    def get_requires_record(self, name):
         """
         Function to lookup, add, and cache requires info
         """
-        name = self.db.sanitize_string(requires)
 
         # first check the cache
         if name in self.requires_cache:
@@ -524,11 +522,10 @@ class Binary:
             return False
 
 
-    def get_provides_record(self, provides):
+    def get_provides_record(self, name):
         """
         Function to lookup, add, and cache provides info
         """
-        name = self.db.sanitize_string(provides)
 
         # first check the cache
         if name in self.provides_cache:
