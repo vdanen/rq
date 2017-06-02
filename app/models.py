@@ -147,7 +147,6 @@ class RPM_Tag(BaseModel):  # tags
 class RPM_Package(BaseModel):
     tag_id = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
     # IntegerField()  # t_record
-    tag = TextField(null=False)  # p_tag
     package = TextField(null=False)  # p_package
     version = TextField(null=False)  # p_version
     release = TextField(null=False)  # p_release
@@ -156,6 +155,11 @@ class RPM_Package(BaseModel):
     srpm = TextField(null=False)  # p_srpm
     fullname = TextField(null=False)  # p_fullname
     update = IntegerField(default=0)  # p_update
+
+    @property
+    def tag(self):
+        t = RPM_Tag.get(RPM_Tag.id == self.tag_id)
+        return t.tag
 
     @classmethod
     def in_db(cls, tag_id, package, version, release, arch):

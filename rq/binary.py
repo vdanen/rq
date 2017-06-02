@@ -190,7 +190,6 @@ class Binary:
         try:
             p = RPM_Package.create(
                 tag_id   = tag_id,
-                tag      = tag,
                 package  = package,
                 version  = version,
                 release  = release,
