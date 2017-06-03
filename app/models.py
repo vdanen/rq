@@ -73,8 +73,11 @@ class RPM_Tag(BaseModel):  # tags
         :param id: integer of tag id to look up
         :return: string
         """
-        t = RPM_Tag.get(RPM_Tag.id == id)
-        return t.tag
+        try:
+            t = RPM_Tag.get(RPM_Tag.id == id)
+            return t.tag
+        except:
+            return None
 
     @classmethod
     def get_id(cls, name):
@@ -103,11 +106,14 @@ class RPM_Tag(BaseModel):  # tags
         Return information on this tag
         :return: dict (id, path) or False
         """
-        t = RPM_Tag.get(RPM_Tag.tag == tag)
-        if t:
-            return {'id': t.id, 'path': t.path}
-        else:
-            return False
+        try:
+            t = RPM_Tag.get(RPM_Tag.tag == tag)
+            if t:
+                return {'id': t.id, 'path': t.path}
+        except:
+            return None
+
+        return None
 
     @classmethod
     def exists(cls, tag):
