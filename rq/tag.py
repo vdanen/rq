@@ -146,9 +146,9 @@ class Tag:
         """
         logging.debug('in Tag.delete_entries(%s)' % tag)
 
-        tag_id =  self.lookup(tag)
+        tid =  self.lookup(tag)
 
-        if not tag_id:
+        if not tid:
             print 'No matching tag found for entry %s!\n' % tag
             sys.exit(1)
         else:
@@ -347,7 +347,7 @@ class Tag:
 
         r_count = 0
         if to_remove and not listonly:
-            queries =[]
+            queries = []
             sys.stdout.write('\nRemoving tagged entries for tag: %s... ' % tag)
             if self.type == 'binary':
                 tables = ('packages', 'requires', 'provides', 'files')
@@ -565,9 +565,9 @@ class Tag:
 
         tid = None
         if tag:
-            tag_id = self.lookup(tag)
-            if tag_id:
-                tid = tag_id['id']
+            taginfo = self.lookup(tag)
+            if taginfo:
+                tid = taginfo['id']
             else:
                 print 'No such tag: "%s" does not exist in the database!\n' % tag
                 sys.exit(1)
@@ -575,12 +575,12 @@ class Tag:
         if tid:
             if self.type == 'binary':
                 c_tags  = RPM_Tag.select().where(RPM_Tag.id == tid).count()
-                c_pkgs  = RPM_Package.select().where(RPM_Package.tag_id == tid).count()
-                c_files = RPM_File.select().where(RPM_File.tag_id == tid).count()
-                c_reqs  = RPM_Requires.select().where(RPM_Requires.tag_id == tid).count()
-                c_provs = RPM_Provides.select().where(RPM_Provides.tag_id == tid).count()
-                c_flags = RPM_Flags.select().where(RPM_Flags.tag_id == tid).count()
-                c_symbs = RPM_Symbols.select().where(RPM_Symbols.tag_id == tid).count()
+                c_pkgs  = RPM_Package.select().where(RPM_Package.tid == tid).count()
+                c_files = RPM_File.select().where(RPM_File.tid == tid).count()
+                c_reqs  = RPM_Requires.select().where(RPM_Requires.tid == tid).count()
+                c_provs = RPM_Provides.select().where(RPM_Provides.tid == tid).count()
+                c_flags = RPM_Flags.select().where(RPM_Flags.tid == tid).count()
+                c_symbs = RPM_Symbols.select().where(RPM_Symbols.tid == tid).count()
 #            else:
 #                c_src   = SRPM_Sources.select().where(RPM_Tag.id == tid).count()
 #                c_ctags = SRPM_Ctags.select().where(RPM_Tag.id == tid).count()
