@@ -30,8 +30,8 @@ import tempfile
 import shutil
 import datetime
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_RequiresName, RPM_RequiresIndex, \
-    RPM_ProvidesName, RPM_ProvidesIndex, RPM_File, RPM_Flags, RPM_Symbols
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_Requires, \
+    RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols
 
 
 class Binary:
@@ -450,7 +450,7 @@ class Binary:
         """
         Function to look up the rq_record and add it to the cache for requires
         """
-        rid = RPM_RequiresName.get_id(name)
+        rid = RPM_Requires.get_id(name)
         if rid:
             # add to the cache
             self.requires_cache[name] = rid
@@ -473,15 +473,7 @@ class Binary:
         if rid:
             return rid
 
-        # not cached, so not in the db, add it
-        try:
-            r = RPM_RequiresName.create(name = name)
-        except Exception, e:
-            logging.error('Failed to add requires %s to the database!\n%s', name, e)
-        if r:
-            # add to the cache
-            self.requires_cache[name] = r.id
-            return r.id
+        return None
 
 
     def add_requires(self, tag_id, record, file):
@@ -498,12 +490,15 @@ class Binary:
                 if self.options.verbose:
                     print 'Dependency: %s' % dep
                 rid = self.get_requires_record(dep.strip())
+                if rid:
+                    return rid
                 try:
-                    r = RPM_RequiresIndex.create(
-                        package_id     = record,
-                        tag_id         = tag_id,
-                        requirename_id = rid
+                    r = RPM_Requires.create(
+                        package_id  = record,
+                        tag_id      = tag_id,
+                        name        = dep.strip()
                     )
+                    return r.id
                 except Exception, e:
                     logging.error('Failed to add requires %s to the database!\n%s', file, e)
 
@@ -512,7 +507,7 @@ class Binary:
         """
         Function to look up the pv_record and add it to the cache for provides
         """
-        pid = RPM_ProvidesName.get_id(name)
+        pid = RPM_Provides.get_id(name)
         if pid:
             # add to the cache
             self.provides_cache[name] = pid
@@ -531,19 +526,11 @@ class Binary:
             return self.provides_cache[name]
 
         # not cached, check the database
-        pv_rec = self.cache_get_provides(name)
-        if pv_rec:
-            return pv_rec
+        pid = self.cache_get_provides(name)
+        if pid:
+            return pid
 
-        # not cached, not in the db, add it
-        try:
-            p = RPM_ProvidesName(name = name)
-        except Exception, e:
-            logging.error('Failed to add provides %s to the database!\n%s', file, e)
-        if p:
-            # add to the cache
-            self.provides_cache[name] = p.id
-            return p.id
+        return None
 
 
     def add_provides(self, tag_id, record, file):
@@ -560,12 +547,15 @@ class Binary:
                 if self.options.verbose:
                     print 'Provides: %s' % prov
                 pid = self.get_provides_record(prov.strip())
+                if pid:
+                    return pid
                 try:
-                    p = RPM_ProvidesIndex.create(
-                        package_id     = record,
-                        tag_id         = tag_id,
-                        providename_id = pid
+                    p = RPM_Provides.create(
+                        package_id = record,
+                        tag_id     = tag_id,
+                        name       = prov.strip()
                     )
+                    return p.id
                 except Exception, e:
                     logging.error('Failed to add provides %s to the database!\n%s', file, e)
 

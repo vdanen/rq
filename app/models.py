@@ -7,8 +7,7 @@ database    = connect(DATABASE_URI)
 
 def create_tables():
     database.connect()
-    database.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_ProvidesIndex,
-               RPM_ProvidesName, RPM_RequiresIndex, RPM_RequiresName,
+    database.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_Provides, RPM_Requires,
                RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen], True) # only create if it doesn't already exist
 
 
@@ -207,13 +206,13 @@ class RPM_Package(BaseModel):
         return '<RPM Package {self.package}>'.format(self=self)
 
 
-# the binary rpm provides index model
-class RPM_ProvidesIndex(BaseModel):  # provides
+# the binary rpm provides model
+class RPM_Provides(BaseModel):  # provides
     package_id = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
     # IntegerField()  # p_record
     tag_id = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
     # IntegerField()  # t_record
-    providename_id = IntegerField()  # pv_record
+    name = TextField(null=False)  # pv_name
 
     @classmethod
     def delete_tags(cls, tag_id):
@@ -222,14 +221,9 @@ class RPM_ProvidesIndex(BaseModel):  # provides
         :param tag_id: tag_id to remove
         :return: int (number of provides entries removed)
         """
-        query   = RPM_ProvidesIndex.delete().where(RPM_ProvidesIndex.tag_id == tag_id)
+        query   = RPM_Provides.delete().where(RPM_Provides.tag_id == tag_id)
         removed = query.execute()
         return removed
-
-
-# the binary rpm provides model
-class RPM_ProvidesName(BaseModel):  # provides_names
-    name = TextField(null=False)  # pv_name
 
     @classmethod
     def get_id(cls, name):
@@ -239,22 +233,22 @@ class RPM_ProvidesName(BaseModel):  # provides_names
         :return: int
         """
         try:
-            pid = RPM_ProvidesName.get(RPM_ProvidesName.name == name)
+            pid = RPM_Provides.get(RPM_Provides.name == name)
             return pid.id
         except:
             return None
 
     def __repr__(self):
-        return '<RPM ProvidesName {self.name}>'.format(self=self)
+        return '<RPM Provides {self.name}>'.format(self=self)
 
 
-# the binary rpm requires index model
-class RPM_RequiresIndex(BaseModel):  # requires
+# the binary rpm requires model
+class RPM_Requires(BaseModel):  # requires
     package_id = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
     # IntegerField()  # p_record
     tag_id = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
     # IntegerField()  # t_record
-    requirename_id = IntegerField()  # rq_record
+    name = TextField(null=False)  # rq_name
 
     @classmethod
     def delete_tags(cls, tag_id):
@@ -263,30 +257,25 @@ class RPM_RequiresIndex(BaseModel):  # requires
         :param tag_id: tag_id to remove
         :return: int (number of requires entries removed)
         """
-        query   = RPM_RequiresIndex.delete().where(RPM_RequiresIndex.tag_id == tag_id)
+        query   = RPM_Requires.delete().where(RPM_Requires.tag_id == tag_id)
         removed = query.execute()
         return removed
-
-
-# the binary rpm requires model
-class RPM_RequiresName(BaseModel):  # requires_names
-    name = TextField(null=False)  # rq_name
 
     @classmethod
     def get_id(cls, name):
         """
         Returns the requires id for the provided requires name
         :param name: the name to lookup
-        :return: int or None
+        :return: int
         """
         try:
-            rid = RPM_RequiresName.get(RPM_RequiresName.name == name)
+            rid = RPM_Requires.get(RPM_Requires.name == name)
             return rid.id
         except:
             return None
 
     def __repr__(self):
-        return '<RPM RequiresName {self.name}>'.format(self=self)
+        return '<RPM Requires {self.name}>'.format(self=self)
 
 
 # the binary rpm files model

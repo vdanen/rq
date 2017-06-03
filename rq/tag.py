@@ -27,7 +27,7 @@ import logging
 import os
 import commands
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_RequiresIndex, RPM_ProvidesIndex, RPM_File, RPM_Flags, RPM_Symbols, RPM_AlreadySeen
+from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, RPM_AlreadySeen
 
 
 class Tag:
