@@ -567,17 +567,20 @@ class Binary:
         logging.debug('in Binary.add_records(%s, %s, %s)' % (tag_id, record, file_list))
 
         for x in file_list.keys():
+            file = file_list[x]['file'].strip()
+            uid  = self.get_user_record(file_list[x]['user'])
+            gid  = self.get_group_record(file_list[x]['group'])
             self.rcommon.show_progress()
             if self.options.verbose:
-                print 'File: %s' % file_list[x]['file']
+                print 'File: %s' % file
 
             try:
                 f = RPM_File.create(
                     tag_id     = tag_id,
                     package_id = record,
-                    user_id    = file_list[x]['user'],
-                    group_id   = file_list[x]['group'],
-                    file       = file_list[x]['file'].strip(),
+                    user_id    = uid,
+                    group_id   = gid,
+                    file       = file,
                     is_suid    = file_list[x]['is_suid'],
                     is_sgid    = file_list[x]['is_sgid'],
                     perms      = file_list[x]['perms']
