@@ -60,7 +60,7 @@ class Common:
                 self.pstate = 1
                 return
             elif prefix != self.lprefix:
-                sys.stdout.write('\t%s: ' %prefix)
+                sys.stdout.write('\t%s: ' % prefix)
                 sys.stdout.flush()
                 self.lprefix = prefix
                 return
@@ -89,7 +89,7 @@ class Common:
             return False
 
         if raw:
-            return(rpm_list)
+            return rpm_list
 
         rpm_list  = rpm_list.splitlines()
         rlist     = {}
@@ -97,7 +97,7 @@ class Common:
 
         for entry in rpm_list:
             break_loop = False
-            logging.debug('processing: %s' % entry) ### DEBUG
+            logging.debug('processing: %s' % entry)  # DEBUG
             for exclude in self.get_file_excludes():
                 # make sure we don't include any files in our exclude list
                 if re.search(exclude, entry):
@@ -132,7 +132,7 @@ class Common:
             rlist[count] = {'file': fname, 'user': user, 'group': group, 'is_suid': is_suid, 'is_sgid': is_sgid, 'perms': perms}
             count       += 1
 
-        return(rlist)
+        return rlist
 
 
     def file_rpm_check(self, rpm_file):
@@ -207,7 +207,7 @@ class Common:
                 if execute == 'x':
                     num = num + 1
         num = '%04d' % num
-        return(num)
+        return num
 
 
     def clean_shell(self, string):
@@ -215,16 +215,16 @@ class Common:
         Function to clean shell arguments
         """
         return("%s" %
-            string.replace(' ', '\ ')
-                  .replace('(', '\(')
-                  .replace(')', '\)')
-                  .replace('$', '\$')
-                  .replace("'", "\'")
-                  .replace('"', '\"')
-                  .replace('`', '\`')
-                  .replace(';', '\;')
-                  .replace('*', '\*')
-            )
+               string.replace(' ', '\ ')
+               .replace('(', '\(')
+               .replace(')', '\)')
+               .replace('$', '\$')
+               .replace("'", "\'")
+               .replace('"', '\"')
+               .replace('`', '\`')
+               .replace(';', '\;')
+               .replace('*', '\*')
+               )
 
 
 class Config:

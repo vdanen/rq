@@ -402,6 +402,8 @@ class Binary:
             u = RPM_User.create(user = name)
         except Exception, e:
             logging.error('Failed to add user %s to the database!\n%s', name, e)
+            sys.exit(1)
+
         if u:
             # add to the cache
             self.user_cache[name] = u.id
@@ -440,6 +442,8 @@ class Binary:
             g = RPM_Group.create(group = name)
         except Exception, e:
             logging.error('Failed to add group %s to the database!\n%s', name, e)
+            sys.exit(1)
+
         if g:
             # add to the cache
             self.group_cache[name] = g.id

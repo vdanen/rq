@@ -14,6 +14,7 @@ app.jinja_env.lstrip_blocks = True
 DATABASE_URI = app.config['DATABASE']
 DATADIR = app.config['DATADIR']
 
+
 @app.errorhandler(404)
 def not_found(error):
     return render_template('404.html'), 404
@@ -27,6 +28,7 @@ def after_request(response):
 
 from app.models import database
 #from app import views
+
 
 @app.before_request
 def before_request():
