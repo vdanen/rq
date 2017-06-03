@@ -155,16 +155,15 @@ class RPM_Tag(BaseModel):  # tags
 
 # the binary rpm package model
 class RPM_Package(BaseModel):
-    tid = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
-    # IntegerField()  # t_record
-    package = TextField(null=False)  # p_package
-    version = TextField(null=False)  # p_version
-    release = TextField(null=False)  # p_release
-    date = TextField(null=False)  # p_date
-    arch = CharField(null=False)  # p_arch
-    srpm = TextField(null=False)  # p_srpm
+    tid      = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
+    package  = TextField(null=False)  # p_package
+    version  = TextField(null=False)  # p_version
+    release  = TextField(null=False)  # p_release
+    date     = TextField(null=False)  # p_date
+    arch     = CharField(null=False)  # p_arch
+    srpm     = TextField(null=False)  # p_srpm
     fullname = TextField(null=False)  # p_fullname
-    update = IntegerField(default=0)  # p_update
+    update   = IntegerField(default=0)  # p_update
 
     @property
     def tag(self):
@@ -219,10 +218,8 @@ class RPM_Package(BaseModel):
 
 # the binary rpm provides model
 class RPM_Provides(BaseModel):  # provides
-    pid = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
-    # IntegerField()  # p_record
-    tid = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
-    # IntegerField()  # t_record
+    pid  = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
+    tid  = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
     name = TextField(null=False)  # pv_name
 
     @classmethod
@@ -255,10 +252,8 @@ class RPM_Provides(BaseModel):  # provides
 
 # the binary rpm requires model
 class RPM_Requires(BaseModel):  # requires
-    pid = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
-    # IntegerField()  # p_record
-    tid = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
-    # IntegerField()  # t_record
+    pid  = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
+    tid  = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
     name = TextField(null=False)  # rq_name
 
     @classmethod
@@ -291,18 +286,14 @@ class RPM_Requires(BaseModel):  # requires
 
 # the binary rpm files model
 class RPM_File(BaseModel):
-    pid = ForeignKeyField(RPM_Package, related_name='file')  # p_record
-    # IntegerField()  # p_record
-    tid = ForeignKeyField(RPM_Tag, related_name='file')  # t_record
-    # IntegerField()  # t_record
-    uid = ForeignKeyField(RPM_User, related_name='file')  # u_record
-    # IntegerField()  # u_record
-    gid = ForeignKeyField(RPM_Group, related_name='file')  # g_record
-    # IntegerField()  # g_record
-    file = TextField()  # files
+    pid     = ForeignKeyField(RPM_Package, related_name='file')  # p_record
+    tid     = ForeignKeyField(RPM_Tag, related_name='file')  # t_record
+    uid     = ForeignKeyField(RPM_User, related_name='file')  # u_record
+    gid     = ForeignKeyField(RPM_Group, related_name='file')  # g_record
+    file    = TextField()  # files
     is_suid = IntegerField(default=0)  # f_is_suid
     is_sgid = IntegerField(default=0)  # f_is_sgid
-    perms = CharField()  # f_perms
+    perms   = CharField()  # f_perms
 
     @classmethod
     def get_id(cls, file, tid, pid):
@@ -366,13 +357,10 @@ class RPM_File(BaseModel):
 
 # the binary rpm symbols model
 class RPM_Symbols(BaseModel):  # symbols
-    pid = ForeignKeyField(RPM_Package, related_name='symbols') # p_record
-    #IntegerField()  # p_record
+    pid     = ForeignKeyField(RPM_Package, related_name='symbols') # p_record
     tid     = ForeignKeyField(RPM_Tag, related_name='symbols') # t_record
-    #IntegerField()  # t_record
-    fid    = ForeignKeyField(RPM_File, related_name='symbols') # f_id
-    #IntegerField()  # f_id
-    symbols    = TextField(null=False)
+    fid     = ForeignKeyField(RPM_File, related_name='symbols') # f_id
+    symbols = TextField(null=False)
 
     @classmethod
     def delete_tags(cls, tid):
@@ -391,17 +379,14 @@ class RPM_Symbols(BaseModel):  # symbols
 
 # the binary rpm flags model
 class RPM_Flags(BaseModel):  # flags
-    pid = ForeignKeyField(RPM_Package, related_name='flags')  # p_record
-    # IntegerField()  # p_record
-    tid = ForeignKeyField(RPM_Tag, related_name='flags')  # t_record
-    # IntegerField()  # t_record
-    fid = ForeignKeyField(RPM_File, related_name='flags')  # f_id
-    # IntegerField()  # f_id
-    relro = IntegerField(default=0)  # f_relro
-    ssp = IntegerField(default=0)  # f_ssp
-    pie = IntegerField(default=0)  # f_pie
+    pid     = ForeignKeyField(RPM_Package, related_name='flags')  # p_record
+    tid     = ForeignKeyField(RPM_Tag, related_name='flags')  # t_record
+    fid     = ForeignKeyField(RPM_File, related_name='flags')  # f_id
+    relro   = IntegerField(default=0)  # f_relro
+    ssp     = IntegerField(default=0)  # f_ssp
+    pie     = IntegerField(default=0)  # f_pie
     fortify = IntegerField(default=0)  # f_fortify
-    nx = IntegerField(default=0)  # f_nx
+    nx      = IntegerField(default=0)  # f_nx
 
     @classmethod
     def get_named(cls, id):
@@ -453,8 +438,7 @@ class RPM_Flags(BaseModel):  # flags
 # the binary alreadyseen model
 class RPM_AlreadySeen(BaseModel):
     fullname = TextField(null=False)
-    tid = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
-    # IntegerField()  # t_record
+    tid      = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
 
     @classmethod
     def delete_tags(cls, tid):
