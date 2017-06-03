@@ -10,6 +10,11 @@ def create_tables():
     database.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_Provides, RPM_Requires,
                RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen], True) # only create if it doesn't already exist
 
+# tid is always tag id
+# pid is always package id
+# fid is always file id
+# uid is always user id
+# gid is always group id
 
 class BaseModel(Model):
     class Meta:
@@ -133,7 +138,7 @@ class RPM_Tag(BaseModel):  # tags
         Return the number of packages
         :return: int
         """
-        return RPM_Package.select().where(RPM_Package.tag_id == self.id).count()
+        return RPM_Package.select().where(RPM_Package.tid == self.id).count()
 
     @property
     def update_count(self):
@@ -141,7 +146,7 @@ class RPM_Tag(BaseModel):  # tags
         Return the number of updates packages
         :return: int
         """
-        return RPM_Package.select().where((RPM_Package.tag_id == self.id) & (RPM_Package.update == 1)).count()
+        return RPM_Package.select().where((RPM_Package.tid == self.id) & (RPM_Package.update == 1)).count()
 
 
     def __repr__(self):
@@ -150,7 +155,7 @@ class RPM_Tag(BaseModel):  # tags
 
 # the binary rpm package model
 class RPM_Package(BaseModel):
-    tag_id = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
+    tid = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
     # IntegerField()  # t_record
     package = TextField(null=False)  # p_package
     version = TextField(null=False)  # p_version
@@ -163,21 +168,21 @@ class RPM_Package(BaseModel):
 
     @property
     def tag(self):
-        t = RPM_Tag.get(RPM_Tag.id == self.tag_id)
+        t = RPM_Tag.get(RPM_Tag.id == self.tid)
         return t.tag
 
     @classmethod
-    def in_db(cls, tag_id, package, version, release, arch):
+    def in_db(cls, tid, package, version, release, arch):
         """
         Returns whether or not this package exists in the database
-        :param tag_id: integer of tag id to search in
+        :param tid: integer of tag id to search in
         :param package: package name
         :param version: package version
         :param release: package release
         :param arch: package arch
         :return: boolean
         """
-        if RPM_Package.select().where((RPM_Package.tag_id == tag_id) &
+        if RPM_Package.select().where((RPM_Package.tid == tid) &
                                     (RPM_Package.package == package) &
                                     (RPM_Package.version == version) &
                                     (RPM_Package.release == release) &
@@ -195,16 +200,16 @@ class RPM_Package(BaseModel):
         """
         t = RPM_Tag.get(RPM_Tag.tag == tag)
         return RPM_Package.select(RPM_Package.fullname).where(
-            (RPM_Package.tag_id == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
+            (RPM_Package.tid == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete packages with this tag_id
-        :param tag_id: tag_id to remove
+        Delete packages with this tid
+        :param tid: tid to remove
         :return: int (number of packages removed)
         """
-        query   = RPM_Package.delete().where(RPM_Package.tag_id == tag_id)
+        query   = RPM_Package.delete().where(RPM_Package.tid == tid)
         removed = query.execute()
         return removed
 
@@ -214,20 +219,20 @@ class RPM_Package(BaseModel):
 
 # the binary rpm provides model
 class RPM_Provides(BaseModel):  # provides
-    package_id = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
+    pid = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
     # IntegerField()  # p_record
-    tag_id = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
+    tid = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
     # IntegerField()  # t_record
     name = TextField(null=False)  # pv_name
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete provides with this tag_id
-        :param tag_id: tag_id to remove
+        Delete provides with this tid
+        :param tid: tid to remove
         :return: int (number of provides entries removed)
         """
-        query   = RPM_Provides.delete().where(RPM_Provides.tag_id == tag_id)
+        query   = RPM_Provides.delete().where(RPM_Provides.tid == tid)
         removed = query.execute()
         return removed
 
@@ -250,20 +255,20 @@ class RPM_Provides(BaseModel):  # provides
 
 # the binary rpm requires model
 class RPM_Requires(BaseModel):  # requires
-    package_id = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
+    pid = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
     # IntegerField()  # p_record
-    tag_id = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
+    tid = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
     # IntegerField()  # t_record
     name = TextField(null=False)  # rq_name
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete requires with this tag_id
-        :param tag_id: tag_id to remove
+        Delete requires with this tid
+        :param tid: tid to remove
         :return: int (number of requires entries removed)
         """
-        query   = RPM_Requires.delete().where(RPM_Requires.tag_id == tag_id)
+        query   = RPM_Requires.delete().where(RPM_Requires.tid == tid)
         removed = query.execute()
         return removed
 
@@ -286,13 +291,13 @@ class RPM_Requires(BaseModel):  # requires
 
 # the binary rpm files model
 class RPM_File(BaseModel):
-    package_id = ForeignKeyField(RPM_Package, related_name='file')  # p_record
+    pid = ForeignKeyField(RPM_Package, related_name='file')  # p_record
     # IntegerField()  # p_record
-    tag_id = ForeignKeyField(RPM_Tag, related_name='file')  # t_record
+    tid = ForeignKeyField(RPM_Tag, related_name='file')  # t_record
     # IntegerField()  # t_record
-    user_id = ForeignKeyField(RPM_User, related_name='file')  # u_record
+    uid = ForeignKeyField(RPM_User, related_name='file')  # u_record
     # IntegerField()  # u_record
-    group_id = ForeignKeyField(RPM_Group, related_name='file')  # g_record
+    gid = ForeignKeyField(RPM_Group, related_name='file')  # g_record
     # IntegerField()  # g_record
     file = TextField()  # files
     is_suid = IntegerField(default=0)  # f_is_suid
@@ -300,38 +305,38 @@ class RPM_File(BaseModel):
     perms = CharField()  # f_perms
 
     @classmethod
-    def get_id(cls, file, tag_id, package_id):
+    def get_id(cls, file, tid, pid):
         """
         Returns the file id for the provided file name, package record and tag record
         :param file: the file to lookup
-        :param tag_id: the tag id to lookup
-        :param package_id: the package id to lookup
+        :param tid: the tag id to lookup
+        :param pid: the package id to lookup
         :return: int
         """
         try:
             file = RPM_File.get(
-                (RPM_File.file == file) & (RPM_File.package_id == package_id) & (RPM_File.tag_id == tag_id))
+                (RPM_File.file == file) & (RPM_File.pid == pid) & (RPM_File.tid == tid))
             return file.id
         except:
             return None
 
     @classmethod
-    def get_sxid(cls, tag_id, db_col):
+    def get_sxid(cls, tid, db_col):
         """
         Function to return a list of files that are either suid or sgid, per tag
-        :param tag_id: the tag id to reference
+        :param tid: the tag id to reference
         :param db_col: the database column to use (either is_suid or is_sgid)
         :return: list
         """
         if db_col == 'is_suid':
             query = (
             RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
-                RPM_Package).where((RPM_File.is_suid == 1) & (RPM_File.tag_id == tag_id)).order_by(
+                RPM_Package).where((RPM_File.is_suid == 1) & (RPM_File.tid == tid)).order_by(
                 RPM_Package.package.asc()))
         elif db_col == 'is_sgid':
             query = (
             RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
-                RPM_Package).where((RPM_File.is_sgid == 1) & (RPM_File.tag_id == tag_id)).order_by(
+                RPM_Package).where((RPM_File.is_sgid == 1) & (RPM_File.tid == tid)).order_by(
                 RPM_Package.package.asc()))
 
         return query
@@ -340,17 +345,17 @@ class RPM_File(BaseModel):
         # query = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON \
         # (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) \
         # LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s \
-        # ORDER BY p_package ASC" % (db_col, tag_id)
+        # ORDER BY p_package ASC" % (db_col, tid)
         # results = self.db.fetch_all(query)
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete files with this tag_id
-        :param tag_id: tag_id to remove
+        Delete files with this tid
+        :param tid: tid to remove
         :return: int (number of files removed)
         """
-        query   = RPM_File.delete().where(RPM_File.tag_id == tag_id)
+        query   = RPM_File.delete().where(RPM_File.tid == tid)
         removed = query.execute()
         return removed
 
@@ -361,22 +366,22 @@ class RPM_File(BaseModel):
 
 # the binary rpm symbols model
 class RPM_Symbols(BaseModel):  # symbols
-    package_id = ForeignKeyField(RPM_Package, related_name='symbols') # p_record
+    pid = ForeignKeyField(RPM_Package, related_name='symbols') # p_record
     #IntegerField()  # p_record
-    tag_id     = ForeignKeyField(RPM_Tag, related_name='symbols') # t_record
+    tid     = ForeignKeyField(RPM_Tag, related_name='symbols') # t_record
     #IntegerField()  # t_record
-    file_id    = ForeignKeyField(RPM_File, related_name='symbols') # f_id
+    fid    = ForeignKeyField(RPM_File, related_name='symbols') # f_id
     #IntegerField()  # f_id
     symbols    = TextField(null=False)
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete symbols with this tag_id
-        :param tag_id: tag_id to remove
+        Delete symbols with this tid
+        :param tid: tid to remove
         :return: int (number of symbols removed)
         """
-        query   = RPM_Symbols.delete().where(RPM_Symbols.tag_id == tag_id)
+        query   = RPM_Symbols.delete().where(RPM_Symbols.tid == tid)
         removed = query.execute()
         return removed
 
@@ -386,11 +391,11 @@ class RPM_Symbols(BaseModel):  # symbols
 
 # the binary rpm flags model
 class RPM_Flags(BaseModel):  # flags
-    package_id = ForeignKeyField(RPM_Package, related_name='flags')  # p_record
+    pid = ForeignKeyField(RPM_Package, related_name='flags')  # p_record
     # IntegerField()  # p_record
-    tag_id = ForeignKeyField(RPM_Tag, related_name='flags')  # t_record
+    tid = ForeignKeyField(RPM_Tag, related_name='flags')  # t_record
     # IntegerField()  # t_record
-    file_id = ForeignKeyField(RPM_File, related_name='flags')  # f_id
+    fid = ForeignKeyField(RPM_File, related_name='flags')  # f_id
     # IntegerField()  # f_id
     relro = IntegerField(default=0)  # f_relro
     ssp = IntegerField(default=0)  # f_ssp
@@ -433,13 +438,13 @@ class RPM_Flags(BaseModel):  # flags
         return flag
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete flags with this tag_id
-        :param tag_id: tag_id to remove
+        Delete flags with this tid
+        :param tid: tid to remove
         :return: int (number of flag entries removed)
         """
-        query   = RPM_Flags.delete().where(RPM_Flags.tag_id == tag_id)
+        query   = RPM_Flags.delete().where(RPM_Flags.tid == tid)
         removed = query.execute()
         return removed
 
@@ -448,16 +453,16 @@ class RPM_Flags(BaseModel):  # flags
 # the binary alreadyseen model
 class RPM_AlreadySeen(BaseModel):
     fullname = TextField(null=False)
-    tag_id = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
+    tid = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
     # IntegerField()  # t_record
 
     @classmethod
-    def delete_tags(cls, tag_id):
+    def delete_tags(cls, tid):
         """
-        Delete alreadyseen items with this tag_id
-        :param tag_id: tag_id to remove
+        Delete alreadyseen items with this tid
+        :param tid: tid to remove
         :return: int (number of alreadyseen entries removed)
         """
-        query   = RPM_AlreadySeen.delete().where(RPM_AlreadySeen.tag_id == tag_id)
+        query   = RPM_AlreadySeen.delete().where(RPM_AlreadySeen.tid == tid)
         removed = query.execute()
         return removed

@@ -114,8 +114,8 @@ class Binary:
 
         file_list.sort()
 
-        tag_id = self.rtag.add_record(tag, path, updatepath)
-        if tag_id == 0:
+        tid = self.rtag.add_record(tag, path, updatepath)
+        if tid == 0:
             logging.critical('Unable to add tag "%s" to the database!' % tag)
             sys.exit(1)
 
@@ -125,14 +125,14 @@ class Binary:
             elif not self.re_brpm.search(file):
                 print 'File %s is not a binary rpm!\n' % file
             else:
-                self.record_add(tag_id, file)
+                self.record_add(tid, file)
 
 
-    def record_add(self, tag_id, file, update=0):
+    def record_add(self, tid, file, update=0):
         """
         Function to add a record to the database
         """
-        logging.debug('in Binary.record_add(%s, %s, %d)' % (tag_id, file, update))
+        logging.debug('in Binary.record_add(%s, %s, %d)' % (tid, file, update))
 
         if os.path.isfile(file):
             path = os.path.abspath(os.path.dirname(file))
@@ -142,29 +142,29 @@ class Binary:
 
         self.rcommon.file_rpm_check(file)
 
-        record = self.package_add_record(tag_id, file, update)
-        if not record:
+        pid = self.package_add_record(tid, file, update)
+        if not pid:
             return
 
         file_list = self.rcommon.rpm_list(file)
         if not file_list:
             return
 
-        logging.debug('Add file records for package record: %s' % record)
-        self.add_records(tag_id, record, file_list)
-        self.add_requires(tag_id, record, file)
-        self.add_provides(tag_id, record, file)
-        self.add_binary_records(tag_id, record, file)
+        logging.debug('Add file records for pid: %s' % pid)
+        self.add_records(tid, pid, file_list)
+        self.add_requires(tid, pid, file)
+        self.add_provides(tid, pid, file)
+        self.add_binary_records(tid, pid, file)
 
         if self.options.progress:
             sys.stdout.write('\n')
 
 
-    def package_add_record(self, tag_id, file, update=0):
+    def package_add_record(self, tid, file, update=0):
         """
         Function to add a package record
         """
-        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tag_id, file, update))
+        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tid, file, update))
 
         fname   = os.path.basename(file)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + self.rcommon.clean_shell(file))
@@ -177,9 +177,9 @@ class Binary:
         arch    = tlist[4].strip()
         srpm    = self.re_srpmname.sub(r'\1', tlist[5].strip())
 
-        tag = RPM_Tag.get_tag(tag_id)
+        tag = RPM_Tag.get_tag(tid)
 
-        if RPM_Package.in_db(tag_id, package, version, release, arch):
+        if RPM_Package.in_db(tid, package, version, release, arch):
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
             return(0)
 
@@ -189,7 +189,7 @@ class Binary:
         self.rcommon.show_progress(fname)
         try:
             p = RPM_Package.create(
-                tag_id   = tag_id,
+                tid      = tid,
                 package  = package,
                 version  = version,
                 release  = release,
@@ -476,11 +476,11 @@ class Binary:
         return None
 
 
-    def add_requires(self, tag_id, record, file):
+    def add_requires(self, tid, pid, file):
         """
         Function to add requires to the database
         """
-        logging.debug('in Binary.add_requires(%s, %s, %s)' % (tag_id, record, file))
+        logging.debug('in Binary.add_requires(%s, %s, %s)' % (tid, pid, file))
 
         list = commands.getoutput("rpm -qp --nosignature --requires " + self.rcommon.clean_shell(file) + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
         list = list.splitlines()
@@ -494,9 +494,9 @@ class Binary:
                     return rid
                 try:
                     r = RPM_Requires.create(
-                        package_id  = record,
-                        tag_id      = tag_id,
-                        name        = dep.strip()
+                        pid  = pid,
+                        tid  = tid,
+                        name = dep.strip()
                     )
                     return r.id
                 except Exception, e:
@@ -507,11 +507,11 @@ class Binary:
         """
         Function to look up the pv_record and add it to the cache for provides
         """
-        pid = RPM_Provides.get_id(name)
-        if pid:
+        prid = RPM_Provides.get_id(name)
+        if prid:
             # add to the cache
-            self.provides_cache[name] = pid
-            return pid
+            self.provides_cache[name] = prid
+            return prid
         else:
             return False
 
@@ -526,18 +526,18 @@ class Binary:
             return self.provides_cache[name]
 
         # not cached, check the database
-        pid = self.cache_get_provides(name)
-        if pid:
-            return pid
+        prid = self.cache_get_provides(name)
+        if prid:
+            return prid
 
         return None
 
 
-    def add_provides(self, tag_id, record, file):
+    def add_provides(self, tid, pid, file):
         """
         Function to add provides to the database
         """
-        logging.debug('in Binary.add_provides(%s, %s, %s)' % (tag_id, record, file))
+        logging.debug('in Binary.add_provides(%s, %s, %s)' % (tid, pid, file))
 
         list = commands.getoutput("rpm -qp --nosignature --provides " + self.rcommon.clean_shell(file))
         list = list.splitlines()
@@ -546,25 +546,25 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Provides: %s' % prov
-                pid = self.get_provides_record(prov.strip())
-                if pid:
-                    return pid
+                prid = self.get_provides_record(prov.strip())
+                if prid:
+                    return prid
                 try:
-                    p = RPM_Provides.create(
-                        package_id = record,
-                        tag_id     = tag_id,
-                        name       = prov.strip()
+                    pr = RPM_Provides.create(
+                         pid  = pid,
+                         tid  = tid,
+                         name = prov.strip()
                     )
-                    return p.id
+                    return pr.id
                 except Exception, e:
                     logging.error('Failed to add provides %s to the database!\n%s', file, e)
 
 
-    def add_records(self, tag_id, record, file_list):
+    def add_records(self, tid, pid, file_list):
         """
         Function to add file records
         """
-        logging.debug('in Binary.add_records(%s, %s, %s)' % (tag_id, record, file_list))
+        logging.debug('in Binary.add_records(%s, %s, %s)' % (tid, pid, file_list))
 
         for x in file_list.keys():
             file = file_list[x]['file'].strip()
@@ -576,24 +576,24 @@ class Binary:
 
             try:
                 f = RPM_File.create(
-                    tag_id     = tag_id,
-                    package_id = record,
-                    user_id    = uid,
-                    group_id   = gid,
-                    file       = file,
-                    is_suid    = file_list[x]['is_suid'],
-                    is_sgid    = file_list[x]['is_sgid'],
-                    perms      = file_list[x]['perms']
+                    tid     = tid,
+                    pid     = pid,
+                    uid     = uid,
+                    gid     = gid,
+                    file    = file,
+                    is_suid = file_list[x]['is_suid'],
+                    is_sgid = file_list[x]['is_sgid'],
+                    perms   = file_list[x]['perms']
                 )
             except Exception, e:
                 logging.error('Adding file %s failed!\n%s', file, e)
 
 
-    def add_binary_records(self, tag_id, record, rpm):
+    def add_binary_records(self, tid, pid, rpm):
         """
         Function to add binary symbols and flags to the database
         """
-        logging.debug('in Binary.add_binary_records(%s, %s, %s)' % (tag_id, record, rpm))
+        logging.debug('in Binary.add_binary_records(%s, %s, %s)' % (tid, pid, rpm))
 
         cpio_dir = tempfile.mkdtemp()
         try:
@@ -618,9 +618,9 @@ class Binary:
                         symbols = self.get_binary_symbols(file)
                         # need to change ./usr/sbin/foo to /usr/sbin/foo and look up the file record
                         nfile   = file[1:]
-                        file_id = RPM_File.get_id(nfile, tag_id, record)
-                        self.add_flag_records(tag_id, file_id, record, flags)
-                        self.add_symbol_records(tag_id, file_id, record, symbols)
+                        fid     = RPM_File.get_id(nfile, tid, pid)
+                        self.add_flag_records(tid, fid, pid, flags)
+                        self.add_symbol_records(tid, fid, pid, symbols)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -700,45 +700,45 @@ class Binary:
         return flags
 
 
-    def add_flag_records(self, tag_id, file_id, record, flags):
+    def add_flag_records(self, tid, fid, pid, flags):
         """
         Function to add flag records to the database
         """
-        logging.debug('in Binary.add_flag_records(%s, %s, %s, %s)' % (tag_id, file_id, record, flags))
+        logging.debug('in Binary.add_flag_records(%s, %s, %s, %s)' % (tid, fid, pid, flags))
 
         logging.debug('flags: %s' % flags)
 
         try:
             f = RPM_Flags.create(
-                tag_id     = tag_id,
-                package_id = record,
-                file_id    = file_id,
-                relro      = flags['relro'],
-                ssp        = flags['ssp'],
-                pie        = flags['pie'],
-                fortify    = flags['fortify_source'],
-                nx         = flags['nx']
+                tid     = tid,
+                pid     = pid,
+                fid     = fid,
+                relro   = flags['relro'],
+                ssp     = flags['ssp'],
+                pie     = flags['pie'],
+                fortify = flags['fortify_source'],
+                nx      = flags['nx']
             )
         except Exception, e:
-            logging.error('Adding flags for file_id %d failed!\n%s', file_id, e)
+            logging.error('Adding flags for fid %d failed!\n%s', fid, e)
 
 
-    def add_symbol_records(self, tag_id, file_id, record, symbols):
+    def add_symbol_records(self, tid, fid, pid, symbols):
         """
         Function to add symbol records to the database
         """
-        logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tag_id, file_id, record, symbols))
+        logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tid, fid, pid, symbols))
 
         for symbol in symbols:
             try:
                 s = RPM_Symbols.create(
-                    package_id = record,
-                    tag_id     = tag_id,
-                    file_id    = file_id,
-                    symbols    = symbol
+                    pid     = pid,
+                    tid     = tid,
+                    fid     = fid,
+                    symbols = symbol
                 )
             except Exception, e:
-                logging.error('Adding symbol for file_id %d failed!\n%s', file_id, e)
+                logging.error('Adding symbol for fid %d failed!\n%s', fid, e)
 
 
     def list_updates(self, tag):
@@ -765,9 +765,9 @@ class Binary:
 
         print 'Searching for %s files in tag %s\n' % (type.upper(), tag)
 
-        tag_id = RPM_Tag.get_id(tag)
+        tid = RPM_Tag.get_id(tag)
 
-        if not tag_id:
+        if not tid:
             print 'Invalid tag: %s' % tag
             sys.exit(1)
 
@@ -779,7 +779,7 @@ class Binary:
             print 'Invalid value, looking for suid or sgid, received: %s' % type
             sys.exit(1)
 
-        results = RPM_File.get_sxid(tag_id, db_col)
+        results = RPM_File.get_sxid(tid, db_col)
         if results:
             for xrow in results:
                 print '%s: %s [%s:%s mode %s]' % (xrow.rpm_package.package,
