@@ -27,7 +27,7 @@ import logging
 import os
 import commands
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, RPM_AlreadySeen
+from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, RPM_AlreadySeen, database
 
 
 class Tag:
@@ -557,53 +557,57 @@ class Tag:
         return(0)
 
 
-    def showdbstats(self, tag = 'all'):
+    def showdbstats(self, tag=None):
         """
         Function to show database info
         """
         logging.debug("in Tag.showdbstats(%s)" % tag)
 
-        if tag == 'all':
-            extra_opts = ''
-        else:
+        tid = None
+        if tag:
             tag_id = self.lookup(tag)
             if tag_id:
-                extra_opts = "WHERE t_record = '%d'" % tag_id['id']
+                tid = tag_id['id']
             else:
                 print 'No such tag: "%s" does not exist in the database!\n' % tag
                 sys.exit(1)
 
-        query   = "SELECT count(*) FROM tags %s" % extra_opts
-        c_tags  = self.db.fetch_one(query)
-        query   = "SELECT count(*) FROM packages %s" % extra_opts
-        c_pkgs  = self.db.fetch_one(query)
-        if self.type == 'binary':
-            query   = "SELECT count(*) FROM requires %s" % extra_opts
-            c_reqs  = self.db.fetch_one(query)
-            query   = "SELECT count(*) FROM provides %s" % extra_opts
-            c_provs = self.db.fetch_one(query)
-            query   = "SELECT count(*) FROM flags %s" % extra_opts
-            c_flags = self.db.fetch_one(query)
-            query   = "SELECT count(*) FROM symbols %s" % extra_opts
-            c_symbs = self.db.fetch_one(query)
+        if tid:
+            if self.type == 'binary':
+                c_tags  = RPM_Tag.select().where(RPM_Tag.id == tid).count()
+                c_pkgs  = RPM_Package.select().where(RPM_Package.tag_id == tid).count()
+                c_files = RPM_File.select().where(RPM_File.tag_id == tid).count()
+                c_reqs  = RPM_Requires.select().where(RPM_Requires.tag_id == tid).count()
+                c_provs = RPM_Provides.select().where(RPM_Provides.tag_id == tid).count()
+                c_flags = RPM_Flags.select().where(RPM_Flags.tag_id == tid).count()
+                c_symbs = RPM_Symbols.select().where(RPM_Symbols.tag_id == tid).count()
+#            else:
+#                c_src   = SRPM_Sources.select().where(RPM_Tag.id == tid).count()
+#                c_ctags = SRPM_Ctags.select().where(RPM_Tag.id == tid).count()
+#                c_breqs = SRPM_Buildreqs.select().where(RPM_Tag.id == tid).count()
         else:
-            query   = "SELECT count(*) FROM sources %s" % extra_opts
-            c_src   = self.db.fetch_one(query)
-            query   = "SELECT count(*) FROM ctags %s" % extra_opts
-            c_ctags = self.db.fetch_one(query)
-            query   = "SELECT count(*) FROM buildreqs %s" % extra_opts
-            c_breqs = self.db.fetch_one(query)
-        query   = "SELECT count(*) FROM files %s" % extra_opts
-        c_files = self.db.fetch_one(query)
+            if self.type == 'binary':
+                c_tags  = RPM_Tag.select().count()
+                c_pkgs  = RPM_Package.select().count()
+                c_files = RPM_File.select().count()
+                c_reqs  = RPM_Requires.select().count()
+                c_provs = RPM_Provides.select().count()
+                c_flags = RPM_Flags.select().count()
+                c_symbs = RPM_Symbols.select().count()
+#            else:
+#                c_src   = SRPM_Sources.select().count()
+#                c_ctags = SRPM_Ctags.select().count()
+#                c_breqs = SRPM_Buildreqs.select().count()
 
         # get the size of the database as well
         size   = 0.00
         btype  = ''
-        query  = "SHOW TABLE STATUS"
-        tbsize = self.db.fetch_all(query)
-
-        for x in tbsize:
-            size += x['Data_length']
+        query = 'SELECT table_schema "name",  sum( data_length + index_length ) "size" FROM information_schema.TABLES \
+                 WHERE table_schema = "%s" GROUP BY table_schema' % database.database
+        tbsize = database.execute_sql(query)
+        for x in tbsize._rows:
+            if x[0] == database.database:
+                size = int(x[1])
         count = 0
 
         while size > 1024:
@@ -621,9 +625,9 @@ class Tag:
         if tag != 'all':
             print 'Printing statistics for tag: %s\n' % tag
         print '   Database  => User: %s, Host: %s, Database: %s' % (
-            self.config['username'],
-            self.config['hostspec'],
-            self.config['database'])
+            database.connect_kwargs['user'],
+            database.connect_kwargs['host'],
+            database.database)
         print '   Data size => %2.2f %s\n' % (size, btype)
         print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
         if self.type == 'binary':
