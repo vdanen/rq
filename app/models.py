@@ -64,7 +64,7 @@ class RPM_Tag(BaseModel):  # tags
     path        = CharField(null=False)
     tdate       = CharField(null=False)
     update_path = CharField(null=False)
-    update_date = CharField()
+    update_date = CharField(default='')
 
     @classmethod
     def get_tag(cls, id):
