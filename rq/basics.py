@@ -22,7 +22,11 @@ You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-import logging, os, sys, re, commands
+import logging
+import os
+import sys
+import re
+import commands
 
 class Common:
     """
