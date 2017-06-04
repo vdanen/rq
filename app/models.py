@@ -20,6 +20,11 @@ class BaseModel(Model):
     class Meta:
         database = database
 
+    @classmethod
+    def optimize(cls):
+        query = 'OPTIMIZE TABLE %s' % cls._meta.db_table
+        database.execute_sql(query)
+        return
 
 # the binary rpm user model
 class RPM_User(BaseModel):

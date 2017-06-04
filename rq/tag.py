@@ -165,20 +165,21 @@ class Tag:
 
                 sys.stdout.write('Removing %s tagged %s %s for %s... ' % (result, word_package, word_entry, tag))
                 sys.stdout.flush()
-                sys.stdout.write(' done\n')
 
                 if result > 500:
-                    self.optimize_db(tables)
+                    self.optimize_db()
 
                 # now delete the tag entry itself
                 RPM_Flags.delete_tags(tid['id'])
                 RPM_Symbols.delete_tags(tid['id'])
                 t.delete_instance(recursive=True)
+
+                sys.stdout.write(' done\n')
             else:
                 sys.stdout.write('No matching package tags to remove.\n')
 
 
-    def optimize_db(self, tables):
+    def optimize_db(self):
         """
         Function to optimize the database
         """
@@ -186,9 +187,14 @@ class Tag:
 
         sys.stdout.write('Optimizing database (this may take some time)... ')
         sys.stdout.flush()
-        for table in tables:
-            query = 'OPTIMIZE TABLE %s' % table
-            self.db.do_query(query)
+        RPM_Flags.optimize()
+        RPM_Symbols.optimize()
+        RPM_File.optimize()
+        RPM_Provides.optimize()
+        RPM_Requires.optimize()
+        RPM_Package.optimize()
+        RPM_Tag.optimize()
+        RPM_AlreadySeen.optimize()
         sys.stdout.write(' done\n')
 
 
