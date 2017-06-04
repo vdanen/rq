@@ -31,7 +31,7 @@ import shutil
 import datetime
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_Requires, \
-    RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols
+    RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, database
 
 
 class Binary:
@@ -214,12 +214,12 @@ class Binary:
         logging.debug('in Binary.query(%s)' % type)
 
 #TODO
-        tag_id = self.rtag.lookup(self.options.tag)
-        if self.options.tag and not tag_id:
+        t = self.rtag.lookup(self.options.tag)
+        if self.options.tag and not t:
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
-        elif self.options.tag and tag_id:
-            tag_id =  tag_id['id']
+        elif self.options.tag and t:
+            tid =  t['id']
 
         if self.options.ignorecase and not self.options.regexp:
             ignorecase = ''
@@ -246,36 +246,58 @@ class Binary:
             print 'Searching database records for %s match for %s (%s)' % (match_type, type, like_q)
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s files " % ignorecase
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_File.select().where((RPM_File.file.regexp(like_q)) & (RPM_File.tid == tid)).order_by(RPM_File.file.asc())
+                else:
+                    result = RPM_File.select().where(RPM_File.file.regexp(like_q)).order_by(RPM_File.file.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_File.select().where((RPM_File.file.contains(like_q)) & (RPM_File.tid == tid)).order_by(RPM_File.file.asc())
+                else:
+                    result = RPM_File.select().where(RPM_File.file.contains(like_q)).order_by(RPM_File.file.asc())
+        """
+        if type == 'files':
+            query = "SELECT DISTINCT rpm_package.update, rpm_package.package, rpm_package.version, \
+                      rpm_package.release, rpm_package.date, rpm_package.srpm, rpm_file.file, rpm_file.id, \
+                      rpm_user.user, rpm_group.group, rpm_file.is_suid, rpm_file.is_sgid, rpm_file.perms FROM rpm_file \
+                      LEFT JOIN rpm_package ON (rpm_package.id = rpm_file.pid) LEFT JOIN rpm_user \
+                      ON (rpm_file.uid = rpm_user.id) LEFT JOIN rpm_group ON (rpm_file.gid = rpm_group.id) \
+                      WHERE %s file " % ignorecase
         elif type == 'symbols':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
         elif type == 'packages':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm FROM packages WHERE %s p_package " % ignorecase
+            query = "SELECT DISTINCT rpm_packages.update, rpm_packages.package, rpm_packages.version, rpm_packages.release, rpm_packages.date, rpm_packages.srpm FROM rpm_packages WHERE %s rpm_packages.package " % ignorecase
         elif type == 'provides':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, pv_name FROM provides LEFT JOIN packages ON (packages.p_record = provides.p_record) JOIN provides_names ON (provides_names.pv_record = provides.pv_record) WHERE %s pv_name " % ignorecase
         elif type == 'requires':
             query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, rq_name FROM requires LEFT JOIN packages ON (packages.p_record = requires.p_record) JOIN requires_names ON (requires_names.rq_record = requires.rq_record) WHERE %s rq_name " % ignorecase
 
         if self.options.regexp:
-            query = query + "RLIKE '" + self.db.sanitize_string(like_q) + "'"
+            query = query + "RLIKE '" + like_q + "'"
         else:
-            query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
+            query = query + "LIKE '%" + like_q + "%'"
 
         if self.options.tag:
-            query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
+            query = "%s AND %s.tid = '%d'"  % (query, type, tid)
 
         if type == 'packages':
-            query  = query + " ORDER BY p_tag, p_package"
+            query  = query + " ORDER BY tid, package"
         elif type == 'symbols':
             query = query + " ORDER BY symbols"
         elif type == 'provides':
-            query = query + " ORDER BY pv_name"
+            query = query + " ORDER BY name"
         elif type == 'requires':
-            query = query + " ORDER BY rq_name"
+            query = query + " ORDER BY name"
         else:
-            query  = query + " ORDER BY p_tag, p_package, " + type
+            query  = query + " ORDER BY tid, package, " + type
 
-        result = self.db.fetch_all(query)
+        print query
+        result = database.execute_sql(query)
+        print result
+        """
+
+        print result
         if result:
             if self.options.count:
                 if self.options.quiet:
@@ -292,12 +314,13 @@ class Binary:
             for row in result:
                 utype = ''
                 # for readability
-                fromdb_tag  = row['p_tag']
-                fromdb_rpm  = row['p_package']
-                fromdb_ver  = row['p_version']
-                fromdb_rel  = row['p_release']
-                fromdb_date = row['p_date']
-                fromdb_srpm = row['p_srpm']
+                package = RPM_Package.get(RPM_Package.id == row.pid)
+                fromdb_tag  = RPM_Tag.get_tag(row.tid)
+                fromdb_rpm  = package.package
+                fromdb_ver  = package.version
+                fromdb_rel  = package.release
+                fromdb_date = package.date
+                fromdb_srpm = package.srpm
 
                 if type == 'provides':
                     fromdb_type = row['pv_name']
@@ -307,21 +330,21 @@ class Binary:
 
                 if type == 'files':
                     # only provides, requires, files
-                    fromdb_type = row['files']
+                    fromdb_type = row.file
 
                 if type == 'files':
-                    fromdb_user    = row['f_user']
-                    fromdb_group   = row['f_group']
-                    fromdb_is_suid = row['f_is_suid']
-                    fromdb_is_sgid = row['f_is_sgid']
-                    fromdb_perms   = row['f_perms']
-                    fromdb_fileid  = row['f_id']
+                    fromdb_user    = RPM_User.get_name(row.uid)
+                    fromdb_group   = RPM_Group.get_name(row.gid)
+                    fromdb_is_suid = row.is_suid
+                    fromdb_is_sgid = row.is_sgid
+                    fromdb_perms   = row.perms
+                    fromdb_fileid  = row.id
 
                 if type == 'symbols':
                     fromdb_files   = row['files']
                     fromdb_symbol  = row['symbols']
 
-                if row['p_update'] == 1:
+                if row.update == 1:
                     utype = '[update] '
 
                 if not ltag == fromdb_tag:
@@ -330,7 +353,7 @@ class Binary:
                     ltag = fromdb_tag
 
                 if self.options.debug:
-                    print row
+                    print vars(row)
                 else:
                     rpm = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
 
@@ -353,12 +376,12 @@ class Binary:
                     if self.options.quiet:
                         lsrc = rpm
                     else:
-                        flag_result = None
+                        flags = None
                         if self.options.extrainfo:
                             if type == 'files':
                                 flags = RPM_Flags.get_named(fromdb_fileid)
                             rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                            if flag_result:
+                            if flags:
                                 print '  %-10s%s' % ("Date :", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                                 print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags.relro, "SSP:", flags.ssp, "PIE:", flags.pie)
                                 print '  %-10s%-10s%-12s%-10s%s' % ("", "FORTIFY:", flags.fortify, "NX :", flags.nx)

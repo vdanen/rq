@@ -44,6 +44,19 @@ class RPM_User(BaseModel):
         except:
             return None
 
+    @classmethod
+    def get_name(cls, uid):
+        """
+        Returns the user name for the provided id
+        :param uid: user id to lookup
+        :return: str
+        """
+        try:
+            user = RPM_User.get(RPM_User.id == uid)
+            return user.user
+        except:
+            return None
+
     def __repr__(self):
         return '<RPM User {self.user}>'.format(self=self)
 
@@ -62,6 +75,19 @@ class RPM_Group(BaseModel):
         try:
             group = RPM_Group.get(RPM_Group.group == name)
             return group.id
+        except:
+            return None
+
+    @classmethod
+    def get_name(cls, gid):
+        """
+        Returns the group name for the provided id
+        :param gid: group id to lookup
+        :return: str
+        """
+        try:
+            group = RPM_Group.get(RPM_Group.id == gid)
+            return group.group
         except:
             return None
 
@@ -175,6 +201,15 @@ class RPM_Package(BaseModel):
     def tag(self):
         t = RPM_Tag.get(RPM_Tag.id == self.tid)
         return t.tag
+
+    @classmethod
+    def get_package(cls, pid):
+        """
+        Return the package name for the specified id
+        :param pid: int
+        :return: package name
+        """
+        return RPM_Package.select(RPM_Package.package).where(RPM_Package.id == pid)
 
     @classmethod
     def in_db(cls, tid, package, version, release, arch):
