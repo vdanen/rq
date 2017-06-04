@@ -622,7 +622,7 @@ class Binary:
                         symbols = self.get_binary_symbols(file)
                         # need to change ./usr/sbin/foo to /usr/sbin/foo and look up the file record
                         nfile   = file[1:]
-                        fid     = RPM_File.get_id(nfile, tid, pid)
+                        fid     = RPM_File.find_id(nfile, tid, pid)
                         self.add_flag_records(tid, fid, pid, flags)
                         self.add_symbol_records(tid, fid, pid, symbols)
             os.chdir(current_dir)

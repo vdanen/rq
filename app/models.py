@@ -26,6 +26,7 @@ class BaseModel(Model):
         database.execute_sql(query)
         return
 
+
 # the binary rpm user model
 class RPM_User(BaseModel):
     user = CharField(null=False)  # f_user
@@ -301,7 +302,7 @@ class RPM_File(BaseModel):
     perms   = CharField()  # f_perms
 
     @classmethod
-    def get_id(cls, file, tid, pid):
+    def find_id(cls, file, tid, pid):
         """
         Returns the file id for the provided file name, package record and tag record
         :param file: the file to lookup
