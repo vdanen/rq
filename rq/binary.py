@@ -213,7 +213,7 @@ class Binary:
         """
         logging.debug('in Binary.query(%s)' % type)
 
-#TODO
+        # TODO: seems to always be case-insensitive; need to change args!!
         t = self.rtag.lookup(self.options.tag)
         if self.options.tag and not t:
             print 'Tag %s is not a known tag!\n' % self.options.tag
@@ -297,7 +297,7 @@ class Binary:
         print result
         """
 
-        print result
+        # DEBUG: print result
         if result:
             if self.options.count:
                 if self.options.quiet:
@@ -312,66 +312,67 @@ class Binary:
             ltag = ''
             lsrc = ''
             for row in result:
+                # DEBUG: print vars(row)
                 utype = ''
                 # for readability
                 package = RPM_Package.get(RPM_Package.id == row.pid)
-                fromdb_tag  = RPM_Tag.get_tag(row.tid)
-                fromdb_rpm  = package.package
-                fromdb_ver  = package.version
-                fromdb_rel  = package.release
-                fromdb_date = package.date
-                fromdb_srpm = package.srpm
+                r_tag  = RPM_Tag.get_tag(row.tid)
+                r_rpm  = package.package
+                r_ver  = package.version
+                r_rel  = package.release
+                r_date = package.date
+                r_srpm = package.srpm
 
                 if type == 'provides':
-                    fromdb_type = row['pv_name']
+                    r_type = row.name
 
                 if type == 'requires':
-                    fromdb_type = row['rq_name']
+                    r_type = row.name
 
                 if type == 'files':
                     # only provides, requires, files
-                    fromdb_type = row.file
+                    r_type = row.file
 
                 if type == 'files':
-                    fromdb_user    = RPM_User.get_name(row.uid)
-                    fromdb_group   = RPM_Group.get_name(row.gid)
-                    fromdb_is_suid = row.is_suid
-                    fromdb_is_sgid = row.is_sgid
-                    fromdb_perms   = row.perms
-                    fromdb_fileid  = row.id
+                    r_user    = RPM_User.get_name(row.uid)
+                    r_group   = RPM_Group.get_name(row.gid)
+                    r_is_suid = row.is_suid
+                    r_is_sgid = row.is_sgid
+                    r_perms   = row.perms
+                    r_fileid  = row.id
 
                 if type == 'symbols':
-                    fromdb_files   = row['files']
-                    fromdb_symbol  = row['symbols']
+                    r_files   = row.files
+                    r_symbol  = row.symbols
 
                 if row.update == 1:
                     utype = '[update] '
 
-                if not ltag == fromdb_tag:
+                if not ltag == r_tag:
                     if not type == 'packages':
-                        print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
-                    ltag = fromdb_tag
+                        print '\n\nResults in Tag: %s\n%s\n' % (r_tag, '='*40)
+                    ltag = r_tag
 
                 if self.options.debug:
                     print vars(row)
                 else:
-                    rpm = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
+                    rpm = '%s-%s-%s' % (r_rpm, r_ver, r_rel)
 
                     if not rpm == lsrc:
                         if type == 'files' and self.options.ownership:
                             is_suid = ''
                             is_sgid = ''
-                            if fromdb_is_suid == 1:
+                            if r_is_suid == 1:
                                 is_suid = '*'
-                            if fromdb_is_sgid == 1:
+                            if r_is_sgid == 1:
                                 is_sgid = '*'
-                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_type, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
+                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, r_srpm, r_type, int(r_perms), is_suid, r_user, is_sgid, r_group)
                         elif type == 'symbols':
-                            print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_symbol, fromdb_files)
+                            print '%s (%s): %s in %s' % (rpm, r_srpm, r_symbol, r_files)
                         elif type == 'packages':
                             print '%s/%s %s' % (ltag, rpm, utype)
                         else:
-                            print '%s%s (%s): %s' % (utype, rpm, fromdb_srpm, fromdb_type)
+                            print '%s%s (%s): %s' % (utype, rpm, r_srpm, r_type)
 
                     if self.options.quiet:
                         lsrc = rpm
@@ -379,8 +380,8 @@ class Binary:
                         flags = None
                         if self.options.extrainfo:
                             if type == 'files':
-                                flags = RPM_Flags.get_named(fromdb_fileid)
-                            rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
+                                flags = RPM_Flags.get_named(r_fileid)
+                            rpm_date = datetime.datetime.fromtimestamp(float(r_date))
                             if flags:
                                 print '  %-10s%s' % ("Date :", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
                                 print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags.relro, "SSP:", flags.ssp, "PIE:", flags.pie)
