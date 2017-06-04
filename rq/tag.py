@@ -171,6 +171,8 @@ class Tag:
                     self.optimize_db(tables)
 
                 # now delete the tag entry itself
+                RPM_Flags.delete_tags(tid['id'])
+                RPM_Symbols.delete_tags(tid['id'])
                 t.delete_instance(recursive=True)
             else:
                 sys.stdout.write('No matching package tags to remove.\n')
