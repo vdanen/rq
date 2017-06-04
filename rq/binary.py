@@ -256,6 +256,18 @@ class Binary:
                     result = RPM_File.select().where((RPM_File.file.contains(like_q)) & (RPM_File.tid == tid)).order_by(RPM_File.file.asc())
                 else:
                     result = RPM_File.select().where(RPM_File.file.contains(like_q)).order_by(RPM_File.file.asc())
+
+        elif type == 'provides':
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Provides.select().where((RPM_Provides.name.regexp(like_q)) & (RPM_Provides.tid == tid)).order_by(RPM_Provides.name.asc())
+                else:
+                    result = RPM_Provides.select().where(RPM_Provides.name.regexp(like_q)).order_by(RPM_Provides.name.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Provides.select().where((RPM_Provides.name.contains(like_q)) & (RPM_Provides.tid == tid)).order_by(RPM_Provides.name.asc())
+                else:
+                    result = RPM_Provides.select().where(RPM_Provides.name.contains(like_q)).order_by(RPM_Provides.name.asc())
         """
         if type == 'files':
             query = "SELECT DISTINCT rpm_package.update, rpm_package.package, rpm_package.version, \
