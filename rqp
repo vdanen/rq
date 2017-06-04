@@ -22,16 +22,14 @@ You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-RQ_PROG    = 'rqp'
-RQ_TYPE    = 'binary'
-
 import optparse
-import os
 import sys
 import logging
 import rq
 from app import *
 
+RQ_PROG    = 'rqp'
+RQ_TYPE    = 'binary'
 
 if __name__ == '__main__':
     print '%s %s\n' % (RQ_PROG, rq.__version__)
