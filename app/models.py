@@ -418,38 +418,45 @@ class RPM_Flags(BaseModel):  # flags
     nx      = IntegerField(default=0)  # f_nx
 
     @classmethod
-    def get_named(cls, id):
+    def get_named(cls, fid):
         """
         Returns described flags rather than their numerical values we return what the values mean
-        :param id: integer of flag id to look up
-        :return: object
+        :param fid: integer of file id to look up
+        :return: object or None
         """
-        f = RPM_Flags.get(RPM_Flags.id == id)
+        try:
+            f = RPM_Flags.get(RPM_Flags.fid == fid)
+        except:
+            return None
 
         # these are the default values
         newflags = namedtuple('newflags', 'relro ssp nx pie fortify')
-        flag = newflags(relro='none', ssp='not found', nx='disabled', pie='none', fortify='not found')
+        relro    = 'none'
+        ssp      = 'not found'
+        nx       = 'disabled'
+        pie      = 'none'
+        fortify  = 'not found'
 
         if f.relro == 1:
-            flag.relro = 'full'
+            relro = 'full'
         elif f.relro == 2:
-            flag.relro = 'partial'
+            relro = 'partial'
 
         if f.ssp == 1:
-            flag.ssp = 'found'
+            ssp = 'found'
 
         if f.nx == 1:
-            flag.nx = 'enabled'
+            nx = 'enabled'
 
         if f.pie == 2:
-            flag.pie = 'DSO'
+            pie = 'DSO'
         elif f.pie == 1:
-            flag.pie = 'enabled'
+            pie = 'enabled'
 
         if f.fortify == 1:
-            flag.fortify = 'found'
+            fortify = 'found'
 
-        return flag
+        return newflags(relro=relro, ssp=ssp, nx=nx, pie=pie, fortify=fortify)
 
     @classmethod
     def delete_tags(cls, tid):
