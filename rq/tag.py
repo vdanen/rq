@@ -27,7 +27,8 @@ import logging
 import os
 import commands
 from glob import glob
-from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, RPM_AlreadySeen, database
+from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, \
+    RPM_AlreadySeen, database
 
 
 class Tag:
@@ -35,13 +36,6 @@ class Tag:
     Class to handle tag management.  Init the class with the database connection and the
     type of connection, whether it is binary or source.  This saves us having to pass
     this information as arguments to functions
-
-    Tag.list()           : show database tags
-    Tag.lookup()         : returns a dictionary of tag information
-    Tag.add_record()     : ads a new tag to the db
-    Tag.deleted_entries(): deletes a tag and associated db entries
-    Tag.update_entries() : updates entries based on tag <-- this function doesn't work yet
-    Tag.showdbstats()    : show database statistics, by optional tag
     """
 
     def __init__(self, rq_type, config, rcommon, options):
@@ -215,15 +209,15 @@ class Tag:
         elif self.type == 'binary':
             pkg_type = 'RPM'
 
-        query  = "SELECT DISTINCT path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        path   = self.db.fetch_one(query)
-        query  = "SELECT DISTINCT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id = self.db.fetch_one(query)
-        query  = "SELECT DISTINCT update_path FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        u_path = self.db.fetch_one(query)
-
-        if not tag_id:
+        if RPM_Tag.exists(tag):
+            the_tag = RPM_Tag.get(RPM_Tag.tag == tag)
+            path    = the_tag.path
+            tid     = the_tag.id
+            u_path  = the_tag.update_path
+        else:
             print 'No Tag entry found for tag: %s\n' % tag
+            sys.exit(1)
+
 
         if u_path:
             logging.info('Using associated updates path: %s' % u_path)
@@ -237,13 +231,12 @@ class Tag:
             # this handles entries where we don't have a dedicated updates directory
             print 'Checking for removed files in %s tag entries from %s...' % (tag, path)
             # get the existing entries
-            query  = "SELECT DISTINCT p_record, p_tag, p_fullname FROM packages WHERE t_record = '%s'" % tag_id
-            result = self.db.fetch_all(query)
+            result = RPM_Package.select(RPM_Package.tid == tid)
             for row in result:
-                fullname = '%s/%s' % (path, row['p_fullname'])
+                fullname = '%s/%s' % (path, row.fullname)
                 if not os.path.isfile(fullname):
-                    logging.info('  %s missing: %s' % (pkg_type, row['p_fullname']))
-                    to_remove.append(row['p_record'])
+                    logging.info('  %s missing: %s' % (pkg_type, row.fullname))
+                    to_remove.append(row.id)
 
             src_list = glob(path + "/*.rpm")
             src_list.sort()
@@ -251,11 +244,7 @@ class Tag:
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                query  = "SELECT p_package FROM packages WHERE t_record = '%s' AND p_fullname = '%s'" % (
-                         tag_id,
-                         self.db.sanitize_string(sfname))
-                package = self.db.fetch_one(query)
-                if not package:
+                if not RPM_Package.exists(tid, sfname):
                     logging.info('Scheduling %s to be added to database' % src_rpm)
                     to_add.append(src_rpm)
 
@@ -271,25 +260,21 @@ class Tag:
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                query  = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_fullname = '%s'" % (
-                         tag_id,
-                         self.db.sanitize_string(sfname))
-                package = self.db.fetch_one(query)
-                if not package:
+                if not RPM_Package.exists(tid, sfname):
                     # this means we do not have this package currently in the database
                     # so check if we have already seen and removed it
-                    query = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s' AND t_record = %d" % (self.db.sanitize_string(sfname), tag_id)
-                    seen  = self.db.fetch_one(query)
-                    if not seen:
+                    if not RPM_AlreadySeen.exists(tid, sfname):
                         # this is a new file that does not exist in the database, but it's
                         # in the updates directory and we have not seen it before
 
-# see file, look in packages and alreadyseen, if:
-#  not in packages, not in alreadyseen: new
-#  in packgaes, not in alreadyseen: release package
-#  in packages, in alreadyseen: should never happen
-#  not in packages, in alreadyseen: old package
-# if new, add it, delete old one from packages, add to alreadyseen
+                        """
+                        # see file, look in packages and alreadyseen, if:
+                        #  not in packages, not in alreadyseen: new
+                        #  in packages, not in alreadyseen: release package
+                        #  in packages, in alreadyseen: should never happen
+                        #  not in packages, in alreadyseen: old package
+                        # if new, add it, delete old one from packages, add to alreadyseen
+                        """
 
                         # this file is not in our db, so we need to see if this is an updated package
                         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{ARCH}' " + self.rcommon.clean_shell(src_rpm))
@@ -298,30 +283,29 @@ class Tag:
                         r_pkg  = tlist[0].strip()
                         r_arch = tlist[1].strip()
                         if self.type == 'source':
-                            query   = "SELECT p_record, p_fullname FROM packages WHERE t_record = '%s' AND p_package = '%s' LIMIT 1" % (
-                                      tag_id,
-                                      self.db.sanitize_string(r_pkg))
+                            result = SRPM_Package.select().where(
+                                        (SRPM_Package.tid == tid) &
+                                        (SRPM_Package.package == r_pkg))
                         elif self.type == 'binary':
                             # when looking at binaries, we need to include the arch for uniqueness otherwise
                             # we get the first hit, which might be i386 when we're looking at a new i686 pkg
-                            query   = "SELECT p_record, p_fullname FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_arch = '%s' LIMIT 1" % (
-                                      tag_id,
-                                      self.db.sanitize_string(r_pkg),
-                                      self.db.sanitize_string(r_arch))
-                        result  = self.db.fetch_all(query)
+                            result = RPM_Package.select().where(
+                                        (RPM_Package.tid == tid) &
+                                        (RPM_Package.package == r_pkg) &
+                                        (RPM_Package.arch == r_arch))
 
                         if result:
                             # we have a package record of the same name in the database
                             # this means we need to mark the old package as seen, remove
                             # the old package, and add this new package
-                            for row in result:
-                                if row['p_record']:
-                                    logging.info('Found an already-in-updates record for %s (ID: %d, %s)' % (sfname, row['p_record'], row['p_fullname']))
+                            for package in result:
+                                if package.id:
+                                    logging.info('Found an already-in-updates record for %s (ID: %d, %s)' % (sfname, package.id, package.fullname))
                                     to_add.append(src_rpm)
-                                    if row['p_record'] not in to_remove:
-                                        to_remove.append(row['p_record'])
-                                    logging.debug('Scheduling %s to be added to already-seen list' % row['p_fullname'])
-                                    have_seen.append(row['p_fullname'])
+                                    if package.id not in to_remove:
+                                        to_remove.append(package.id)
+                                    logging.debug('Scheduling %s to be added to already-seen list' % package.fullname)
+                                    have_seen.append(package.fullname)
                         else:
                             # we do NOT have a matching package record of the same name
                             # that makes this a new package to add, and there is nothing
@@ -355,26 +339,17 @@ class Tag:
 
         r_count = 0
         if to_remove and not listonly:
-            queries = []
             sys.stdout.write('\nRemoving tagged entries for tag: %s... ' % tag)
-            if self.type == 'binary':
-                tables = ('packages', 'requires', 'provides', 'files')
-            if self.type == 'source':
-                tables = ('packages', 'sources', 'files', 'ctags', 'buildreqs')
+            # if self.type == 'binary':
+            #     tables = ('packages', 'requires', 'provides', 'files')
+            # if self.type == 'source':
+            #     tables = ('packages', 'sources', 'files', 'ctags', 'buildreqs')
 
             for rnum in to_remove:
                 r_count = r_count + 1
-                for table in tables:
-                    query  = "DELETE FROM %s WHERE p_record = %d" % (table, rnum)
-                    queries.append(query)
-                    #result = self.db.do_query(query)
-                    #self.rcommon.show_progress()
-                # TODO: see if this makes things faster; it might for a full db
-                #query  = "DELETE FROM %s USING %s INNER JOIN temptable ON %s.p_record = temptable.p_record WHERE p_record = %d" % (table, table, table, rnum)
-                #result = self.db.do_query(query)
-                #self.rcommon.show_progress()
-                #queries.append(query)
-            result = self.db.do_transactions(queries)
+                p = RPM_Package.get(RPM_Package.id == rnum)
+                p.delete_instance(recursive=True)
+
             sys.stdout.write(' done\n')
 
             if r_count > 100:
@@ -406,24 +381,24 @@ class Tag:
 
             h_count = 0
             for hseen in hs:
-                exists = None
-                query  = "SELECT a_record FROM alreadyseen WHERE p_fullname = '%s' AND t_record = %d LIMIT 1" % (self.db.sanitize_string(sfname), tag_id)
-                exists = self.db.fetch_one(query)
-                if not exists:
+                if not RPM_AlreadySeen.exists(tid, sfname):
                     # only add this to the database if we've not seen it
                     # TODO: this should be unnecessary, but seems like we might get dupes otherwise right now
                     h_count = h_count + 1
-                    query   = "INSERT INTO alreadyseen (p_fullname, t_record) VALUES ('%s', '%s')" % (hseen, tag_id)
-                    result  = self.db.do_query(query)
-                    logging.debug('Added %d records to alreadyseen table' % h_count)
+                    h = RPM_AlreadySeen.create(
+                        fullname = hseen,
+                        tid      = tid
+                    )
+                    logging.debug('Added %s to alreadyseen table (id: %d)', hseen, h.id)
+            logging.debug('Added %d records to alreadyseen table', h_count)
 
         if not to_add and not to_remove:
             print 'No changes detected.'
         else:
             cur_date = datetime.datetime.now()
             cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
-            query    = "UPDATE tags SET update_date = '%s' WHERE t_record = '%s'" % (cur_date, tag_id)
-            result   = self.db.do_query(query)
+            q = RPM_Tag.update(update_date=cur_date).where(RPM_Tag.id == tid)
+            q.execute()
 
 
     def trim_update_list(self, packagelist, seenlist):

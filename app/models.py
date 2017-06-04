@@ -197,6 +197,19 @@ class RPM_Package(BaseModel):
         return False
 
     @classmethod
+    def exists(cls, tid, name):
+        """
+        Find out if the supplied filename and associated tag is in the database
+
+        :param tid: tag id to lookup
+        :param name: filename to lookup
+        :return: True if exists, False otherwise
+        """
+        if RPM_Package.select().where((RPM_Package.tid == tid) & (RPM_Package.fullname == name)):
+            return True
+        return False
+
+    @classmethod
     def list_updates(cls, tag):
         """
         Returns a list of packages for which an update exists
@@ -445,6 +458,19 @@ class RPM_Flags(BaseModel):  # flags
 class RPM_AlreadySeen(BaseModel):
     fullname = TextField(null=False)
     tid      = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
+
+    @classmethod
+    def exists(cls, tid, name):
+        """
+        Find out if the supplied filename and associated tag is in the database
+
+        :param tid: tag id to lookup
+        :param name: filename to lookup
+        :return: True if exists, False otherwise
+        """
+        if RPM_AlreadySeen.select().where((RPM_AlreadySeen.tid == tid) & (RPM_AlreadySeen.fullname == name)):
+            return True
+        return False
 
     @classmethod
     def delete_tags(cls, tid):
