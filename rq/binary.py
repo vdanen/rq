@@ -783,13 +783,13 @@ class Binary:
             print 'Invalid value, looking for suid or sgid, received: %s' % type
             sys.exit(1)
 
-        results = RPM_File.get_sxid(tid, db_col)
-        if results:
-            for xrow in results:
-                print '%s: %s [%s:%s mode %s]' % (xrow.rpm_package.package,
-                                                  xrow.rpm_file.file,
-                                                  xrow.rpm_user.user,
-                                                  xrow.rpm_group.group,
-                                                  xrow.rpm_file.perms)
+        sxid_files = RPM_File.get_sxid(tid, db_col)
+        if sxid_files:
+            for sxid_file in sxid_files:
+                print '%s: %s [%s:%s mode %s]' % (sxid_file.package,
+                                                  sxid_file.file,
+                                                  sxid_file.user,
+                                                  sxid_file.group,
+                                                  sxid_file.perms)
         else:
             print 'No results found.'

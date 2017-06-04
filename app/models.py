@@ -339,18 +339,28 @@ class RPM_File(BaseModel):
         :return: list
         """
         if db_col == 'is_suid':
-            query = (
-            RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
-                RPM_Package).where((RPM_File.is_suid == 1) & (RPM_File.tid == tid)).order_by(
-                RPM_Package.package.asc()))
+            sxid_cond = ((RPM_File.is_suid == 1))
         elif db_col == 'is_sgid':
-            query = (
-            RPM_File.select(RPM_File, RPM_Package, RPM_User, RPM_Group).join(RPM_User).join(RPM_Group).join(
-                RPM_Package).where((RPM_File.is_sgid == 1) & (RPM_File.tid == tid)).order_by(
-                RPM_Package.package.asc()))
+            sxid_cond = ((RPM_File.is_sgid == 1))
 
-        return query
-        # TODO return RPM_File.select().where((Entry.published == True) & (Entry.type == 'page') & (Entry.timestamp <= now)).order_by(Entry.timestamp.desc()).limit(numdisplay)
+        # TODO would really love to get this to work, but it doesn't yet give me the values for user, group, etc just files
+        # TODO getting this to work would save some extra lame queries
+        query = (RPM_File.select().join(
+                    RPM_Package, on=(RPM_File.pid == RPM_Package.id)).join(
+                    RPM_User, JOIN_LEFT_OUTER, on=(RPM_File.uid == RPM_User.id)).join(
+                    RPM_Group, JOIN_LEFT_OUTER, on=(RPM_File.gid == RPM_Group.id)).where(
+                    sxid_cond & (RPM_File.tid == tid)).order_by(
+                    RPM_Package.package.asc()))
+
+        #print query
+        out = []
+        s = namedtuple('s', 'package file user group perms')
+        for q in query:
+            u = RPM_User.get(RPM_User.id == q.uid)
+            g = RPM_Group.get(RPM_Group.id == q.gid)
+            p = RPM_Package.get(RPM_Package.id == q.pid)
+            out.append(s(package=p.package, file=q.file, user=u.user, group=g.group, perms=q.perms))
+        return out
 
         # query = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON \
         # (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) \
