@@ -75,7 +75,7 @@ class Common:
         Function to return the file_excludes
         """
 
-        file_excludes = ('/.svn', '/CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
+        file_excludes = ('/.svn', '/.git', '/CVS', 'AUTHORS', 'Makefile', 'ChangeLog', 'COPYING', 'TODO', 'README')
 
         return(file_excludes)
 
