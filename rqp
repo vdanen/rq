@@ -215,6 +215,10 @@ if __name__ == '__main__':
             rqp.query('files')
         sys.exit(0)
 
+    if options.show_current:
+        logging.critical('The --show-current option is only used with -q!')
+        print ''
+
     if options.provides:
         rqp.query('provides')
         sys.exit(0)
