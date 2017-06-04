@@ -84,12 +84,11 @@ class Tag:
 
     def lookup(self, tag):
         """
-        Function to return a diction of information about a tag.
+        Function to return a diction of information about a tag.  Returns a dictionary ({id, path}) of the tag
+        if it exists, otherwise returns False.
 
-        Tag.lookup(tag):
-          tag: the tag name to lookup
-
-        Returns a dictionary (id, path) of the tag if it exists, otherwise returns False.
+        :param tag: the tag name to lookup
+        :return: dict or False
         """
         logging.debug('in Tag.lookup(%s)' % tag)
 
@@ -98,14 +97,12 @@ class Tag:
 
     def add_record(self, tag, path_to_tag, updatepath):
         """
-        Function to add a tag record.
+        Add a new tag record to the database.  Returns the ID of the newly created tag, otherwise returns 0
 
-        Tag.add_record(tag, path_to_tag):
-          tag        : the tag to add
-          path_to_tag: the path for this tag
-          updatepath : the updates path for this tag
-
-        Returns the ID of the newly created tag, otherwise returns 0
+        :param tag: the tag to add
+        :param path_to_tag: the path for this tag
+        :param updatepath:  the update path for this tag
+        :return: int
         """
         logging.debug('in Tag.add_record(%s, %s, %s)' % (tag, path_to_tag, updatepath))
 
@@ -137,12 +134,11 @@ class Tag:
 
     def delete_entries(self, tag):
         """
-        Function to delete database tags and associated entries
+        Delete database tags and associated entries; optimizes the database if there are a lot of entries
+        to remove
 
-        Tag.delete_entries(tag):
-          tag : the tag to check
-
-        Returns nothing.
+        :param tag: the tag to delete
+        :return: nothing
         """
         logging.debug('in Tag.delete_entries(%s)' % tag)
 
@@ -181,7 +177,7 @@ class Tag:
 
     def optimize_db(self):
         """
-        Function to optimize the database
+        Optimize the database
         """
         logging.debug('in Tag.optimize_db()')
 
@@ -200,7 +196,11 @@ class Tag:
 
     def update_entries(self, rq, tag, listonly=False):
         """
-        Function to update entries for a given tag (for rqs)
+        Update entries for a given tag (for rqs)
+        :param rq:
+        :param tag:
+        :param listonly:
+        :return:
         """
         logging.debug('in Tag.update_entries(%s, %s)' % (tag, listonly))
 
@@ -381,7 +381,7 @@ class Tag:
                 # we could potentially be removing a lot of stuff here, so the package
                 # count needs to be set fairly low as we're dropping buildreqs, ctags,
                 # etc. so even 10 packages could have a few thousand records all told
-                self.optimize_db(tables)
+                self.optimize_db()
 
         if to_add:
             if listonly:
@@ -432,6 +432,9 @@ class Tag:
         database and make sure they are unique by only taking the package with
         the highest N-V-R, otherwise we may end up adding multiple copies of the
         same package name, just with different versions
+        :param packagelist:
+        :param seenlist:
+        :return:
         """
         logging.debug("in Tag.trim_update_list(%s, %s)" % (packagelist, seenlist))
 
@@ -494,8 +497,12 @@ class Tag:
 
     def nvr_compare(self, oldpkg, version, release):
         """
-        Function to compare version and release of two
-        different RPM packages to see which is bigger
+        TODO: we can get this from python-rpm and do it better
+        Function to compare version and release of two different RPM packages to see which is bigger
+        :param oldpkg:
+        :param version:
+        :param release:
+        :return:
         """
         def ncomp(old, new, type):
             logging.debug('comparing %s old:%s and new:%s' % (type, old, new))
@@ -566,6 +573,12 @@ class Tag:
 
 
     def showdbstats(self, tag=None):
+        """
+        Show database statistics and info.  This function exits the program when done.
+
+        :param tag: optional tag name to isolate and report on
+        :return:
+        """
         """
         Function to show database info
         """
