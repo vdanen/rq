@@ -1,14 +1,17 @@
 from peewee import *
-from app import DATABASE_URI
+from app import RPM_URI, SRPM_URI
 from playhouse.db_url import connect
 from collections import namedtuple
 
-database    = connect(DATABASE_URI)
+rpm_db  = connect(RPM_URI)
+srpm_db = connect(SRPM_URI)
 
 def create_tables():
-    database.connect()
-    database.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_Provides, RPM_Requires,
+    rpm_db.connect()
+    rpm_db.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_Provides, RPM_Requires,
                RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen], True) # only create if it doesn't already exist
+    srpm_db.connect()
+    srpm_db.create_tables([SRPM_AlreadySeen], True)
 
 # tid is always tag id
 # pid is always package id
@@ -16,9 +19,20 @@ def create_tables():
 # uid is always user id
 # gid is always group id
 
-class BaseModel(Model):
+class RPMModel(Model):
     class Meta:
-        database = database
+        database = rpm_db
+
+    @classmethod
+    def optimize(cls):
+        query = 'OPTIMIZE TABLE %s' % cls._meta.db_table
+        database.execute_sql(query)
+        return
+
+
+class SRPMModel(Model):
+    class Meta:
+        database = srpm_db
 
     @classmethod
     def optimize(cls):
@@ -28,7 +42,7 @@ class BaseModel(Model):
 
 
 # the binary rpm user model
-class RPM_User(BaseModel):
+class RPM_User(RPMModel):
     user = CharField(null=False)  # f_user
 
     @classmethod
@@ -62,7 +76,7 @@ class RPM_User(BaseModel):
 
 
 # the binary rpm group model
-class RPM_Group(BaseModel):
+class RPM_Group(RPMModel):
     group = CharField(null=False)  # f_group
 
     @classmethod
@@ -96,7 +110,7 @@ class RPM_Group(BaseModel):
 
 
 # the binary rpm tag model
-class RPM_Tag(BaseModel):  # tags
+class RPM_Tag(RPMModel):  # tags
     tag         = CharField(null=False)
     path        = CharField(null=False)
     tdate       = CharField(null=False)
@@ -186,7 +200,7 @@ class RPM_Tag(BaseModel):  # tags
 
 
 # the binary rpm package model
-class RPM_Package(BaseModel):
+class RPM_Package(RPMModel):
     tid      = ForeignKeyField(RPM_Tag, related_name='package')  # t_record
     package  = TextField(null=False)  # p_package
     version  = TextField(null=False)  # p_version
@@ -260,7 +274,7 @@ class RPM_Package(BaseModel):
 
 
 # the binary rpm provides model
-class RPM_Provides(BaseModel):  # provides
+class RPM_Provides(RPMModel):  # provides
     pid  = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
     tid  = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
     name = TextField(null=False)  # pv_name
@@ -283,7 +297,7 @@ class RPM_Provides(BaseModel):  # provides
 
 
 # the binary rpm requires model
-class RPM_Requires(BaseModel):  # requires
+class RPM_Requires(RPMModel):  # requires
     pid  = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
     tid  = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
     name = TextField(null=False)  # rq_name
@@ -306,7 +320,7 @@ class RPM_Requires(BaseModel):  # requires
 
 
 # the binary rpm files model
-class RPM_File(BaseModel):
+class RPM_File(RPMModel):
     pid     = ForeignKeyField(RPM_Package, related_name='file')  # p_record
     tid     = ForeignKeyField(RPM_Tag, related_name='file')  # t_record
     uid     = ForeignKeyField(RPM_User, related_name='file')  # u_record
@@ -389,7 +403,7 @@ class RPM_File(BaseModel):
 
 
 # the binary rpm symbols model
-class RPM_Symbols(BaseModel):  # symbols
+class RPM_Symbols(RPMModel):  # symbols
     pid     = ForeignKeyField(RPM_Package, related_name='symbols') # p_record
     tid     = ForeignKeyField(RPM_Tag, related_name='symbols') # t_record
     fid     = ForeignKeyField(RPM_File, related_name='symbols') # f_id
@@ -411,7 +425,7 @@ class RPM_Symbols(BaseModel):  # symbols
 
 
 # the binary rpm flags model
-class RPM_Flags(BaseModel):  # flags
+class RPM_Flags(RPMModel):  # flags
     pid     = ForeignKeyField(RPM_Package, related_name='flags')  # p_record
     tid     = ForeignKeyField(RPM_Tag, related_name='flags')  # t_record
     fid     = ForeignKeyField(RPM_File, related_name='flags')  # f_id
@@ -474,9 +488,8 @@ class RPM_Flags(BaseModel):  # flags
         return removed
 
 
-
 # the binary alreadyseen model
-class RPM_AlreadySeen(BaseModel):
+class RPM_AlreadySeen(RPMModel):
     fullname = TextField(null=False)
     tid      = ForeignKeyField(RPM_Tag, related_name='alreadyseen')
 
@@ -493,13 +506,27 @@ class RPM_AlreadySeen(BaseModel):
             return True
         return False
 
+
+#############################################################################
+#
+# SRPM Model Definitions
+#
+#############################################################################
+
+# the source alreadyseen model
+class SRPM_AlreadySeen(SRPMModel):  # a_record
+    fullname = TextField(null=False) # p_fullname
+    tid      = IntegerField() #ForeignKeyField(SRPM_Tag, related_name='alreadyseen') # t_record
+
     @classmethod
-    def delete_tags(cls, tid):
+    def exists(cls, tid, name):
         """
-        Delete alreadyseen items with this tid
-        :param tid: tid to remove
-        :return: int (number of alreadyseen entries removed)
+        Find out if the supplied filename and associated tag is in the database
+
+        :param tid: tag id to lookup
+        :param name: filename to lookup
+        :return: True if exists, False otherwise
         """
-        query   = RPM_AlreadySeen.delete().where(RPM_AlreadySeen.tid == tid)
-        removed = query.execute()
-        return removed
+        if SRPM_AlreadySeen.select().where((SRPM_AlreadySeen.tid == tid) & (SRPM_AlreadySeen.fullname == name)):
+            return True
+        return False

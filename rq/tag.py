@@ -28,7 +28,7 @@ import os
 import commands
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, \
-    RPM_AlreadySeen, database
+    RPM_AlreadySeen, rpm_db
 
 
 class Tag:
@@ -598,11 +598,12 @@ class Tag:
         # get the size of the database as well
         size   = 0.00
         btype  = ''
+        # TODO: use srpm_db if type == source
         query = 'SELECT table_schema "name",  sum( data_length + index_length ) "size" FROM information_schema.TABLES \
-                 WHERE table_schema = "%s" GROUP BY table_schema' % database.database
-        tbsize = database.execute_sql(query)
+                 WHERE table_schema = "%s" GROUP BY table_schema' % rpm_db.database
+        tbsize = rpm_db.execute_sql(query)
         for x in tbsize._rows:
-            if x[0] == database.database:
+            if x[0] == rpm_db.database:
                 size = int(x[1])
         count = 0
 
@@ -621,9 +622,9 @@ class Tag:
         if tag != 'all':
             print 'Printing statistics for tag: %s\n' % tag
         print '   Database  => User: %s, Host: %s, Database: %s' % (
-            database.connect_kwargs['user'],
-            database.connect_kwargs['host'],
-            database.database)
+            rpm_db.connect_kwargs['user'],
+            rpm_db.connect_kwargs['host'],
+            rpm_db.database)
         print '   Data size => %2.2f %s\n' % (size, btype)
         print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
         if self.type == 'binary':

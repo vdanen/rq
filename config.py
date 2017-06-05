@@ -29,9 +29,11 @@ for line in content:
 # database settings
 DB_HOST  = 'localhost'
 DB_USER  = 'rq'
-DB_DBASE = 'rq'
+DB_RPMS  = 'rq_binary'
+DB_SRPMS = 'rq_source'
 DB_PORT  = '3306'
-DATABASE = 'mysql://%s:%s@%s:%s/%s' % (DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_DBASE)
+RPM_URI  = 'mysql://%s:%s@%s:%s/%s' % (DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_RPMS)
+SRPM_URI = 'mysql://%s:%s@%s:%s/%s' % (DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_SRPMS)
 
 PRODUCTION = True
 

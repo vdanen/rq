@@ -31,7 +31,7 @@ import shutil
 import datetime
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_Requires, \
-    RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, database
+    RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols
 
 
 class Binary:
