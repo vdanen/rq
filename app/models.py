@@ -366,6 +366,19 @@ class RPM_File(BaseModel):
             return None
 
     @classmethod
+    def get_name(cls, fid):
+        """
+        Returns the file name for the provided file id
+        :param fid: the file id to lookup
+        :return: int
+        """
+        try:
+            file = RPM_File.get((RPM_File.id == fid))
+            return file.file
+        except:
+            return None
+
+    @classmethod
     def get_sxid(cls, tid, db_col):
         """
         Function to return a list of files that are either suid or sgid, per tag

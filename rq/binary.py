@@ -257,6 +257,30 @@ class Binary:
                 else:
                     result = RPM_File.select().where(RPM_File.file.contains(like_q)).order_by(RPM_File.file.asc())
 
+        elif type == 'symbols':
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Symbols.select().where((RPM_Symbols.symbols.regexp(like_q)) & (RPM_Symbols.tid == tid)).order_by(RPM_Symbols.symbols.asc())
+                else:
+                    result = RPM_Symbols.select().where(RPM_Symbols.symbols.regexp(like_q)).order_by(RPM_Symbols.symbols.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Symbols.select().where((RPM_Symbols.symbols.contains(like_q)) & (RPM_Symbols.tid == tid)).order_by(RPM_Symbols.symbols.asc())
+                else:
+                    result = RPM_Symbols.select().where(RPM_Symbols.symbols.contains(like_q)).order_by(RPM_Symbols.symbols.asc())
+
+        elif type == 'packages':
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Package.select().where((RPM_Package.package.regexp(like_q)) & (RPM_Package.tid == tid)).order_by(RPM_Package.package.asc())
+                else:
+                    result = RPM_Package.select().where(RPM_Package.package.regexp(like_q)).order_by(RPM_Package.package.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Package.select().where((RPM_Package.package.contains(like_q)) & (RPM_Package.tid == tid)).order_by(RPM_Package.package.asc())
+                else:
+                    result = RPM_Package.select().where(RPM_Package.package.contains(like_q)).order_by(RPM_Package.package.asc())
+
         elif type == 'provides':
             if self.options.regexp:
                 if self.options.tag:
@@ -268,46 +292,18 @@ class Binary:
                     result = RPM_Provides.select().where((RPM_Provides.name.contains(like_q)) & (RPM_Provides.tid == tid)).order_by(RPM_Provides.name.asc())
                 else:
                     result = RPM_Provides.select().where(RPM_Provides.name.contains(like_q)).order_by(RPM_Provides.name.asc())
-        """
-        if type == 'files':
-            query = "SELECT DISTINCT rpm_package.update, rpm_package.package, rpm_package.version, \
-                      rpm_package.release, rpm_package.date, rpm_package.srpm, rpm_file.file, rpm_file.id, \
-                      rpm_user.user, rpm_group.group, rpm_file.is_suid, rpm_file.is_sgid, rpm_file.perms FROM rpm_file \
-                      LEFT JOIN rpm_package ON (rpm_package.id = rpm_file.pid) LEFT JOIN rpm_user \
-                      ON (rpm_file.uid = rpm_user.id) LEFT JOIN rpm_group ON (rpm_file.gid = rpm_group.id) \
-                      WHERE %s file " % ignorecase
-        elif type == 'symbols':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
-        elif type == 'packages':
-            query = "SELECT DISTINCT rpm_packages.update, rpm_packages.package, rpm_packages.version, rpm_packages.release, rpm_packages.date, rpm_packages.srpm FROM rpm_packages WHERE %s rpm_packages.package " % ignorecase
-        elif type == 'provides':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, pv_name FROM provides LEFT JOIN packages ON (packages.p_record = provides.p_record) JOIN provides_names ON (provides_names.pv_record = provides.pv_record) WHERE %s pv_name " % ignorecase
+
         elif type == 'requires':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, rq_name FROM requires LEFT JOIN packages ON (packages.p_record = requires.p_record) JOIN requires_names ON (requires_names.rq_record = requires.rq_record) WHERE %s rq_name " % ignorecase
-
-        if self.options.regexp:
-            query = query + "RLIKE '" + like_q + "'"
-        else:
-            query = query + "LIKE '%" + like_q + "%'"
-
-        if self.options.tag:
-            query = "%s AND %s.tid = '%d'"  % (query, type, tid)
-
-        if type == 'packages':
-            query  = query + " ORDER BY tid, package"
-        elif type == 'symbols':
-            query = query + " ORDER BY symbols"
-        elif type == 'provides':
-            query = query + " ORDER BY name"
-        elif type == 'requires':
-            query = query + " ORDER BY name"
-        else:
-            query  = query + " ORDER BY tid, package, " + type
-
-        print query
-        result = database.execute_sql(query)
-        print result
-        """
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Requires.select().where((RPM_Requires.name.regexp(like_q)) & (RPM_Requires.tid == tid)).order_by(RPM_Requires.name.asc())
+                else:
+                    result = RPM_Requires.select().where(RPM_Requires.name.regexp(like_q)).order_by(RPM_Requires.name.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Requires.select().where((RPM_Requires.name.contains(like_q)) & (RPM_Requires.tid == tid)).order_by(RPM_Requires.name.asc())
+                else:
+                    result = RPM_Requires.select().where(RPM_Requires.name.contains(like_q)).order_by(RPM_Requires.name.asc())
 
         # DEBUG: print result
         if result:
@@ -328,12 +324,12 @@ class Binary:
                 utype = ''
                 # for readability
                 package = RPM_Package.get(RPM_Package.id == row.pid)
-                r_tag  = RPM_Tag.get_tag(row.tid)
-                r_rpm  = package.package
-                r_ver  = package.version
-                r_rel  = package.release
-                r_date = package.date
-                r_srpm = package.srpm
+                r_tag   = RPM_Tag.get_tag(row.tid)
+                r_rpm   = package.package
+                r_ver   = package.version
+                r_rel   = package.release
+                r_date  = package.date
+                r_srpm  = package.srpm
 
                 if type == 'provides':
                     r_type = row.name
@@ -354,8 +350,8 @@ class Binary:
                     r_fileid  = row.id
 
                 if type == 'symbols':
-                    r_files   = row.files
-                    r_symbol  = row.symbols
+                    r_files  = RPM_File.get_name(row.fid)
+                    r_symbol = row.symbols
 
                 if row.update == 1:
                     utype = '[update] '
