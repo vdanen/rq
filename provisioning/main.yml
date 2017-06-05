@@ -51,10 +51,15 @@
   - name: Create /root/.my.cnf
     template: src={{ playbook_dir }}/root.cnf.j2 dest=/root/.my.cnf owner=root group=root mode=0600
 
-  - name: Create rq MariaDB database
-    mysql_db: name=rq state=present
+  - name: Create rq_binary MariaDB database
+    mysql_db: name=rq_binary state=present
   - name: Create rq MariaDB user
-    mysql_user: name=rq password=rq priv='rq.*:ALL' state=present
+    mysql_user: name=rq password=rq priv='rq_binary.*:ALL' state=present
+
+  - name: Create rq_source MariaDB database
+    mysql_db: name=rq_source state=present
+  - name: Create rq MariaDB user
+    mysql_user: name=rq password=rq priv='rq_source.*:ALL' state=present
 
   - name: Remove binary flask directory if exists
     file: path={{ app_dir }}/flask state=absent
