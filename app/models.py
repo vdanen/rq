@@ -255,17 +255,6 @@ class RPM_Package(BaseModel):
         return RPM_Package.select(RPM_Package.fullname).where(
             (RPM_Package.tid == t.id) & (RPM_Package.update == 1)).order_by(RPM_Package.fullname.asc())
 
-    @classmethod
-    def delete_tags(cls, tid):
-        """
-        Delete packages with this tid
-        :param tid: tid to remove
-        :return: int (number of packages removed)
-        """
-        query   = RPM_Package.delete().where(RPM_Package.tid == tid)
-        removed = query.execute()
-        return removed
-
     def __repr__(self):
         return '<RPM Package {self.package}>'.format(self=self)
 
@@ -275,17 +264,6 @@ class RPM_Provides(BaseModel):  # provides
     pid  = ForeignKeyField(RPM_Package, related_name='provides')  # p_record
     tid  = ForeignKeyField(RPM_Tag, related_name='provides')  # t_record
     name = TextField(null=False)  # pv_name
-
-    @classmethod
-    def delete_tags(cls, tid):
-        """
-        Delete provides with this tid
-        :param tid: tid to remove
-        :return: int (number of provides entries removed)
-        """
-        query   = RPM_Provides.delete().where(RPM_Provides.tid == tid)
-        removed = query.execute()
-        return removed
 
     @classmethod
     def get_id(cls, name):
@@ -309,17 +287,6 @@ class RPM_Requires(BaseModel):  # requires
     pid  = ForeignKeyField(RPM_Package, related_name='requires')  # p_record
     tid  = ForeignKeyField(RPM_Tag, related_name='requires')  # t_record
     name = TextField(null=False)  # rq_name
-
-    @classmethod
-    def delete_tags(cls, tid):
-        """
-        Delete requires with this tid
-        :param tid: tid to remove
-        :return: int (number of requires entries removed)
-        """
-        query   = RPM_Requires.delete().where(RPM_Requires.tid == tid)
-        removed = query.execute()
-        return removed
 
     @classmethod
     def get_id(cls, name):
@@ -415,17 +382,6 @@ class RPM_File(BaseModel):
         # LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s \
         # ORDER BY p_package ASC" % (db_col, tid)
         # results = self.db.fetch_all(query)
-
-    @classmethod
-    def delete_tags(cls, tid):
-        """
-        Delete files with this tid
-        :param tid: tid to remove
-        :return: int (number of files removed)
-        """
-        query   = RPM_File.delete().where(RPM_File.tid == tid)
-        removed = query.execute()
-        return removed
 
 
     def __repr__(self):
