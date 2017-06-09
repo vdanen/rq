@@ -11,7 +11,7 @@ def create_tables():
     rpm_db.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_Provides, RPM_Requires,
                RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen], True) # only create if it doesn't already exist
     srpm_db.connect()
-    srpm_db.create_tables([SRPM_AlreadySeen], True)
+    srpm_db.create_tables([SRPM_File, SRPM_Package, SRPM_Source, SRPM_BuildRequires, SRPM_Tag, SRPM_Ctag, SRPM_AlreadySeen], True)
 
 # tid is always tag id
 # pid is always package id
@@ -513,10 +513,261 @@ class RPM_AlreadySeen(RPMModel):
 #
 #############################################################################
 
+# the source rpm tag model
+class SRPM_Tag(SRPMModel):  # tags
+    tag         = CharField(null=False)
+    path        = CharField(null=False)
+    tdate       = CharField(null=False)
+    update_path = CharField(null=False)
+    update_date = CharField(default='')
+
+    @classmethod
+    def get_tag(cls, id):
+        """
+        Returns the tag name when provided the tag id
+        :param id: integer of tag id to look up
+        :return: string
+        """
+        try:
+            t = SRPM_Tag.get(SRPM_Tag.id == id)
+            return t.tag
+        except:
+            return None
+
+    @classmethod
+    def get_id(cls, name):
+        """
+        Returns the tag id for the provided tag name
+        :param name: the name to lookup
+        :return: int
+        """
+        try:
+            tid = SRPM_Tag.get(SRPM_Tag.tag == name)
+            return tid.id
+        except:
+            return None
+
+    @classmethod
+    def get_list(cls):
+        """
+        Returns a list of tags
+        :return: list
+        """
+        return SRPM_Tag.select().order_by(SRPM_Tag.tag)
+
+    @classmethod
+    def info(cls, tag):
+        """
+        Return information on this tag
+        :return: dict (id, path) or False
+        """
+        try:
+            t = SRPM_Tag.get(SRPM_Tag.tag == tag)
+            if t:
+                return {'id': t.id, 'path': t.path}
+        except:
+            return None
+
+        return None
+
+    @classmethod
+    def exists(cls, tag):
+        """
+        Return True if this tag exists, False otherwise
+        :param tag: tag name to lookup
+        :return: bool
+        """
+        t = SRPM_Tag.select().where(SRPM_Tag.tag == tag).limit(1)
+        if t:
+            return True
+        return False
+
+    @property
+    def package_count(self):
+        """
+        Return the number of packages
+        :return: int
+        """
+        return SRPM_Package.select().where(SRPM_Package.tid == self.id).count()
+
+    @property
+    def update_count(self):
+        """
+        Return the number of updates packages
+        :return: int
+        """
+        return SRPM_Package.select().where((SRPM_Package.tid == self.id) & (SRPM_Package.update == 1)).count()
+
+
+    def __repr__(self):
+        return '<SRPM Tag {self.tag}>'.format(self=self)
+
+
+# the source rpm package model
+class SRPM_Package(SRPMModel):
+    tid      = ForeignKeyField(SRPM_Tag, related_name='package')  # t_record
+    package  = TextField(null=False)  # p_package
+    version  = TextField(null=False)  # p_version
+    release  = TextField(null=False)  # p_release
+    date     = TextField(null=False)  # p_date
+    fullname = TextField(null=False)  # p_fullname
+    update   = IntegerField(default=0)  # p_update
+
+    @property
+    def tag(self):
+        t = SRPM_Tag.get(SRPM_Tag.id == self.tid)
+        return t.tag
+
+    @classmethod
+    def get_package(cls, pid):
+        """
+        Return the package name for the specified id
+        :param pid: int
+        :return: package name
+        """
+        return SRPM_Package.select(SRPM_Package.package).where(SRPM_Package.id == pid)
+
+    @classmethod
+    def in_db(cls, tid, package, version, release):
+        """
+        Returns whether or not this package exists in the database
+        :param tid: integer of tag id to search in
+        :param package: package name
+        :param version: package version
+        :param release: package release
+        :param arch: package arch
+        :return: boolean
+        """
+        if SRPM_Package.select().where((SRPM_Package.tid == tid) &
+                                    (SRPM_Package.package == package) &
+                                    (SRPM_Package.version == version) &
+                                    (SRPM_Package.release == release)
+        ):
+            return True
+        return False
+
+    @classmethod
+    def exists(cls, tid, name):
+        """
+        Find out if the supplied filename and associated tag is in the database
+
+        :param tid: tag id to lookup
+        :param name: filename to lookup
+        :return: True if exists, False otherwise
+        """
+        if SRPM_Package.select().where((SRPM_Package.tid == tid) & (SRPM_Package.fullname == name)):
+            return True
+        return False
+
+    @classmethod
+    def list_updates(cls, tag):
+        """
+        Returns a list of packages for which an update exists
+        :param tag: the named tag
+        :return: list
+        """
+        t = SRPM_Tag.get(SRPM_Tag.tag == tag)
+        return SRPM_Package.select(SRPM_Package.fullname).where(
+            (SRPM_Package.tid == t.id) & (SRPM_Package.update == 1)).order_by(SRPM_Package.fullname.asc())
+
+    def __repr__(self):
+        return '<SRPM Package {self.package}>'.format(self=self)
+
+
+# the source rpm source file model
+class SRPM_Source(SRPMModel):
+    pid     = ForeignKeyField(SRPM_Package, related_name='source')  # p_record
+    tid     = ForeignKeyField(SRPM_Tag, related_name='source')  # t_record
+    ftype   = CharField()  # s_type
+    file    = TextField()  # s_file
+
+    def __repr__(self):
+        return '<SRPM Source {self.file}>'.format(self=self)
+
+
+# the source rpm files model
+class SRPM_File(SRPMModel):
+    pid     = ForeignKeyField(SRPM_Package, related_name='sfile')  # p_record
+    tid     = ForeignKeyField(SRPM_Tag, related_name='sfile')  # t_record
+    sid     = ForeignKeyField(SRPM_Source, related_name='sfile')  # s_record
+    file    = TextField()  # f_file
+
+    @classmethod
+    def find_id(cls, file, tid, pid):
+        """
+        Returns the file id for the provided file name, package record and tag record
+        :param file: the file to lookup
+        :param tid: the tag id to lookup
+        :param pid: the package id to lookup
+        :return: int
+        """
+        try:
+            file = SRPM_File.get(
+                (SRPM_File.file == file) & (SRPM_File.pid == pid) & (SRPM_File.tid == tid))
+            return file.id
+        except:
+            return None
+
+    @classmethod
+    def get_name(cls, fid):
+        """
+        Returns the file name for the provided file id
+        :param fid: the file id to lookup
+        :return: int
+        """
+        try:
+            file = SRPM_File.get((SRPM_File.id == fid))
+            return file.file
+        except:
+            return None
+
+    def __repr__(self):
+        return '<SRPM File {self.file}>'.format(self=self)
+
+
+# the source rpm buildrequires model
+class SRPM_BuildRequires(SRPMModel):  # provides
+    pid  = ForeignKeyField(SRPM_Package, related_name='buildrequires')  # p_record
+    tid  = ForeignKeyField(SRPM_Tag, related_name='buildrequires')  # t_record
+    name = TextField(null=False)  # pv_name
+
+    @classmethod
+    def get_id(cls, name):
+        """
+        Returns the buildrequires id for the provided buildrequires name
+        :param name: the name to lookup
+        :return: int
+        """
+        try:
+            pid = SRPM_BuildRequires.get(SRPM_BuildRequires.name == name)
+            return pid.id
+        except:
+            return None
+
+    def __repr__(self):
+        return '<RPM BuildRequires {self.name}>'.format(self=self)
+
+
+# the source rpm c_tags model
+class SRPM_Ctag(SRPMModel):
+    pid     = ForeignKeyField(SRPM_Package, related_name='ctag')  # p_record
+    tid     = ForeignKeyField(SRPM_Tag, related_name='ctag')  # t_record
+    sid     = ForeignKeyField(SRPM_Source, related_name='ctag')  # t_record
+    name    = CharField(null=False)  # c_name
+    extra   = TextField(null=False)  # c_extra
+    ctype   = IntegerField(null=False)  # c_type
+    line    = CharField(null=False)  # c_line
+    file    = TextField(null=False)  # c_file
+
+    def __repr__(self):
+        return '<SRPM Ctag {self.name}>'.format(self=self)
+
+
 # the source alreadyseen model
 class SRPM_AlreadySeen(SRPMModel):  # a_record
+    tid      = ForeignKeyField(SRPM_Tag, related_name='alreadyseen')  # t_record
     fullname = TextField(null=False) # p_fullname
-    tid      = IntegerField() #ForeignKeyField(SRPM_Tag, related_name='alreadyseen') # t_record
+
 
     @classmethod
     def exists(cls, tid, name):
