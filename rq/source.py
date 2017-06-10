@@ -856,7 +856,7 @@ class Source:
         """
         logging.debug('in Source.package_add_record(%s, %s, %d)' % (tid, fname, update))
 
-        fname   = os.path.basename(fname)
+        name    = os.path.basename(fname)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(fname))
         tlist   = rpmtags.split('|')
         logging.debug("tlist is %s " % tlist)
@@ -874,7 +874,7 @@ class Source:
         # TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         # TODO: sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        self.rcommon.show_progress(fname)
+        self.rcommon.show_progress(name)
         try:
             p = SRPM_Package.create(
                 tid      = tid,
