@@ -53,7 +53,11 @@ class Tag:
         """
         logging.debug("in Tag.list()")
 
-        results = RPM_Tag.get_list()
+        if self.type == 'binary':
+            results = RPM_Tag.get_list()
+        else:
+            results = SRPM_Tag.get_list()
+
         if results:
             for row in results:
                 updated = ''
@@ -204,14 +208,23 @@ class Tag:
 
         sys.stdout.write('Optimizing database (this may take some time)... ')
         sys.stdout.flush()
-        RPM_Flags.optimize()
-        RPM_Symbols.optimize()
-        RPM_File.optimize()
-        RPM_Provides.optimize()
-        RPM_Requires.optimize()
-        RPM_Package.optimize()
-        RPM_Tag.optimize()
-        RPM_AlreadySeen.optimize()
+        if self.type == 'binary':
+            RPM_Flags.optimize()
+            RPM_Symbols.optimize()
+            RPM_File.optimize()
+            RPM_Provides.optimize()
+            RPM_Requires.optimize()
+            RPM_Package.optimize()
+            RPM_Tag.optimize()
+            RPM_AlreadySeen.optimize()
+        else:
+            SRPM_Ctag.optimize()
+            SRPM_File.optimize()
+            SRPM_Source.optimize()
+            SRPM_BuildRequires.optimize()
+            SRPM_AlreadySeen.optimize()
+            SRPM_Tag.optimize()
+            SRPM_Package.optimize()
         sys.stdout.write(' done\n')
 
 
@@ -230,21 +243,26 @@ class Tag:
         have_seen = []
         updates   = 0
         newpkgs   = 0
+        the_tag   = None
 
-        if self.type == 'source':
-            pkg_type = 'SRPM'
-        elif self.type == 'binary':
+        if self.type == 'binary':
             pkg_type = 'RPM'
-
-        if RPM_Tag.exists(tag):
-            the_tag = RPM_Tag.get(RPM_Tag.tag == tag)
-            path    = the_tag.path
-            tid     = the_tag.id
-            u_path  = the_tag.update_path
+            if RPM_Tag.exists(tag):
+                the_tag = RPM_Tag.get(RPM_Tag.tag == tag)
+                path    = the_tag.path
+                tid     = the_tag.id
+                u_path  = the_tag.update_path
         else:
+            pkg_type = 'SRPM'
+            if SRPM_Tag.exists(tag):
+                the_tag = SRPM_Tag.get(SRPM_Tag.tag == tag)
+                path    = the_tag.path
+                tid     = the_tag.id
+                u_path  = the_tag.update_path
+
+        if not the_tag:
             print 'No Tag entry found for tag: %s\n' % tag
             sys.exit(1)
-
 
         if u_path:
             logging.info('Using associated updates path: %s' % u_path)
@@ -258,7 +276,10 @@ class Tag:
             # this handles entries where we don't have a dedicated updates directory
             print 'Checking for removed files in %s tag entries from %s...' % (tag, path)
             # get the existing entries
-            result = RPM_Package.select(RPM_Package.tid == tid)
+            if self.type == 'binary':
+                result = RPM_Package.select(RPM_Package.tid == tid)
+            else:
+                result = SRPM_Package.select(SRPM_Package.tid == tid)
             for row in result:
                 fullname = '%s/%s' % (path, row.fullname)
                 if not os.path.isfile(fullname):
@@ -271,9 +292,14 @@ class Tag:
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                if not RPM_Package.exists(tid, sfname):
-                    logging.info('Scheduling %s to be added to database' % src_rpm)
-                    to_add.append(src_rpm)
+                if self.type == 'binary':
+                    if not RPM_Package.exists(tid, sfname):
+                        logging.info('Scheduling %s to be added to database' % src_rpm)
+                        to_add.append(src_rpm)
+                else:
+                    if not SRPM_Package.exists(tid, sfname):
+                        logging.info('Scheduling %s to be added to database' % src_rpm)
+                        to_add.append(src_rpm)
 
         if updates == 1 and u_path:
             # this is an entry with an updates path
@@ -287,10 +313,21 @@ class Tag:
             print 'Checking for added files in %s tag entries from %s...' % (tag, path)
             for src_rpm in src_list:
                 sfname = os.path.basename(src_rpm)
-                if not RPM_Package.exists(tid, sfname):
+
+                if self.type == 'binary':
+                    exists = RPM_Package.exists(tid, sfname)
+                else:
+                    exists = SRPM_Package.exists(tid, sfname)
+
+                if not exists:
                     # this means we do not have this package currently in the database
                     # so check if we have already seen and removed it
-                    if not RPM_AlreadySeen.exists(tid, sfname):
+                    if self.type == 'binary':
+                        alreadyseen = RPM_AlreadySeen.exists(tid, sfname)
+                    else:
+                        alreadyseen = SRPM_AlreadySeen.exists(tid, sfname)
+
+                    if not alreadyseen:
                         # this is a new file that does not exist in the database, but it's
                         # in the updates directory and we have not seen it before
 
@@ -374,7 +411,10 @@ class Tag:
 
             for rnum in to_remove:
                 r_count = r_count + 1
-                p = RPM_Package.get(RPM_Package.id == rnum)
+                if self.type == 'binary':
+                    p = RPM_Package.get(RPM_Package.id == rnum)
+                else:
+                    p = SRPM_Package.get(SRPM_Package.id == rnum)
                 p.delete_instance(recursive=True)
 
             sys.stdout.write(' done\n')
@@ -408,14 +448,24 @@ class Tag:
 
             h_count = 0
             for hseen in hs:
-                if not RPM_AlreadySeen.exists(tid, sfname):
+                if self.type == 'binary':
+                    aseen = RPM_AlreadySeen.exists(tid, sfname)
+                else:
+                    aseen = SRPM_AlreadySeen.exists(tid, sfname)
+                if not aseen:
                     # only add this to the database if we've not seen it
                     # TODO: this should be unnecessary, but seems like we might get dupes otherwise right now
                     h_count = h_count + 1
-                    h = RPM_AlreadySeen.create(
-                        fullname = hseen,
-                        tid      = tid
-                    )
+                    if self.type == 'binary':
+                        h = RPM_AlreadySeen.create(
+                            fullname = hseen,
+                            tid      = tid
+                        )
+                    else:
+                        h = SRPM_AlreadySeen.create(
+                            fullname = hseen,
+                            tid      = tid
+                        )
                     logging.debug('Added %s to alreadyseen table (id: %d)', hseen, h.id)
             logging.debug('Added %d records to alreadyseen table', h_count)
 
@@ -424,7 +474,10 @@ class Tag:
         else:
             cur_date = datetime.datetime.now()
             cur_date = cur_date.strftime('%a %b %d %H:%M:%S %Y')
-            q = RPM_Tag.update(update_date=cur_date).where(RPM_Tag.id == tid)
+            if self.type == 'binary':
+                q = RPM_Tag.update(update_date=cur_date).where(RPM_Tag.id == tid)
+            else:
+                q = SRPM_Tag.update(update_date=cur_date).where(SRPM_Tag.id == tid)
             q.execute()
 
 
