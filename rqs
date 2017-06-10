@@ -111,10 +111,13 @@ if __name__ == '__main__':
         p.error("--tag and --delete are mutually exclusive; you do not need to use --tag")
 
     # setup logging facilities
-    LOG_FILENAME = '%s/%s.log' % (os.getcwd(), RQ_PROG)
-    LEVELS = {'debug'  : logging.DEBUG,
-              'info'   : logging.INFO,
-              'warning': logging.WARNING}
+    LOGFILE   = '%s/%s.log' % (os.getcwd(), RQ_PROG)
+    LEVELS    = {'debug'  : logging.DEBUG,
+                 'info'   : logging.INFO,
+                 'warning': logging.WARNING}
+    FILELEVEL = LEVELS.get('info', logging.NOTSET)
+    CONSLEVEL = LEVELS.get('warning', logging.NOTSET)
+    FILEFMT   = '%(asctime)s %(message)s'
 
     if options.debug:
         FILELEVEL = LEVELS.get('debug', logging.NOTSET)
@@ -126,15 +129,10 @@ if __name__ == '__main__':
         CONSLEVEL = LEVELS.get('info', logging.NOTSET)
         FILEFMT   = '%(asctime)s %(message)s'
 
-    if not options.verbose and not options.debug:
-        FILELEVEL = LEVELS.get('info', logging.NOTSET)
-        CONSLEVEL = LEVELS.get('warning', logging.NOTSET)
-        FILEFMT   = '%(asctime)s %(message)s'
-
     logging.basicConfig(level=FILELEVEL,
                         format=FILEFMT,
                         datefmt='%b %d %H:%M:%S',
-                        filename=LOG_FILENAME,
+                        filename=LOGFILE,
                         filemode='a')
     console = logging.StreamHandler()
     console.setLevel(CONSLEVEL)
