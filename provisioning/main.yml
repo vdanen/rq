@@ -78,6 +78,9 @@
   - name: Install mysql-python in virtual environment
     pip: virtualenv={{ app_dir }}/flask name=mysql-python chdir={{ app_dir }} virtualenv_site_packages=yes
 
+  - name: Copy ctags config file
+    copy: src={{ app_dir }}/ctags-dotfile dest={{ vagrant_home }}/.ctags owner=vagrant group=vagrant mode=0644
+
   - name: Copy rq service file
     copy: src={{ app_dir }}/config/rq.service dest=/etc/systemd/system/rq.service remote_src=True
   - name: Copy rq socket file
