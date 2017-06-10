@@ -434,7 +434,7 @@ class Tag:
                     print '%s' % a_rpm
                 else:
                     logging.info('Adding: %s' % a_rpm)
-                    rq.record_add(tid, a_rpm, 1) # the 1 is to indicate this is an update
+                    rq.record_add(tid, a_rpm, 1)  # the 1 is to indicate this is an update
 
         if have_seen and not listonly:
             # make have_seen unique
@@ -504,7 +504,7 @@ class Tag:
             package = tlist[0].strip()
             version = tlist[1].strip()
             release = tlist[2].strip()
-            pdate   = tlist[3].strip()
+
             if self.type == 'source':
                 arch    = 'src'
             else:
