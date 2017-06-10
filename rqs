@@ -4,7 +4,7 @@ This program extracts data from RPM and SRPM packages and stores it in
 a database for later querying.
 
 based on the srpm script of similar function copyright (c) 2005 Stew Benedict <sbenedict@mandriva.com>
-copyright (c) 2007-2011 Vincent Danen <vdanen@linsec.ca>
+copyright (c) 2007-2017 Vincent Danen <vdanen@linsec.ca>
 
 This file is part of rq.
 
