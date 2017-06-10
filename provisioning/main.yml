@@ -17,6 +17,8 @@
     yum: name=mariadb-server state=latest
   - name: Install vim
     yum: name=vim state=latest
+  - name: Install ctags
+    yum: name=ctags state=latest
   - name: Install development tools
     yum: name=gcc,gcc-c++
   - name: Install development packages
