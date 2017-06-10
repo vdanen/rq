@@ -735,6 +735,17 @@ class SRPM_File(SRPMModel):
         except:
             return None
 
+    @classmethod
+    def delete_tags(cls, tid):
+        """
+        Delete files with this tid
+        :param tid: tid to remove
+        :return: int (number of files removed)
+        """
+        query   = SRPM_File.delete().where(SRPM_File.tid == tid)
+        removed = query.execute()
+        return removed
+
     def __repr__(self):
         return '<SRPM File {self.file}>'.format(self=self)
 
@@ -772,6 +783,17 @@ class SRPM_Ctag(SRPMModel):
     ctype   = IntegerField(null=False)  # c_type
     line    = CharField(null=False)  # c_line
     file    = TextField(null=False)  # c_file
+
+    @classmethod
+    def delete_tags(cls, tid):
+        """
+        Delete ctags with this tid
+        :param tid: tid to remove
+        :return: int (number of ctags removed)
+        """
+        query   = SRPM_Ctag.delete().where(SRPM_Ctag.tid == tid)
+        removed = query.execute()
+        return removed
 
     def __repr__(self):
         return '<SRPM Ctag {self.name}>'.format(self=self)

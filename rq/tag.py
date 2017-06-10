@@ -184,6 +184,10 @@ class Tag:
                 if self.type == 'binary':
                     RPM_Flags.delete_tags(tid['id'])
                     RPM_Symbols.delete_tags(tid['id'])
+                else:
+                    print 'deleting sources'
+                    SRPM_Ctag.delete_tags(tid['id'])
+                    SRPM_File.delete_tags(tid['id'])
 
                 t.delete_instance(recursive=True)
 
