@@ -1,0 +1,114 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  vars_files:
+    - variables.yml
+
+  tasks:
+  - name: Upgrade all installed packages
+    yum: name='*' state=latest
+
+  - name: Install EPEL
+    yum: name=https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm state=present
+  - name: Install Apache
+    yum: name=httpd state=latest
+  - name: Install MariaDB
+    yum: name=mariadb-server state=latest
+  - name: Install vim
+    yum: name=vim state=latest
+  - name: Install ctags
+    yum: name=ctags state=latest
+  - name: Install development tools
+    yum: name=gcc,gcc-c++
+  - name: Install development packages
+    yum: name=python-devel,mariadb-devel,postgresql-devel,freetype-devel,libpng-devel,libffi-devel state=latest
+  - name: Install python modules
+    yum: name=python,python-pip,MySQL-python state=latest
+
+  - name: State firewalld
+    service: name=firewalld state=started
+  - name: Allow MariaDB via firewall
+    command: firewall-cmd --zone=public --add-service=mysql --permanent
+  - name: Allow Apache via firewall
+    command: firewall-cmd --zone=public --add-service=http --permanent
+  - name: Allow rq via firewall
+    command: firewall-cmd --zone=public --add-port=5000/tcp --permanent
+  - name: Reload firewall
+    command: firewall-cmd --reload
+
+  - name: Enable MariaDB
+    service: name=mariadb enabled=yes
+  - name: Enable Apache
+    service: name=httpd enabled=yes
+
+  - name: Start MariaDB
+    service: name=mariadb state=started
+
+  - name: Create vagrant/.my.cnf
+    template: src={{ playbook_dir }}/my.cnf.j2 dest=/home/vagrant/.my.cnf owner=vagrant group=vagrant mode=0600
+
+  - name: Set root MariaDB password
+    mysql_user: name=root password={{ mysql_root_pw }}
+  - name: Create /root/.my.cnf
+    template: src={{ playbook_dir }}/root.cnf.j2 dest=/root/.my.cnf owner=root group=root mode=0600
+
+  - name: Create rq_binary MariaDB database
+    mysql_db: name=rq_binary state=present
+  - name: Create rq MariaDB user
+    mysql_user: name=rq password=rq priv='rq_binary.*:ALL' state=present
+
+  - name: Create rq_source MariaDB database
+    mysql_db: name=rq_source state=present
+  - name: Create rq MariaDB user
+    mysql_user: name=rq password=rq priv='rq_source.*:ALL' state=present
+
+  - name: Remove binary flask directory if exists
+    file: path={{ app_dir }}/flask state=absent
+
+  - name: Create /home/vagrant/.my.cnf
+    template: src={{ playbook_dir }}/my.cnf.j2 dest={{ vagrant_home }}/.my.cnf owner=vagrant group=vagrant mode=0600
+
+  - name: Install python virtualenv
+    pip: name=virtualenv executable=pip
+  - name: Upgrade pip 
+    pip: virtualenv={{ app_dir }}/flask name=pip version=9.0.1 chdir={{ app_dir }} virtualenv_site_packages=yes
+  - name: Setup flask virtual environment
+    pip: virtualenv={{ app_dir }}/flask requirements=requirements.txt chdir={{ app_dir }} virtualenv_site_packages=yes
+  - name: Install mysql-python in virtual environment
+    pip: virtualenv={{ app_dir }}/flask name=mysql-python chdir={{ app_dir }} virtualenv_site_packages=yes
+
+  - name: Copy ctags config file
+    copy: src={{ app_dir }}/ctags-dotfile dest={{ vagrant_home }}/.ctags owner=vagrant group=vagrant mode=0644
+
+  - name: Copy rq service file
+    copy: src={{ app_dir }}/config/rq.service dest=/etc/systemd/system/rq.service remote_src=True
+  - name: Copy rq socket file
+    copy: src={{ app_dir }}/config/rq.socket dest=/etc/systemd/system/rq.socket remote_src=True
+  - name: Copy rq tmpfile file
+    copy: src={{ app_dir }}/config/tmpfiles.d-rq.conf dest=/etc/tmpfiles.d/rq.conf remote_src=True
+
+  - name: Reload systemd units
+    command: systemctl daemon-reload
+  - name: Create rq temporary files
+    command: systemd-tmpfiles --create
+  - name: Enable rq service
+    service: name=rq.service enabled=yes
+  - name: Enable rq socket
+    service: name=rq.socket enabled=yes
+
+  - name: Create Apache symlink for configuration file
+    file: path=/etc/httpd/conf.d/00_rq.conf src={{ app_dir }}/config/httpd.conf state=link
+
+  - name: Create rq database
+    command: flask/bin/python {{ app_dir }}/create_database.py chdir={{ app_dir }}
+
+  - name: Install crontab
+    template: src={{ playbook_dir }}/crontab.j2 dest=/etc/crontab owner=root group=root mode=0644
+
+  - name: Start rq
+    service: name=rq state=started
+
+  - name: Start Apache
+    service: name=httpd state=started
+

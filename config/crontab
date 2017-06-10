@@ -1,0 +1,2 @@
+##(in /etc/crontab to run as root)##* * * * * root test -f /srv/www/rq/flask/rq.restart  && /bin/systemctl restart rq.service && rm -f /srv/www/rq/flask/rq.restart
+1 0 * * * /usr/sbin/logrotate -s /srv/www/rq/config/logrotate.status /srv/www/rq/config/logrotate.conf

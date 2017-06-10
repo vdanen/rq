@@ -1,0 +1,17 @@
+[Unit]
+Description=rq daemon
+Requires=rq.socket
+After=network.target
+
+[Service]
+PIDFile=/run/rq/pid
+User=rq
+Group=rq
+WorkingDirectory=/srv/www/rq
+ExecStart=/srv/www/rq/flask/bin/gunicorn --pid /run/rq/pid --access-logfile /srv/www/rq/rq.log app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

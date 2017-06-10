@@ -1,0 +1,10 @@
+[Unit]
+Description=rq socket
+
+[Socket]
+ListenStream=/run/rq/socket
+ListenStream=0.0.0.0:5010
+ListenStream=[::]:8010
+
+[Install]
+WantedBy=sockets.target

@@ -21,18 +21,25 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
-import os, sys, re, commands, logging, tempfile, shutil, datetime
+import os
+import sys
+import re
+import commands
+import logging
+import tempfile
+import shutil
+import datetime
 from glob import glob
-import rq.db
-import rq.basics
+from app.models import RPM_Tag, RPM_Package, RPM_User, RPM_Group, RPM_Requires, \
+    RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols
+
 
 class Binary:
     """
     Class to handle working with source files
     """
 
-    def __init__(self, db, config, options, rtag, rcommon):
-        self.db      = db
+    def __init__(self, config, options, rtag, rcommon):
         self.config  = config
         self.options = options
         self.rtag    = rtag
@@ -107,8 +114,8 @@ class Binary:
 
         file_list.sort()
 
-        tag_id = self.rtag.add_record(tag, path, updatepath)
-        if tag_id == 0:
+        tid = self.rtag.add_record(tag, path, updatepath)
+        if tid == 0:
             logging.critical('Unable to add tag "%s" to the database!' % tag)
             sys.exit(1)
 
@@ -118,14 +125,14 @@ class Binary:
             elif not self.re_brpm.search(file):
                 print 'File %s is not a binary rpm!\n' % file
             else:
-                self.record_add(tag_id, file)
+                self.record_add(tid, file)
 
 
-    def record_add(self, tag_id, file, update=0):
+    def record_add(self, tid, file, update=0):
         """
         Function to add a record to the database
         """
-        logging.debug('in Binary.record_add(%s, %s, %d)' % (tag_id, file, update))
+        logging.debug('in Binary.record_add(%s, %s, %d)' % (tid, file, update))
 
         if os.path.isfile(file):
             path = os.path.abspath(os.path.dirname(file))
@@ -135,29 +142,29 @@ class Binary:
 
         self.rcommon.file_rpm_check(file)
 
-        record = self.package_add_record(tag_id, file, update)
-        if not record:
+        pid = self.package_add_record(tid, file, update)
+        if not pid:
             return
 
         file_list = self.rcommon.rpm_list(file)
         if not file_list:
             return
 
-        logging.debug('Add file records for package record: %s' % record)
-        self.add_records(tag_id, record, file_list)
-        self.add_requires(tag_id, record, file)
-        self.add_provides(tag_id, record, file)
-        self.add_binary_records(tag_id, record, file)
+        logging.debug('Add file records for pid: %s' % pid)
+        self.add_records(tid, pid, file_list)
+        self.add_requires(tid, pid, file)
+        self.add_provides(tid, pid, file)
+        self.add_binary_records(tid, pid, file)
 
         if self.options.progress:
             sys.stdout.write('\n')
 
 
-    def package_add_record(self, tag_id, file, update=0):
+    def package_add_record(self, tid, file, update=0):
         """
         Function to add a package record
         """
-        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tag_id, file, update))
+        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tid, file, update))
 
         fname   = os.path.basename(file)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + self.rcommon.clean_shell(file))
@@ -170,46 +177,32 @@ class Binary:
         arch    = tlist[4].strip()
         srpm    = self.re_srpmname.sub(r'\1', tlist[5].strip())
 
-        query = "SELECT tag FROM tags WHERE t_record = '%s' LIMIT 1" % tag_id
-        tag   = self.db.fetch_one(query)
+        tag = RPM_Tag.get_tag(tid)
 
-        query = "SELECT t_record, p_package, p_version, p_release, p_arch FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s' AND p_arch = '%s'" % (
-            tag_id,
-            self.db.sanitize_string(package),
-            self.db.sanitize_string(version),
-            self.db.sanitize_string(release),
-            self.db.sanitize_string(arch))
-        result = self.db.fetch_all(query)
-
-        if result:
+        if RPM_Package.in_db(tid, package, version, release, arch):
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
-            return(0)
+            return 0
 
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_arch, p_srpm, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
-            tag_id,
-            self.db.sanitize_string(tag),
-            self.db.sanitize_string(package),
-            self.db.sanitize_string(version),
-            self.db.sanitize_string(release),
-            self.db.sanitize_string(pdate),
-            self.db.sanitize_string(arch),
-            self.db.sanitize_string(srpm),
-            self.db.sanitize_string(fname),
-            update)
-
-        result = self.db.do_query(query)
         self.rcommon.show_progress(fname)
-
-        query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, self.db.sanitize_string(package))
-        p_record = self.db.fetch_one(query)
-        if p_record:
-            return(p_record)
-        else:
-            print 'Adding file %s failed!\n' % file
-            return(0)
+        try:
+            p = RPM_Package.create(
+                tid      = tid,
+                package  = package,
+                version  = version,
+                release  = release,
+                date     = pdate,
+                arch     = arch,
+                srpm     = srpm,
+                fullname = fname,
+                update   = update
+            )
+            return p.id
+        except Exception, e:
+            logging.error('Adding file %s failed!\n%s', file, e)
+            return 0
 
 
     def query(self, type):
@@ -220,12 +213,13 @@ class Binary:
         """
         logging.debug('in Binary.query(%s)' % type)
 
-        tag_id = self.rtag.lookup(self.options.tag)
-        if self.options.tag and not tag_id:
+        # TODO: seems to always be case-insensitive; need to change args!!
+        t = self.rtag.lookup(self.options.tag)
+        if self.options.tag and not t:
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
-        elif self.options.tag and tag_id:
-            tag_id =  tag_id['id']
+        elif self.options.tag and t:
+            tid =  t['id']
 
         if self.options.ignorecase and not self.options.regexp:
             ignorecase = ''
@@ -252,36 +246,66 @@ class Binary:
             print 'Searching database records for %s match for %s (%s)' % (match_type, type, like_q)
 
         if type == 'files':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, files, f_id, f_user, f_group, f_is_suid, f_is_sgid, f_perms FROM files LEFT JOIN packages ON (packages.p_record = files.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s files " % ignorecase
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_File.select().where((RPM_File.file.regexp(like_q)) & (RPM_File.tid == tid)).order_by(RPM_File.file.asc())
+                else:
+                    result = RPM_File.select().where(RPM_File.file.regexp(like_q)).order_by(RPM_File.file.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_File.select().where((RPM_File.file.contains(like_q)) & (RPM_File.tid == tid)).order_by(RPM_File.file.asc())
+                else:
+                    result = RPM_File.select().where(RPM_File.file.contains(like_q)).order_by(RPM_File.file.asc())
+
         elif type == 'symbols':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, symbols, symbols.f_id, files FROM symbols LEFT JOIN (packages, files) ON (packages.p_record = symbols.p_record AND symbols.f_id = files.f_id) WHERE %s symbols " % ignorecase
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Symbols.select().where((RPM_Symbols.symbols.regexp(like_q)) & (RPM_Symbols.tid == tid)).order_by(RPM_Symbols.symbols.asc())
+                else:
+                    result = RPM_Symbols.select().where(RPM_Symbols.symbols.regexp(like_q)).order_by(RPM_Symbols.symbols.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Symbols.select().where((RPM_Symbols.symbols.contains(like_q)) & (RPM_Symbols.tid == tid)).order_by(RPM_Symbols.symbols.asc())
+                else:
+                    result = RPM_Symbols.select().where(RPM_Symbols.symbols.contains(like_q)).order_by(RPM_Symbols.symbols.asc())
+
         elif type == 'packages':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm FROM packages WHERE %s p_package " % ignorecase
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Package.select().where((RPM_Package.package.regexp(like_q)) & (RPM_Package.tid == tid)).order_by(RPM_Package.package.asc())
+                else:
+                    result = RPM_Package.select().where(RPM_Package.package.regexp(like_q)).order_by(RPM_Package.package.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Package.select().where((RPM_Package.package.contains(like_q)) & (RPM_Package.tid == tid)).order_by(RPM_Package.package.asc())
+                else:
+                    result = RPM_Package.select().where(RPM_Package.package.contains(like_q)).order_by(RPM_Package.package.asc())
+
         elif type == 'provides':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, pv_name FROM provides LEFT JOIN packages ON (packages.p_record = provides.p_record) JOIN provides_names ON (provides_names.pv_record = provides.pv_record) WHERE %s pv_name " % ignorecase
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Provides.select().where((RPM_Provides.name.regexp(like_q)) & (RPM_Provides.tid == tid)).order_by(RPM_Provides.name.asc())
+                else:
+                    result = RPM_Provides.select().where(RPM_Provides.name.regexp(like_q)).order_by(RPM_Provides.name.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Provides.select().where((RPM_Provides.name.contains(like_q)) & (RPM_Provides.tid == tid)).order_by(RPM_Provides.name.asc())
+                else:
+                    result = RPM_Provides.select().where(RPM_Provides.name.contains(like_q)).order_by(RPM_Provides.name.asc())
+
         elif type == 'requires':
-            query = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, p_srpm, rq_name FROM requires LEFT JOIN packages ON (packages.p_record = requires.p_record) JOIN requires_names ON (requires_names.rq_record = requires.rq_record) WHERE %s rq_name " % ignorecase
+            if self.options.regexp:
+                if self.options.tag:
+                    result = RPM_Requires.select().where((RPM_Requires.name.regexp(like_q)) & (RPM_Requires.tid == tid)).order_by(RPM_Requires.name.asc())
+                else:
+                    result = RPM_Requires.select().where(RPM_Requires.name.regexp(like_q)).order_by(RPM_Requires.name.asc())
+            else:
+                if self.options.tag:
+                    result = RPM_Requires.select().where((RPM_Requires.name.contains(like_q)) & (RPM_Requires.tid == tid)).order_by(RPM_Requires.name.asc())
+                else:
+                    result = RPM_Requires.select().where(RPM_Requires.name.contains(like_q)).order_by(RPM_Requires.name.asc())
 
-        if self.options.regexp:
-            query = query + "RLIKE '" + self.db.sanitize_string(like_q) + "'"
-        else:
-            query = query + "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
-
-        if self.options.tag:
-            query = "%s AND %s.t_record = '%d'"  % (query, type, tag_id)
-
-        if type == 'packages':
-            query  = query + " ORDER BY p_tag, p_package"
-        elif type == 'symbols':
-            query = query + " ORDER BY symbols"
-        elif type == 'provides':
-            query = query + " ORDER BY pv_name"
-        elif type == 'requires':
-            query = query + " ORDER BY rq_name"
-        else:
-            query  = query + " ORDER BY p_tag, p_package, " + type
-
-        result = self.db.fetch_all(query)
+        # DEBUG: print result
         if result:
             if self.options.count:
                 if self.options.quiet:
@@ -296,83 +320,80 @@ class Binary:
             ltag = ''
             lsrc = ''
             for row in result:
+                # DEBUG: print vars(row)
                 utype = ''
                 # for readability
-                fromdb_tag  = row['p_tag']
-                fromdb_rpm  = row['p_package']
-                fromdb_ver  = row['p_version']
-                fromdb_rel  = row['p_release']
-                fromdb_date = row['p_date']
-                fromdb_srpm = row['p_srpm']
+                package = RPM_Package.get(RPM_Package.id == row.pid)
+                r_tag   = RPM_Tag.get_tag(row.tid)
+                r_rpm   = package.package
+                r_ver   = package.version
+                r_rel   = package.release
+                r_date  = package.date
+                r_srpm  = package.srpm
 
                 if type == 'provides':
-                    fromdb_type = row['pv_name']
+                    r_type = row.name
 
                 if type == 'requires':
-                    fromdb_type = row['rq_name']
+                    r_type = row.name
 
                 if type == 'files':
                     # only provides, requires, files
-                    fromdb_type = row['files']
+                    r_type = row.file
 
                 if type == 'files':
-                    fromdb_user    = row['f_user']
-                    fromdb_group   = row['f_group']
-                    fromdb_is_suid = row['f_is_suid']
-                    fromdb_is_sgid = row['f_is_sgid']
-                    fromdb_perms   = row['f_perms']
-                    fromdb_fileid  = row['f_id']
+                    r_user    = RPM_User.get_name(row.uid)
+                    r_group   = RPM_Group.get_name(row.gid)
+                    r_is_suid = row.is_suid
+                    r_is_sgid = row.is_sgid
+                    r_perms   = row.perms
+                    r_fileid  = row.id
 
                 if type == 'symbols':
-                    fromdb_files   = row['files']
-                    fromdb_symbol  = row['symbols']
+                    r_files  = RPM_File.get_name(row.fid)
+                    r_symbol = row.symbols
 
-                if row['p_update'] == 1:
+                if row.update == 1:
                     utype = '[update] '
 
-                if not ltag == fromdb_tag:
+                if not ltag == r_tag:
                     if not type == 'packages':
-                        print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
-                    ltag = fromdb_tag
+                        print '\n\nResults in Tag: %s\n%s\n' % (r_tag, '='*40)
+                    ltag = r_tag
 
                 if self.options.debug:
-                    print row
+                    print vars(row)
                 else:
-                    rpm = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
+                    rpm = '%s-%s-%s' % (r_rpm, r_ver, r_rel)
 
                     if not rpm == lsrc:
                         if type == 'files' and self.options.ownership:
                             is_suid = ''
                             is_sgid = ''
-                            if fromdb_is_suid == 1:
+                            if r_is_suid == 1:
                                 is_suid = '*'
-                            if fromdb_is_sgid == 1:
+                            if r_is_sgid == 1:
                                 is_sgid = '*'
-                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, fromdb_srpm, fromdb_type, int(fromdb_perms), is_suid, fromdb_user, is_sgid, fromdb_group)
+                            print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, r_srpm, r_type, int(r_perms), is_suid, r_user, is_sgid, r_group)
                         elif type == 'symbols':
-                            print '%s (%s): %s in %s' % (rpm, fromdb_srpm, fromdb_symbol, fromdb_files)
+                            print '%s (%s): %s in %s' % (rpm, r_srpm, r_symbol, r_files)
                         elif type == 'packages':
                             print '%s/%s %s' % (ltag, rpm, utype)
                         else:
-                            print '%s%s (%s): %s' % (utype, rpm, fromdb_srpm, fromdb_type)
+                            print '%s%s (%s): %s' % (utype, rpm, r_srpm, r_type)
 
                     if self.options.quiet:
                         lsrc = rpm
                     else:
-                        flag_result = None
+                        flags = None
                         if self.options.extrainfo:
                             if type == 'files':
-                                query       = 'SELECT * FROM flags WHERE f_id = %d LIMIT 1' % fromdb_fileid
-                                flag_result = self.db.fetch_all(query)
-                                if flag_result:
-                                    for x in flag_result:
-                                        #fetch_all returns a tuple containing a dict, so...
-                                        flags = self.convert_flags(x)
-                            rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                            if flag_result:
+                                flags = RPM_Flags.get_named(r_fileid)
+                            rpm_date = datetime.datetime.fromtimestamp(float(r_date))
+                            if flags:
                                 print '  %-10s%s' % ("Date :", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
-                                print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags['relro'], "SSP:", flags['ssp'], "PIE:", flags['pie'])
-                                print '  %-10s%-10s%-12s%-10s%s' % ("", "FORTIFY:", flags['fortify'], "NX :", flags['nx'])
+                                print '  %-10s%-10s%-12s%-10s%-12s%-10s%s' % ("Flags:", "RELRO  :", flags.relro, "SSP:", flags.ssp, "PIE:", flags.pie)
+                                print '  %-10s%-10s%-12s%-10s%s' % ("", "FORTIFY:", flags.fortify, "NX :", flags.nx)
 
         else:
             if self.options.tag:
@@ -385,121 +406,117 @@ class Binary:
         """
         Function to look up the u_record and add it to the cache for users
         """
-        query = "SELECT u_record FROM user_names WHERE f_user = '%s'" % name
-        u_rec = self.db.fetch_one(query)
-        if u_rec:
+        uid = RPM_User.get_id(name)
+        if uid:
             # add to the cache
-            self.user_cache[name] = u_rec
-            return u_rec
+            self.user_cache[name] = uid
+            return uid
         else:
             return False
 
 
-    def get_user_record(self, user):
+    def get_user_record(self, name):
         """
         Function to lookup, add, and cache user info
         """
-        name = self.db.sanitize_string(user)
 
         # first check the cache
         if name in self.user_cache:
             return self.user_cache[name]
 
         # not cached, check the database
-        u_rec = self.cache_get_user(name)
-        if u_rec:
-            return u_rec
+        uid = self.cache_get_user(name)
+        if uid:
+            return uid
 
-        # not cached, not in the db, add it
-        query = "INSERT INTO user_names (u_record, f_user) VALUES (NULL, '%s')" % name
-        u_rec = self.db.do_query(query, True)
-        if u_rec:
+        # not cached, so not in the db, add it
+        try:
+            u = RPM_User.create(user = name)
+        except Exception, e:
+            logging.error('Failed to add user %s to the database!\n%s', name, e)
+            sys.exit(1)
+
+        if u:
             # add to the cache
-            self.user_cache[name] = u_rec
-            return u_rec
+            self.user_cache[name] = u.id
+            return u.id
 
 
     def cache_get_group(self, name):
         """
         Function to look up the g_record and add it to the cache for groups
         """
-        query = "SELECT g_record FROM group_names WHERE f_group = '%s'" % name
-        g_rec = self.db.fetch_one(query)
-        if g_rec:
+        gid = RPM_Group.get_id(name)
+        if gid:
             # add to the cache
-            self.group_cache[name] = g_rec
-            return g_rec
+            self.group_cache[name] = gid
+            return gid
         else:
             return False
 
 
-    def get_group_record(self, group):
+    def get_group_record(self, name):
         """
         Function to lookup, add, and cache group info
         """
-        name = self.db.sanitize_string(group)
 
         # first check the cache
         if name in self.group_cache:
             return self.group_cache[name]
 
         # not cached, check the database
-        g_rec = self.cache_get_group(name)
-        if g_rec:
-            return g_rec
+        gid = self.cache_get_group(name)
+        if gid:
+            return gid
 
-        # not cached, not in the db, add it
-        query = "INSERT INTO group_names (g_record, f_group) VALUES (NULL, '%s')" % name
-        g_rec = self.db.do_query(query, True)
-        if g_rec:
+        # not cached, so not in the db, add it
+        try:
+            g = RPM_Group.create(group = name)
+        except Exception, e:
+            logging.error('Failed to add group %s to the database!\n%s', name, e)
+            sys.exit(1)
+
+        if g:
             # add to the cache
-            self.group_cache[name] = g_rec
-            return g_rec
+            self.group_cache[name] = g.id
+            return g.id
 
 
     def cache_get_requires(self, name):
         """
         Function to look up the rq_record and add it to the cache for requires
         """
-        query = "SELECT rq_record FROM requires_names WHERE rq_name = '%s'" % name
-        rq_rec = self.db.fetch_one(query)
-        if rq_rec:
+        rid = RPM_Requires.get_id(name)
+        if rid:
             # add to the cache
-            self.requires_cache[name] = rq_rec
-            return rq_rec
+            self.requires_cache[name] = rid
+            return rid
         else:
             return False
 
 
-    def get_requires_record(self, requires):
+    def get_requires_record(self, name):
         """
         Function to lookup, add, and cache requires info
         """
-        name = self.db.sanitize_string(requires)
 
         # first check the cache
         if name in self.requires_cache:
             return self.requires_cache[name]
 
         # not cached, check the database
-        rq_rec = self.cache_get_requires(name)
-        if rq_rec:
-            return rq_rec
+        rid = self.cache_get_requires(name)
+        if rid:
+            return rid
 
-        # not cached, not in the db, add it
-        query  = "INSERT INTO requires_names (rq_record, rq_name) VALUES (NULL, '%s')" % name
-        rq_rec = self.db.do_query(query, True)
-        if rq_rec:
-            # add to the cache
-            self.requires_cache[name] = rq_rec
-            return rq_rec
+        return None
 
 
-    def add_requires(self, tag_id, record, file):
+    def add_requires(self, tid, pid, file):
         """
         Function to add requires to the database
         """
-        logging.debug('in Binary.add_requires(%s, %s, %s)' % (tag_id, record, file))
+        logging.debug('in Binary.add_requires(%s, %s, %s)' % (tid, pid, file))
 
         list = commands.getoutput("rpm -qp --nosignature --requires " + self.rcommon.clean_shell(file) + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
         list = list.splitlines()
@@ -508,54 +525,55 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Dependency: %s' % dep
-                rq_rec = self.get_requires_record(dep.strip())
-                query  = "INSERT INTO requires (t_record, p_record, rq_record) VALUES ('%s', '%s', '%s')" % (tag_id, record, rq_rec)
-                result = self.db.do_query(query)
+                rid = self.get_requires_record(dep.strip())
+                if rid:
+                    return rid
+                try:
+                    r = RPM_Requires.create(
+                        pid  = pid,
+                        tid  = tid,
+                        name = dep.strip()
+                    )
+                    return r.id
+                except Exception, e:
+                    logging.error('Failed to add requires %s to the database!\n%s', file, e)
 
 
     def cache_get_provides(self, name):
         """
         Function to look up the pv_record and add it to the cache for provides
         """
-        query = "SELECT pv_record FROM provides_names WHERE pv_name = '%s'" % name
-        pv_rec = self.db.fetch_one(query)
-        if pv_rec:
+        prid = RPM_Provides.get_id(name)
+        if prid:
             # add to the cache
-            self.provides_cache[name] = pv_rec
-            return pv_rec
+            self.provides_cache[name] = prid
+            return prid
         else:
             return False
 
 
-    def get_provides_record(self, provides):
+    def get_provides_record(self, name):
         """
         Function to lookup, add, and cache provides info
         """
-        name = self.db.sanitize_string(provides)
 
         # first check the cache
         if name in self.provides_cache:
             return self.provides_cache[name]
 
         # not cached, check the database
-        pv_rec = self.cache_get_provides(name)
-        if pv_rec:
-            return pv_rec
+        prid = self.cache_get_provides(name)
+        if prid:
+            return prid
 
-        # not cached, not in the db, add it
-        query  = "INSERT INTO provides_names (pv_record, pv_name) VALUES (NULL, '%s')" % name
-        pv_rec = self.db.do_query(query, True)
-        if pv_rec:
-            # add to the cache
-            self.provides_cache[name] = pv_rec
-            return pv_rec
+        return None
 
 
-    def add_provides(self, tag_id, record, file):
+    def add_provides(self, tid, pid, file):
         """
         Function to add provides to the database
         """
-        logging.debug('in Binary.add_provides(%s, %s, %s)' % (tag_id, record, file))
+        logging.debug('in Binary.add_provides(%s, %s, %s)' % (tid, pid, file))
 
         list = commands.getoutput("rpm -qp --nosignature --provides " + self.rcommon.clean_shell(file))
         list = list.splitlines()
@@ -564,38 +582,54 @@ class Binary:
                 self.rcommon.show_progress()
                 if self.options.verbose:
                     print 'Provides: %s' % prov
-                pv_rec = self.get_provides_record(prov.strip())
-                query  = "INSERT INTO provides (t_record, p_record, pv_record) VALUES ('%s', '%s', '%s')" % (tag_id, record, pv_rec)
-                result = self.db.do_query(query)
+                prid = self.get_provides_record(prov.strip())
+                if prid:
+                    return prid
+                try:
+                    pr = RPM_Provides.create(
+                         pid  = pid,
+                         tid  = tid,
+                         name = prov.strip()
+                    )
+                    return pr.id
+                except Exception, e:
+                    logging.error('Failed to add provides %s to the database!\n%s', file, e)
 
 
-    def add_records(self, tag_id, record, file_list):
+    def add_records(self, tid, pid, file_list):
         """
         Function to add file records
         """
-        logging.debug('in Binary.add_records(%s, %s, %s)' % (tag_id, record, file_list))
+        logging.debug('in Binary.add_records(%s, %s, %s)' % (tid, pid, file_list))
 
         for x in file_list.keys():
+            file = file_list[x]['file'].strip()
+            uid  = self.get_user_record(file_list[x]['user'])
+            gid  = self.get_group_record(file_list[x]['group'])
             self.rcommon.show_progress()
             if self.options.verbose:
-                print 'File: %s' % file_list[x]['file']
-            query  = "INSERT INTO files (t_record, p_record, u_record, g_record, files, f_is_suid, f_is_sgid, f_perms) VALUES ('%s', '%s', '%s', '%s', '%s', %d, %d, %s)" % (
-                tag_id,
-                record,
-                self.get_user_record(file_list[x]['user']),
-                self.get_group_record(file_list[x]['group']),
-                self.db.sanitize_string(file_list[x]['file'].strip()),
-                file_list[x]['is_suid'],
-                file_list[x]['is_sgid'],
-                file_list[x]['perms'])
-            result = self.db.do_query(query)
+                print 'File: %s' % file
+
+            try:
+                f = RPM_File.create(
+                    tid     = tid,
+                    pid     = pid,
+                    uid     = uid,
+                    gid     = gid,
+                    file    = file,
+                    is_suid = file_list[x]['is_suid'],
+                    is_sgid = file_list[x]['is_sgid'],
+                    perms   = file_list[x]['perms']
+                )
+            except Exception, e:
+                logging.error('Adding file %s failed!\n%s', file, e)
 
 
-    def add_binary_records(self, tag_id, record, rpm):
+    def add_binary_records(self, tid, pid, rpm):
         """
         Function to add binary symbols and flags to the database
         """
-        logging.debug('in Binary.add_binary_records(%s, %s, %s)' % (tag_id, record, rpm))
+        logging.debug('in Binary.add_binary_records(%s, %s, %s)' % (tid, pid, rpm))
 
         cpio_dir = tempfile.mkdtemp()
         try:
@@ -620,10 +654,9 @@ class Binary:
                         symbols = self.get_binary_symbols(file)
                         # need to change ./usr/sbin/foo to /usr/sbin/foo and look up the file record
                         nfile   = file[1:]
-                        query   = "SELECT f_id FROM files WHERE t_record = %s AND p_record = %s AND files = '%s'" % (tag_id, record, nfile)
-                        file_id = self.db.fetch_one(query)
-                        self.add_flag_records(tag_id, file_id, record, flags)
-                        self.add_symbol_records(tag_id, file_id, record, symbols)
+                        fid     = RPM_File.find_id(nfile, tid, pid)
+                        self.add_flag_records(tid, fid, pid, flags)
+                        self.add_symbol_records(tid, fid, pid, symbols)
             os.chdir(current_dir)
         finally:
             logging.debug('Removing temporary directory: %s...' % cpio_dir)
@@ -659,7 +692,8 @@ class Binary:
         """
         Function to get binary flags from a file
         """
-        flags = {'relro': 0, 'ssp': 0, 'nx': 0, 'pie': 0, 'fortify_source': 0}
+        # set all bits to their defaults
+        flags = {'relro': 0, 'ssp': 0, 'nx': 1, 'pie': 0, 'fortify_source': 0}
 
         self.rcommon.show_progress()
 
@@ -675,23 +709,14 @@ class Binary:
             else:
                 # partial RELRO
                 flags['relro'] = 2
-        else:
-            # no RELRO
-            flags['relro'] = 0
 
         if re.search('__stack_chk_fail', readelf_s):
             # found
             flags['ssp'] = 1
-        else:
-            # none
-            flags['ssp'] = 0
 
         if re.search('GNU_STACK.*RWE', readelf_l):
             # disabled
             flags['nx'] = 0
-        else:
-            # enabled
-            flags['nx'] = 1
 
         if re.search('Type:( )+EXEC', readelf_h):
             # none
@@ -707,84 +732,49 @@ class Binary:
         if re.search('_chk@GLIBC', readelf_s):
             # found
             flags['fortify_source'] = 1
-        else:
-            # not found
-            flags['fortify_source'] = 0
 
         return flags
 
 
-    def add_flag_records(self, tag_id, file_id, record, flags):
+    def add_flag_records(self, tid, fid, pid, flags):
         """
         Function to add flag records to the database
         """
-        logging.debug('in Binary.add_flag_records(%s, %s, %s, %s)' % (tag_id, file_id, record, flags))
+        logging.debug('in Binary.add_flag_records(%s, %s, %s, %s)' % (tid, fid, pid, flags))
 
         logging.debug('flags: %s' % flags)
-        query  = "INSERT INTO flags (t_record, p_record, f_id, f_relro, f_ssp, f_pie, f_fortify, f_nx) VALUES ('%s', '%s', '%s', %d, %d, %d, %d, %d)" % (
-            tag_id,
-            record,
-            file_id,
-            flags['relro'],
-            flags['ssp'],
-            flags['pie'],
-            flags['fortify_source'],
-            flags['nx'])
-        result = self.db.do_query(query)
+
+        try:
+            f = RPM_Flags.create(
+                tid     = tid,
+                pid     = pid,
+                fid     = fid,
+                relro   = flags['relro'],
+                ssp     = flags['ssp'],
+                pie     = flags['pie'],
+                fortify = flags['fortify_source'],
+                nx      = flags['nx']
+            )
+        except Exception, e:
+            logging.error('Adding flags for fid %d failed!\n%s', fid, e)
 
 
-    def add_symbol_records(self, tag_id, file_id, record, symbols):
+    def add_symbol_records(self, tid, fid, pid, symbols):
         """
         Function to add symbol records to the database
         """
-        logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tag_id, file_id, record, symbols))
+        logging.debug('in Binary.add_symbol_records(%s, %s, %s, %s)' % (tid, fid, pid, symbols))
 
         for symbol in symbols:
-            query  = "INSERT INTO symbols (t_record, p_record, f_id, symbols) VALUES ('%s', '%s', '%s', '%s')" % (
-                tag_id,
-                record,
-                file_id,
-                self.db.sanitize_string(symbol))
-            result = self.db.do_query(query)
-
-
-    def convert_flags(self, flags):
-        """
-        Convert numeric representation of flags (from the database) to human
-        readable form, dropping the prefix (i.e. f_relro becomes relro)
-        """
-        newflags = {}
-
-        if flags['f_relro'] == 1:
-            newflags['relro'] = "full"
-        elif flags['f_relro'] == 2:
-            newflags['relro'] = "partial"
-        else:
-            newflags['relro'] = "none"
-
-        if flags['f_ssp'] == 1:
-            newflags['ssp'] = "found"
-        else:
-            newflags['ssp'] = "not found"
-
-        if flags['f_nx'] == 1:
-            newflags['nx'] = "enabled"
-        else:
-            newflags['nx'] = "disabled"
-
-        if flags['f_pie'] == 2:
-            newflags['pie'] = "DSO"
-        elif flags['f_pie'] == 1:
-            newflags['pie'] = "enabled"
-        else:
-            newflags['pie'] = "none"
-
-        if flags['f_fortify'] == 1:
-            newflags['fortify'] = "found"
-        else:
-            newflags['fortify'] = "not found"
-
-        return(newflags)
+            try:
+                s = RPM_Symbols.create(
+                    pid     = pid,
+                    tid     = tid,
+                    fid     = fid,
+                    symbols = symbol
+                )
+            except Exception, e:
+                logging.error('Adding symbol for fid %d failed!\n%s', fid, e)
 
 
     def list_updates(self, tag):
@@ -795,14 +785,10 @@ class Binary:
 
         print 'Updated packages in tag %s:\n' % tag
 
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id  = self.db.fetch_one(query)
-
-        query   = "SELECT p_fullname FROM packages WHERE t_record = %s AND p_update = 1 ORDER BY p_fullname ASC" % tag_id
-        results = self.db.fetch_all(query)
+        results = RPM_Package.list_updates(tag)
         if results:
             for xrow in results:
-                print '%s' % xrow['p_fullname']
+                print '%s' % xrow.fullname
         else:
             print 'No results found.'
 
@@ -815,22 +801,27 @@ class Binary:
 
         print 'Searching for %s files in tag %s\n' % (type.upper(), tag)
 
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id  = self.db.fetch_one(query)
+        tid = RPM_Tag.get_id(tag)
 
-        if not tag_id:
+        if not tid:
             print 'Invalid tag: %s' % tag
             sys.exit(1)
 
         if type == 'suid':
-            db_col = 'f_is_suid'
+            db_col = 'is_suid'
         elif type == 'sgid':
-            db_col = 'f_is_sgid'
+            db_col = 'is_sgid'
+        else:
+            print 'Invalid value, looking for suid or sgid, received: %s' % type
+            sys.exit(1)
 
-        query   = "SELECT p_package, files, f_user, f_group, f_perms FROM files JOIN packages ON (files.p_record = packages.p_record) LEFT JOIN user_names ON (files.u_record = user_names.u_record) LEFT JOIN group_names ON (files.g_record = group_names.g_record) WHERE %s = 1 AND files.t_record = %s ORDER BY p_package ASC" % (db_col, tag_id)
-        results = self.db.fetch_all(query)
-        if results:
-            for xrow in results:
-                print '%s: %s [%s:%s mode %s]' % (xrow['p_package'], xrow['files'], xrow['f_user'], xrow['f_group'], xrow['f_perms'])
+        sxid_files = RPM_File.get_sxid(tid, db_col)
+        if sxid_files:
+            for sxid_file in sxid_files:
+                print '%s: %s [%s:%s mode %s]' % (sxid_file.package,
+                                                  sxid_file.file,
+                                                  sxid_file.user,
+                                                  sxid_file.group,
+                                                  sxid_file.perms)
         else:
             print 'No results found.'

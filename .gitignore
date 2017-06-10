@@ -1,2 +1,16 @@
-/rq.komodoproject
+.DS_Store
 *.pyc
+*.pyo
+.komodoproject
+.bundle
+.vagrant
+.idea
+flask
+data
+rq.restart
+rq.log
+config/logrotate.status
+app/static/uploads/*
+/build
+/rq.egg-info
+*.log
