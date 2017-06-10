@@ -33,7 +33,8 @@ def create_tables():
     rpm_db.create_tables([RPM_File, RPM_User, RPM_Group, RPM_Package, RPM_Provides, RPM_Requires,
                RPM_Symbols, RPM_Flags, RPM_Tag, RPM_AlreadySeen], True) # only create if it doesn't already exist
     srpm_db.connect()
-    srpm_db.create_tables([SRPM_File, SRPM_Package, SRPM_Source, SRPM_BuildRequires, SRPM_Tag, SRPM_Ctag, SRPM_AlreadySeen], True)
+    srpm_db.create_tables([SRPM_File, SRPM_Package, SRPM_Source, SRPM_BuildRequires, SRPM_Tag, SRPM_Ctag,
+               SRPM_AlreadySeen], True)
 
 # tid is always tag id
 # pid is always package id
