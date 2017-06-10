@@ -170,9 +170,12 @@ class Source:
         """
         logging.debug('in Source.query(%s)' % type)
 
-        if self.options.tag and not self.rtag.lookup(self.options.tag):
+        t = self.rtag.lookup(self.options.tag)
+        if self.options.tag and not t:
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
+        elif self.options.tag and t:
+            tid = t['id']
 
         if self.options.ignorecase and not self.options.regexp:
             ignorecase = ''
@@ -180,49 +183,72 @@ class Source:
             ignorecase = 'BINARY'
 
         if type == 'ctags':
-            like_q = self.options.ctags
+            match_t = 'Ctags data'
+            like_q  = self.options.ctags
         if type == 'buildreqs':
-            like_q = self.options.buildreqs
+            match_t = '.spec BuildRequires'
+            like_q  = self.options.buildreqs
         if type == 'files':
-            like_q = self.options.query
+            match_t = 'files'
+            like_q  = self.options.query
 
         if self.options.regexp:
             match_type = 'regexp'
         else:
             match_type = 'substring'
 
-        if self.options.regexp:
-            qlike = "RLIKE '" + self.db.sanitize_string(like_q) + "'"
-        else:
-            qlike = "LIKE '%" + self.db.sanitize_string(like_q) + "%'"
+        if not self.options.quiet:
+            print 'Searching database records for %s match on %s ("%s")' % (match_type, match_t, like_q)
 
         if type == 'ctags':
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, c_file, c_type, c_extra, c_line FROM ctags JOIN sources ON (sources.s_record = ctags.s_record) JOIN packages ON (packages.p_record = ctags.p_record) WHERE %s c_name %s" % (ignorecase, qlike)
-            orderby = "c_file"
-            match_t = 'Ctags data'
-        elif type == 'buildreqs':
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, b_name FROM buildreqs JOIN packages ON (packages.p_record = buildreqs.p_record) JOIN breq_name ON (breq_name.n_record = buildreqs.n_record) WHERE %s b_name %s" % (ignorecase, qlike)
-            match_t = '.spec BuildRequires'
-        else:
-            query   = "SELECT DISTINCT p_tag, p_update, p_package, p_version, p_release, p_date, s_type, s_file, f_file FROM files JOIN sources ON (sources.s_record = files.s_record) JOIN packages ON (packages.p_record = files.p_record) WHERE (%s f_file %s) OR (%s s_file %s)" % (ignorecase, qlike, ignorecase, qlike)
-            orderby = "f_file"
-            match_t = 'files'
+            if self.options.regexp:
+                if self.options.tag:
+                    result = SRPM_Ctag.select().where((SRPM_Ctag.name.regexp(like_q)) & (SRPM_Ctag.tid == tid)).order_by(SRPM_Ctag.file.asc())
+                else:
+                    result = SRPM_Ctag.select().where(SRPM_Ctag.name.regexp(like_q)).order_by(SRPM_Ctag.file.asc())
+            else:
+                if self.options.tag:
+                    result = SRPM_Ctag.select().where((SRPM_Ctag.name.contains(like_q)) & (SRPM_Ctag.tid == tid)).order_by(SRPM_Ctag.file.asc())
+                else:
+                    result = SRPM_Ctag.select().where(SRPM_Ctag.name.contains(like_q)).order_by(SRPM_Ctag.file.asc())
 
-        if self.options.sourceonly:
-            query = query + " AND s_type = 'S'"
+        elif type == 'buildreqs':
+            if self.options.regexp:
+                if self.options.tag:
+                    result = SRPM_BuildRequires.select().where((SRPM_BuildRequires.name.regexp(like_q)) & (SRPM_BuildRequires.tid == tid)).order_by(SRPM_BuildRequires.name.asc())
+                else:
+                    result = SRPM_BuildRequires.select().where(SRPM_BuildRequires.name.regexp(like_q)).order_by(SRPM_BuildRequires.name.asc())
+            else:
+                if self.options.tag:
+                    result = SRPM_BuildRequires.select().where((SRPM_BuildRequires.name.contains(like_q)) & (SRPM_BuildRequires.tid == tid)).order_by(SRPM_BuildRequires.name.asc())
+                else:
+                    result = SRPM_BuildRequires.select().where(SRPM_BuildRequires.name.contains(like_q)).order_by(SRPM_BuildRequires.name.asc())
+
+        elif type == 'files':
+            if self.options.regexp:
+                if self.options.tag:
+                    result = SRPM_File.select().where((SRPM_File.file.regexp(like_q)) & (SRPM_File.tid == tid)).order_by(SRPM_File.file.asc())
+                else:
+                    result = SRPM_File.select().where(SRPM_File.file.regexp(like_q)).order_by(SRPM_File.file.asc())
+            else:
+                if self.options.tag:
+                    result = SRPM_File.select().where((SRPM_File.file.contains(like_q)) & (SRPM_File.tid == tid)).order_by(SRPM_File.file.asc())
+                else:
+                    result = SRPM_File.select().where(SRPM_File.file.contains(like_q)).order_by(SRPM_File.file.asc())
+
+
+        #TODO: need to make joins work somehow and reduce the above; need to be able to look for sources only
+        #if self.options.sourceonly:
+        #    query = query + " AND s_type = 'S'"
 
         if self.options.tag:
             query = query + " AND p_tag = '" + self.db.sanitize_string(self.options.tag) + "'"
 
-        if type == 'buildreqs':
-            query   = '%s ORDER BY p_tag, p_package' % query
-        else:
-            query   = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
+        #if type == 'buildreqs':
+        #    query   = '%s ORDER BY p_tag, p_package' % query
+        #else:
+        #    query   = "%s ORDER BY p_tag, p_package, s_type, s_file, %s" % (query, orderby)
 
-        if not self.options.quiet:
-            print 'Searching database records for %s match on %s ("%s")' % (match_type, match_t, like_q)
-
-        result = self.db.fetch_all(query)
 
         # TODO: if the match is a source file (e.g. a patch) we should constrain on it's uniqueness; for instance
         # a search on mgetty-1.1.33-167830.patch results in:
@@ -249,63 +275,67 @@ class Source:
                 return
 
             ltag = ''
-            lsrc = ''
             last = ''
             for row in result:
                 utype = ''
                 # for readability
-                fromdb_tag   = row['p_tag']
-                fromdb_rpm   = row['p_package']
-                fromdb_ver   = row['p_version']
-                fromdb_rel   = row['p_release']
-                fromdb_date  = row['p_date']
+                package = SRPM_Package.get(SRPM_Package.id == row.pid)
+                r_tag   = SRPM_Tag.get_tag(row.tid)
+                r_rpm   = package.package
+                r_ver   = package.version
+                r_rel   = package.release
+                r_date  = package.date
+
                 if type == 'buildreqs':
-                    fromdb_type  = 'S'
-                    fromdb_breq  = row['b_name']
+                    r_type = 'S'
+                    r_breq = row.name
                 else:
-                    fromdb_type  = row['s_type']
-                    fromdb_file  = row['s_file']
-                    fromdb_sfile = row[orderby]
+                    source  = SRPM_Source.get(SRPM_Source.id == row.sid)
+                    r_type  = source.stype
+                    r_file  = row.file
+                    r_sfile = source.file
+
                 if type == 'ctags':
-                    fromdb_ctype  = [k for k, v in self.ctag_map.iteritems() if v == row['c_type']][0]
-                    fromdb_cline  = row['c_line']
-                    fromdb_cextra = row['c_extra']
-                if row['p_update'] == 1:
+                    r_ctype  = [k for k, v in self.ctag_map.iteritems() if v == row.ctype][0]
+                    r_cline  = row.line
+                    r_cextra = row.extra
+
+                if row.update == 1:
                     utype = '[update] '
 
-                if not ltag == fromdb_tag:
-                    print '\n\nResults in Tag: %s\n%s\n' % (fromdb_tag, '='*40)
-                    ltag = fromdb_tag
+                if not ltag == r_tag:
+                    print '\n\nResults in Tag: %s\n%s\n' % (r_tag, '='*40)
+                    ltag = r_tag
 
                 if self.options.debug:
-                    print row
+                    print vars(row)
                 else:
-                    srpm  = '%s-%s-%s' % (fromdb_rpm, fromdb_ver, fromdb_rel)
+                    srpm  = '%s-%s-%s' % (r_rpm, r_ver, r_rel)
                     stype = 'source'
 
                     if self.options.quiet:
-                        lsrc = srpm
                         print srpm
                     else:
-                        if fromdb_type == 'P':
+                        if r_type == 'P':
                             stype = 'patch'
                         if self.options.extrainfo:
-                            rpm_date = datetime.datetime.fromtimestamp(float(fromdb_date))
-                            print '\n%-16s%-27s%-9s%s' % ("Package:", fromdb_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
-                            print '%-16s%-27s%-9s%s' % ("Version:", fromdb_ver, "Release:", fromdb_rel)
-                            print '%-16s%-30s' % (stype.title() + " File:", fromdb_file)
-                            print '%-16s%-30s' % ("Source Path:", fromdb_sfile)
+                            rpm_date = datetime.datetime.fromtimestamp(float(r_date))
+                            print '\n%-16s%-27s%-9s%s' % ("Package:", r_rpm, "Date:", rpm_date.strftime('%a %b %d %H:%M:%S %Y'))
+                            print '%-16s%-27s%-9s%s' % ("Version:", r_ver, "Release:", r_rel)
+                            print '%-16s%-30s' % (stype.title() + " File:", r_file)
+                            print '%-16s%-30s' % ("Source Path:", r_sfile)
                         else:
                             if type == 'ctags':
-                                if fromdb_file != last:
-                                    print '%s: (%s) %s' % (srpm, stype, fromdb_file)
-                                print '\tFound matching %s in %s:%s: %s' % (fromdb_ctype, fromdb_sfile, fromdb_cline, fromdb_cextra)
+                                if r_file != last:
+                                    print '%s: (%s) %s' % (srpm, stype, r_file)
+                                print '\tFound matching %s in %s:%s: %s' % (r_ctype, r_sfile, r_cline, r_cextra)
                             elif type == 'buildreqs':
-                                print '%s: %s' % (srpm, fromdb_breq)
+                                print '%s: %s' % (srpm, r_breq)
                             else:
-                                print '%s%s: (%s) %s: %s' % (utype, srpm, stype, fromdb_file, fromdb_sfile)
+                                print '%s%s: (%s) %s: %s' % (utype, srpm, stype, r_file, r_sfile)
+
                 if type == 'ctags':
-                    last = fromdb_file
+                    last = r_file
 
         else:
             if self.options.tag:
