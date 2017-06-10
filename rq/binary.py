@@ -118,55 +118,55 @@ class Binary:
             logging.critical('Unable to add tag "%s" to the database!' % tag)
             sys.exit(1)
 
-        for file in file_list:
-            if not os.path.isfile(file):
-                print 'File %s not found!\n' % file
-            elif not self.re_brpm.search(file):
-                print 'File %s is not a binary rpm!\n' % file
+        for rpm in file_list:
+            if not os.path.isfile(rpm):
+                print 'File %s not found!\n' % rpm
+            elif not self.re_brpm.search(rpm):
+                print 'File %s is not a binary rpm!\n' % rpm
             else:
-                self.record_add(tid, file)
+                self.record_add(tid, rpm)
 
 
-    def record_add(self, tid, file, update=0):
+    def record_add(self, tid, rpm, update=0):
         """
         Function to add a record to the database
         """
-        logging.debug('in Binary.record_add(%s, %s, %d)' % (tid, file, update))
+        logging.debug('in Binary.record_add(%s, %s, %d)' % (tid, rpm, update))
 
-        if os.path.isfile(file):
-            path = os.path.abspath(os.path.dirname(file))
+        if os.path.isfile(rpm):
+            path = os.path.abspath(os.path.dirname(rpm))
         else:
-            path = os.path.abspath(file)
+            path = os.path.abspath(rpm)
         logging.debug('Path:\t%s' % path)
 
-        self.rcommon.file_rpm_check(file)
+        self.rcommon.file_rpm_check(rpm)
 
-        pid = self.package_add_record(tid, file, update)
+        pid = self.package_add_record(tid, rpm, update)
         if not pid:
             return
 
-        file_list = self.rcommon.rpm_list(file)
-        if not file_list:
+        rpm_list = self.rcommon.rpm_list(rpm)
+        if not rpm_list:
             return
 
         logging.debug('Add file records for pid: %s' % pid)
-        self.add_records(tid, pid, file_list)
-        self.add_requires(tid, pid, file)
-        self.add_provides(tid, pid, file)
-        self.add_binary_records(tid, pid, file)
+        self.add_records(tid, pid, rpm_list)
+        self.add_requires(tid, pid, rpm)
+        self.add_provides(tid, pid, rpm)
+        self.add_binary_records(tid, pid, rpm)
 
         if self.options.progress:
             sys.stdout.write('\n')
 
 
-    def package_add_record(self, tid, file, update=0):
+    def package_add_record(self, tid, rpm, update=0):
         """
         Function to add a package record
         """
-        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tid, file, update))
+        logging.debug('in Binary.package_add_record(%s, %s, %d)' % (tid, rpm, update))
 
-        fname   = os.path.basename(file)
-        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + self.rcommon.clean_shell(file))
+        fname   = os.path.basename(rpm)
+        rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}|%{ARCH}|%{SOURCERPM}' " + self.rcommon.clean_shell(rpm))
         tlist   = rpmtags.split('|')
         logging.debug("tlist is %s " % tlist)
         package = tlist[0].strip()
@@ -182,8 +182,8 @@ class Binary:
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
             return 0
 
-        ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
-        ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
+        # TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
+        # TODO: sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
         self.rcommon.show_progress(fname)
         try:
@@ -200,17 +200,17 @@ class Binary:
             )
             return p.id
         except Exception, e:
-            logging.error('Adding file %s failed!\n%s', file, e)
+            logging.error('Adding file %s failed!\n%s', rpm, e)
             return 0
 
 
-    def query(self, type):
+    def query(self, qtype):
         """
         Function to run the query for binary RPMs
 
         Valid types are: files, provides, requires, symbols, packages
         """
-        logging.debug('in Binary.query(%s)' % type)
+        logging.debug('in Binary.query(%s)' % qtype)
 
         # TODO: seems to always be case-insensitive; need to change args!!
         t = self.rtag.lookup(self.options.tag)
@@ -218,17 +218,20 @@ class Binary:
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
         elif self.options.tag and t:
-            tid =  t['id']
+            tid = t['id']
+        else:
+            tid = ''
 
-        if type == 'files':
+        like_q = ''
+        if qtype == 'files':
             like_q = self.options.query
-        if type == 'provides':
+        elif qtype == 'provides':
             like_q = self.options.provides
-        if type == 'requires':
+        elif qtype == 'requires':
             like_q = self.options.requires
-        if type == 'symbols':
+        elif qtype == 'symbols':
             like_q = self.options.symbols
-        if type == 'packages':
+        elif qtype == 'packages':
             like_q = self.options.query
 
         if self.options.regexp:
@@ -237,9 +240,10 @@ class Binary:
             match_type = 'substring'
 
         if not self.options.quiet:
-            print 'Searching database records for %s match for %s (%s)' % (match_type, type, like_q)
+            print 'Searching database records for %s match for %s (%s)' % (match_type, qtype, like_q)
 
-        if type == 'files':
+        result = None
+        if qtype == 'files':
             if self.options.regexp:
                 if self.options.tag:
                     result = RPM_File.select().where((RPM_File.file.regexp(like_q)) & (RPM_File.tid == tid)).order_by(RPM_File.file.asc())
@@ -251,7 +255,7 @@ class Binary:
                 else:
                     result = RPM_File.select().where(RPM_File.file.contains(like_q)).order_by(RPM_File.file.asc())
 
-        elif type == 'symbols':
+        elif qtype == 'symbols':
             if self.options.regexp:
                 if self.options.tag:
                     result = RPM_Symbols.select().where((RPM_Symbols.symbols.regexp(like_q)) & (RPM_Symbols.tid == tid)).order_by(RPM_Symbols.symbols.asc())
@@ -263,7 +267,7 @@ class Binary:
                 else:
                     result = RPM_Symbols.select().where(RPM_Symbols.symbols.contains(like_q)).order_by(RPM_Symbols.symbols.asc())
 
-        elif type == 'packages':
+        elif qtype == 'packages':
             if self.options.regexp:
                 if self.options.tag:
                     result = RPM_Package.select().where((RPM_Package.package.regexp(like_q)) & (RPM_Package.tid == tid)).order_by(RPM_Package.package.asc())
@@ -275,7 +279,7 @@ class Binary:
                 else:
                     result = RPM_Package.select().where(RPM_Package.package.contains(like_q)).order_by(RPM_Package.package.asc())
 
-        elif type == 'provides':
+        elif qtype == 'provides':
             if self.options.regexp:
                 if self.options.tag:
                     result = RPM_Provides.select().where((RPM_Provides.name.regexp(like_q)) & (RPM_Provides.tid == tid)).order_by(RPM_Provides.name.asc())
@@ -287,7 +291,7 @@ class Binary:
                 else:
                     result = RPM_Provides.select().where(RPM_Provides.name.contains(like_q)).order_by(RPM_Provides.name.asc())
 
-        elif type == 'requires':
+        elif qtype == 'requires':
             if self.options.regexp:
                 if self.options.tag:
                     result = RPM_Requires.select().where((RPM_Requires.name.regexp(like_q)) & (RPM_Requires.tid == tid)).order_by(RPM_Requires.name.asc())
@@ -325,17 +329,28 @@ class Binary:
                 r_date  = package.date
                 r_srpm  = package.srpm
 
-                if type == 'provides':
+                # defaults, so nothing is undeclared
+                r_is_suid = ''
+                r_is_sgid = ''
+                r_type    = ''
+                r_user    = ''
+                r_group   = ''
+                r_perms   = ''
+                r_symbol  = ''
+                r_fileid  = ''
+                r_files   = ''
+
+                if qtype == 'provides':
                     r_type = row.name
 
-                if type == 'requires':
+                if qtype == 'requires':
                     r_type = row.name
 
-                if type == 'files':
+                if qtype == 'files':
                     # only provides, requires, files
                     r_type = row.file
 
-                if type == 'files':
+                if qtype == 'files':
                     r_user    = RPM_User.get_name(row.uid)
                     r_group   = RPM_Group.get_name(row.gid)
                     r_is_suid = row.is_suid
@@ -343,7 +358,7 @@ class Binary:
                     r_perms   = row.perms
                     r_fileid  = row.id
 
-                if type == 'symbols':
+                if qtype == 'symbols':
                     r_files  = RPM_File.get_name(row.fid)
                     r_symbol = row.symbols
 
@@ -351,7 +366,7 @@ class Binary:
                     utype = '[update] '
 
                 if not ltag == r_tag:
-                    if not type == 'packages':
+                    if not qtype == 'packages':
                         print '\n\nResults in Tag: %s\n%s\n' % (r_tag, '='*40)
                     ltag = r_tag
 
@@ -361,7 +376,7 @@ class Binary:
                     rpm = '%s-%s-%s' % (r_rpm, r_ver, r_rel)
 
                     if not rpm == lsrc:
-                        if type == 'files' and self.options.ownership:
+                        if qtype == 'files' and self.options.ownership:
                             is_suid = ''
                             is_sgid = ''
                             if r_is_suid == 1:
@@ -369,9 +384,9 @@ class Binary:
                             if r_is_sgid == 1:
                                 is_sgid = '*'
                             print '%s (%s): %s (%04d,%s%s,%s%s)' % (rpm, r_srpm, r_type, int(r_perms), is_suid, r_user, is_sgid, r_group)
-                        elif type == 'symbols':
+                        elif qtype == 'symbols':
                             print '%s (%s): %s in %s' % (rpm, r_srpm, r_symbol, r_files)
-                        elif type == 'packages':
+                        elif qtype == 'packages':
                             print '%s/%s %s' % (ltag, rpm, utype)
                         else:
                             print '%s%s (%s): %s' % (utype, rpm, r_srpm, r_type)
@@ -381,7 +396,7 @@ class Binary:
                     else:
                         flags = None
                         if self.options.extrainfo:
-                            if type == 'files':
+                            if qtype == 'files':
                                 flags = RPM_Flags.get_named(r_fileid)
                             rpm_date = datetime.datetime.fromtimestamp(float(r_date))
                             if flags:
@@ -506,15 +521,15 @@ class Binary:
         return None
 
 
-    def add_requires(self, tid, pid, file):
+    def add_requires(self, tid, pid, fname):
         """
         Function to add requires to the database
         """
-        logging.debug('in Binary.add_requires(%s, %s, %s)' % (tid, pid, file))
+        logging.debug('in Binary.add_requires(%s, %s, %s)' % (tid, pid, fname))
 
-        list = commands.getoutput("rpm -qp --nosignature --requires " + self.rcommon.clean_shell(file) + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
-        list = list.splitlines()
-        for dep in list:
+        flist = commands.getoutput("rpm -qp --nosignature --requires " + self.rcommon.clean_shell(fname) + " | egrep -v '(rpmlib|GLIBC|GCC|rtld)' | uniq")
+        flist = flist.splitlines()
+        for dep in flist:
             if dep:
                 self.rcommon.show_progress()
                 if self.options.verbose:
@@ -530,7 +545,7 @@ class Binary:
                     )
                     return r.id
                 except Exception, e:
-                    logging.error('Failed to add requires %s to the database!\n%s', file, e)
+                    logging.error('Failed to add requires %s to the database!\n%s', fname, e)
 
 
     def cache_get_provides(self, name):
@@ -563,15 +578,15 @@ class Binary:
         return None
 
 
-    def add_provides(self, tid, pid, file):
+    def add_provides(self, tid, pid, fname):
         """
         Function to add provides to the database
         """
-        logging.debug('in Binary.add_provides(%s, %s, %s)' % (tid, pid, file))
+        logging.debug('in Binary.add_provides(%s, %s, %s)' % (tid, pid, fname))
 
-        list = commands.getoutput("rpm -qp --nosignature --provides " + self.rcommon.clean_shell(file))
-        list = list.splitlines()
-        for prov in list:
+        flist = commands.getoutput("rpm -qp --nosignature --provides " + self.rcommon.clean_shell(fname))
+        flist = flist.splitlines()
+        for prov in flist:
             if prov:
                 self.rcommon.show_progress()
                 if self.options.verbose:
@@ -587,7 +602,7 @@ class Binary:
                     )
                     return pr.id
                 except Exception, e:
-                    logging.error('Failed to add provides %s to the database!\n%s', file, e)
+                    logging.error('Failed to add provides %s to the database!\n%s', fname, e)
 
 
     def add_records(self, tid, pid, file_list):
@@ -597,12 +612,12 @@ class Binary:
         logging.debug('in Binary.add_records(%s, %s, %s)' % (tid, pid, file_list))
 
         for x in file_list.keys():
-            file = file_list[x]['file'].strip()
-            uid  = self.get_user_record(file_list[x]['user'])
-            gid  = self.get_group_record(file_list[x]['group'])
+            fname = file_list[x]['file'].strip()
+            uid   = self.get_user_record(file_list[x]['user'])
+            gid   = self.get_group_record(file_list[x]['group'])
             self.rcommon.show_progress()
             if self.options.verbose:
-                print 'File: %s' % file
+                print 'File: %s' % fname
 
             try:
                 f = RPM_File.create(
@@ -610,13 +625,14 @@ class Binary:
                     pid     = pid,
                     uid     = uid,
                     gid     = gid,
-                    file    = file,
+                    file    = fname,
                     is_suid = file_list[x]['is_suid'],
                     is_sgid = file_list[x]['is_sgid'],
                     perms   = file_list[x]['perms']
                 )
+                logging.debug('Filed File with id %d', f.id)
             except Exception, e:
-                logging.error('Adding file %s failed!\n%s', file, e)
+                logging.error('Adding file %s failed!\n%s', fname, e)
 
 
     def add_binary_records(self, tid, pid, rpm):
@@ -636,18 +652,18 @@ class Binary:
             command      = 'find . -perm /u+x -type f'
             (rc, output) = commands.getstatusoutput(command)
 
-            dir = output.split()
-            logging.debug('dir is %s' % dir)
-            for file in dir:
-                if os.path.isfile(file):
-                    logging.debug('checking file: %s' % file)
+            rdir = output.split()
+            logging.debug('dir is %s' % rdir)
+            for fname in rdir:
+                if os.path.isfile(fname):
+                    logging.debug('checking file: %s' % fname)
                     # executable files
-                    if re.search('ELF', commands.getoutput('file ' + self.rcommon.clean_shell(file))):
+                    if re.search('ELF', commands.getoutput('file ' + self.rcommon.clean_shell(fname))):
                         # ELF binaries
-                        flags   = self.get_binary_flags(file)
-                        symbols = self.get_binary_symbols(file)
+                        flags   = self.get_binary_flags(fname)
+                        symbols = self.get_binary_symbols(fname)
                         # need to change ./usr/sbin/foo to /usr/sbin/foo and look up the file record
-                        nfile   = file[1:]
+                        nfile   = fname[1:]
                         fid     = RPM_File.find_id(nfile, tid, pid)
                         self.add_flag_records(tid, fid, pid, flags)
                         self.add_symbol_records(tid, fid, pid, symbols)
@@ -662,7 +678,7 @@ class Binary:
                 shutil.rmtree(cpio_dir)
 
 
-    def get_binary_symbols(self, file):
+    def get_binary_symbols(self, bfile):
         """
         Function to get symbols from a binary file
         """
@@ -670,7 +686,7 @@ class Binary:
 
         self.rcommon.show_progress()
 
-        nm_output = commands.getoutput('nm -D -g ' + self.rcommon.clean_shell(file))
+        nm_output = commands.getoutput('nm -D -g ' + self.rcommon.clean_shell(bfile))
         nm_output = nm_output.split()
         for symbol in nm_output:
             if re.search('^[A-Za-z_]{2}.*', symbol):
@@ -682,7 +698,7 @@ class Binary:
         return symbols
 
 
-    def get_binary_flags(self, file):
+    def get_binary_flags(self, bfile):
         """
         Function to get binary flags from a file
         """
@@ -691,10 +707,10 @@ class Binary:
 
         self.rcommon.show_progress()
 
-        readelf_l = commands.getoutput('readelf -l ' + self.rcommon.clean_shell(file))
-        readelf_d = commands.getoutput('readelf -d ' + self.rcommon.clean_shell(file))
-        readelf_s = commands.getoutput('readelf -s ' + self.rcommon.clean_shell(file))
-        readelf_h = commands.getoutput('readelf -h ' + self.rcommon.clean_shell(file))
+        readelf_l = commands.getoutput('readelf -l ' + self.rcommon.clean_shell(bfile))
+        readelf_d = commands.getoutput('readelf -d ' + self.rcommon.clean_shell(bfile))
+        readelf_s = commands.getoutput('readelf -s ' + self.rcommon.clean_shell(bfile))
+        readelf_h = commands.getoutput('readelf -h ' + self.rcommon.clean_shell(bfile))
 
         if re.search('GNU_RELRO', readelf_l):
             if re.search('BIND_NOW', readelf_d):
@@ -749,6 +765,7 @@ class Binary:
                 fortify = flags['fortify_source'],
                 nx      = flags['nx']
             )
+            logging.debug('Filed Flag with id %d', f.id)
         except Exception, e:
             logging.error('Adding flags for fid %d failed!\n%s', fid, e)
 
@@ -767,6 +784,7 @@ class Binary:
                     fid     = fid,
                     symbols = symbol
                 )
+                logging.debug('Filed Symbol with id %d', s.id)
             except Exception, e:
                 logging.error('Adding symbol for fid %d failed!\n%s', fid, e)
 

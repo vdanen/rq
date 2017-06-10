@@ -27,6 +27,7 @@ import sys
 import re
 import commands
 
+
 class Common:
     """
     define some common functions for use
