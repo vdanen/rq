@@ -456,12 +456,10 @@ class Source:
             if self.re_patch.search(sfile):
                 flist    = self.patch_list(sfile)
                 good_src = True
-                print flist
 
             if self.re_tar.search(sfile):
                 flist    = self.tar_list(sfile)
                 good_src = True
-                print flist
 
 
             # only proceed for tarballs and patches
