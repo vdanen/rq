@@ -177,11 +177,6 @@ class Source:
         elif self.options.tag and t:
             tid = t['id']
 
-        if self.options.ignorecase and not self.options.regexp:
-            ignorecase = ''
-        else:
-            ignorecase = 'BINARY'
-
         if type == 'ctags':
             match_t = 'Ctags data'
             like_q  = self.options.ctags

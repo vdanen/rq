@@ -47,9 +47,7 @@ if __name__ == '__main__':
     p.add_option('-e', '--extrainfo', dest="extrainfo", default=False, action="store_true",
                  help="Show extra info (version, release, date)")
     p.add_option('-g', '--regexp', dest="regexp", default=False, action="store_true",
-                 help="Query string is a regular expression (invalidates -i)")
-    p.add_option('-i', '--ignorecase', dest="ignorecase", default=False, action="store_true",
-                 help="Case insensitive search")
+                 help="Query string is a regular expression")
     p.add_option('-l', '--list', dest="list", default=False, action="store_true",
                  help="List database tags")
     p.add_option('-p', '--patch', dest="patch", default=False, action="store_true",

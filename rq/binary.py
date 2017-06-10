@@ -221,11 +221,6 @@ class Binary:
         elif self.options.tag and t:
             tid =  t['id']
 
-        if self.options.ignorecase and not self.options.regexp:
-            ignorecase = ''
-        else:
-            ignorecase = 'BINARY'
-
         if type == 'files':
             like_q = self.options.query
         if type == 'provides':
