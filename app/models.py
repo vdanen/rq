@@ -678,7 +678,7 @@ class SRPM_Package(SRPMModel):
 class SRPM_Source(SRPMModel):
     pid     = ForeignKeyField(SRPM_Package, related_name='source')  # p_record
     tid     = ForeignKeyField(SRPM_Tag, related_name='source')  # t_record
-    ftype   = CharField()  # s_type
+    stype   = CharField()  # s_type
     file    = TextField()  # s_file
 
     def __repr__(self):
