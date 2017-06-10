@@ -181,7 +181,7 @@ class Binary:
 
         if RPM_Package.in_db(tid, package, version, release, arch):
             print 'File %s-%s-%s.%s is already in the database under tag %s' % (package, version, release, arch, tag)
-            return(0)
+            return 0
 
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
@@ -202,7 +202,7 @@ class Binary:
             return p.id
         except Exception, e:
             logging.error('Adding file %s failed!\n%s', file, e)
-            return(0)
+            return 0
 
 
     def query(self, type):
