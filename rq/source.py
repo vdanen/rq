@@ -395,43 +395,43 @@ class Source:
         """
         logging.debug('in Source.showinfo()')
 
-        if self.options.tag and not self.rtag.lookup(self.options.tag):
+        t = self.rtag.lookup(self.options.tag)
+        if self.options.tag and not t:
             print 'Tag %s is not a known tag!\n' % self.options.tag
             sys.exit(1)
+        elif self.options.tag and t:
+            tid = t['id']
 
-        print 'Displaying all known information on srpm "%s"\n' % self.options.showinfo
+        srpm = self.options.showinfo
+        print 'Displaying all known information on srpm "%s"\n' % srpm
 
         if self.options.tag:
-            qtag = " AND p_tag = '%s'" % self.db.sanitize_string(self.options.tag)
+            result = SRPM_Package.select().where((SRPM_Package.package == srpm) & (SRPM_Package.tid == tid)).order_by(SRPM_Package.tid.asc())
         else:
-            qtag = ''
+            result = SRPM_Package.select().where(SRPM_Package.package == srpm).order_by(SRPM_Package.tid.asc())
 
-        query = "SELECT * FROM packages JOIN tags ON (packages.t_record = tags.t_record) WHERE p_package = '%s' %s ORDER BY p_tag" % (self.db.sanitize_string(self.options.showinfo), qtag)
-
-        result = self.db.fetch_all(query)
         if not result:
             print 'No matches found for package %s' % srpm
             sys.exit(0)
 
         for row in result:
-            print 'Results for package %s-%s-%s' % (row['p_package'], row['p_version'], row['p_release'])
-            print '  Tag: %-20s Source path: %s' % (row['p_tag'], row['path'])
+            tag = SRPM_Tag.get(SRPM_Tag.id == row.tid)
+            print 'Results for package %s-%s-%s' % (row.package, row.version, row.release)
+            print '  Tag: %-20s Source path: %s' % (tag.tag, tag.path)
 
-            query   = "SELECT s_file FROM sources WHERE p_record = '%s' ORDER BY s_type, s_file ASC" % row['p_record']
-            results = self.db.fetch_all(query)
+            results = SRPM_Source.select().where(SRPM_Source.pid == row.id).order_by(SRPM_Source.stype.desc())
             if results:
                 print ''
                 print '  Source RPM contains the following source files:'
                 for xrow in results:
-                    print '  %s' % xrow['s_file']
+                    print '  %s' % xrow.file
 
-            query   = "SELECT b_name FROM buildreqs JOIN breq_name ON (breq_name.n_record = buildreqs.n_record) WHERE p_record = '%s' ORDER BY b_name ASC" % row['p_record']
-            results = self.db.fetch_all(query)
+            results = SRPM_BuildRequires.select().where(SRPM_BuildRequires.pid == row.id).order_by(SRPM_BuildRequires.name.asc())
             if results:
                 print ''
                 print '  Source RPM has the following BuildRequires:'
                 for xrow in results:
-                    print '  %s' % xrow['b_name']
+                    print '  %s' % xrow.name
             print ''
 
 
