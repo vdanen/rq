@@ -71,8 +71,6 @@ if __name__ == '__main__':
     p.add_option('', '--list-to-update', dest="list_to_update", default=False, action="store_true",
                  help="List all packages scheduled for update by tag")
     dbgroup = optparse.OptionGroup(p, "Database Options")
-    dbgroup.add_option('-a', '--add', dest="addfile", metavar="FILE",
-                       help="Add a " + RQ_TYPE + " rpm entry with TAG to the database")
     dbgroup.add_option('-C', '--createpath', dest="createpath", metavar="DIR",
                        help="Create database entries with TAG from a " + RQ_TYPE + " rpm DIR")
     dbgroup.add_option('-U', '--updatepath', dest="updatepath", metavar="DIR",
@@ -190,49 +188,6 @@ if __name__ == '__main__':
 
     if options.src_examine:
         rqs.examine(options.src_examine)
-        sys.exit(0)
-
-    # this option is strange... it must be for adding a file, but should a single file
-    # have a new tag?  or can we add it (despite the path) to an existing tag?
-    # TODO: it also needs to be able to support numerous files at once
-    if options.addfile:
-        if not options.tag:
-            logging.critical('The --add option requires a tag entry!')
-            sys.exit(1)
-
-        # are we passed a file, or directory?
-        if os.path.isfile(options.addfile):
-            # passed a file, we want the path
-            path = os.path.abspath(os.path.dirname(options.addfile))
-        else:
-            # passed a directory
-            path = os.path.abspath(options.addfile)
-
-        havetag = rtag.lookup(options.tag)
-
-        if not havetag:
-            logging.critical('The --add option requires a tag that already exists!')
-            sys.exit(1)
-
-        if path != havetag['path']:
-            logging.critical('Tag (%s) is already in the database with path: %s' % (options.tag, havetag['path']))
-            logging.critical('Cannot add to an existing tag from a different path!  Unwilling to use %s to add a new file!' % path)
-            sys.exit(1)
-
-        # the rest of this just makes no sense as-is so bail
-        print 'The --add option is non-functional.  Sorry.'
-        sys.exit(1)
-
-        addfiles = []
-        addfiles.append(path)
-
-        if len(arguments) > 0:
-            addfiles.extend(arguments)
-
-        for afile in addfiles:
-            print afile
-            #record_add(options.tag, afile, RQ_TYPE)
-
         sys.exit(0)
 
     if options.createpath:
