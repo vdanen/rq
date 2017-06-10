@@ -21,23 +21,27 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with rq.  If not, see <http://www.gnu.org/licenses/>.
 """
-import os, sys, re, commands, logging, tempfile, shutil, datetime
+import os
+import sys
+import re
+import commands
+import logging
+import tempfile
+import shutil
+import datetime
 from glob import glob
-import rq.db
-import rq.basics
+from app.models import SRPM_Ctag, SRPM_Tag, SRPM_BuildRequires, SRPM_Source, SRPM_Package, SRPM_File, SRPM_AlreadySeen
 
 class Source:
     """
     Class to handle working with source files
     """
 
-    def __init__(self, db, config, options, rtag, rcommon):
-        self.db         = db
+    def __init__(self, config, options, rtag, rcommon):
         self.config     = config
         self.options    = options
         self.rtag       = rtag
         self.rcommon    = rcommon
-        self.breq_cache = {}
 
         self.re_srpm    = re.compile(r'\.src\.rpm$')
         self.re_patch   = re.compile(r'\.(diff|dif|patch)(\.bz2|\.gz)?$')
@@ -51,6 +55,9 @@ class Source:
                            'subroutine': 1,
                            'class'     : 2,
                            'method'    : 3}
+
+        # caches
+        self.breq_cache = {}
 
 
     def patch_list(self, file):
@@ -69,7 +76,7 @@ class Source:
 
         list = commands.getoutput(grep + " '^+++' " + self.rcommon.clean_shell(file) + " 2>/dev/null | awk '{print $2}'")
 
-        return(list)
+        return list
 
 
     def tar_list(self, file):
@@ -95,7 +102,7 @@ class Source:
         (rc, list) = commands.getstatusoutput(command)
         logging.debug('called tar (rc=%s): %s\n%s' % (rc, command, list))
 
-        return(list)
+        return list
 
 
     def fix_excludes(self, file):
@@ -105,7 +112,7 @@ class Source:
         if file[0] == '/':
             file = file[1:]
 
-        return(file)
+        return file
 
 
     def get_all_files(self, file):
@@ -398,11 +405,11 @@ class Source:
             print ''
 
 
-    def add_records(self, tag_id, record, file_list):
+    def add_records(self, tid, pid, file_list):
         """
         Function to add source records
         """
-        logging.debug('in Source.add_records(%s, %s, %s)' % (tag_id, record, file_list))
+        logging.debug('in Source.add_records(%s, %s, %s)' % (tid, pid, file_list))
 
         for x in file_list.keys():
             # remove any possible paths from source files; may be due to rpm5
@@ -422,15 +429,23 @@ class Source:
 
             if self.options.verbose:
                 print 'Source: %s, Type: %s' % (sfile, stype)
-            query  = "INSERT INTO sources (t_record, p_record, s_type, s_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, stype, self.db.sanitize_string(sfile.strip()))
-            result = self.db.do_query(query)
+            try:
+                s = SRPM_Source.create(
+                    tid   = tid,
+                    pid   = pid,
+                    stype = stype,
+                    file  = sfile.strip()
+                )
+                logging.debug('Filed Source with id %d', s.id)
+            except Exception, e:
+                logging.error('Adding source file %s failed!\n%s', file, e)
 
 
-    def add_file_records(self, tag_id, record, file_list):
+    def add_file_records(self, tid, pid, file_list):
         """
         Function to add all source file records
         """
-        logging.debug('in Source.add_file_records(%s, %s, %s)' % (tag_id, record, file_list))
+        logging.debug('in Source.add_file_records(%s, %s, %s)' % (tid, pid, file_list))
 
         for x in file_list.keys():
             good_src = False
@@ -441,10 +456,13 @@ class Source:
             if self.re_patch.search(sfile):
                 flist    = self.patch_list(sfile)
                 good_src = True
+                print flist
 
             if self.re_tar.search(sfile):
                 flist    = self.tar_list(sfile)
                 good_src = True
+                print flist
+
 
             # only proceed for tarballs and patches
             if good_src:
@@ -452,9 +470,8 @@ class Source:
                 files = flist.split()
 
                 # get the s_record for this source from the db
-                query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, self.db.sanitize_string(sfile))
-                db_srec = self.db.fetch_one(query)
-                if not db_srec:
+                sid = SRPM_Source.find_id(pid, sfile)
+                if not sid:
                     logging.critical('adding files from %s failed...' % sfile)
                     sys.exit(1)
 
@@ -474,18 +491,27 @@ class Source:
                             self.rcommon.show_progress()
                             if self.options.verbose:
                                 print 'File: %s' % dfile
-                            query  = "INSERT INTO files (t_record, p_record, s_record, f_file) VALUES ('%s', '%s', '%s', '%s')" % (tag_id, record, db_srec, self.db.sanitize_string(dfile))
-                            result = self.db.do_query(query)
+                            try:
+                                f = SRPM_File.create(
+                                    tid  = tid,
+                                    pid  = pid,
+                                    sid  = sid,
+                                    file = dfile
+                                )
+                                logging.debug('Filed File with id %d', f.id)
+                            except Exception, e:
+                                logging.error('Adding file %s failed!\n%s', dfile, e)
+
             else:
                 logging.debug('unwilling to process: %s' % sfile)
 
 
-    def add_ctag_records(self, tag_id, record, cpio_dir):
+    def add_ctag_records(self, tid, pid, cpio_dir):
         """
         Function to run ctags against an unpacked source directory
         and insert records into the database
         """
-        logging.debug('in Source.add_ctag_records(%s, %s, %s)' % (tag_id, record, cpio_dir))
+        logging.debug('in Source.add_ctag_records(%s, %s, %s)' % (tid, pid, cpio_dir))
 
         # this is likely a double chdir, but let's make sure we're in the right place
         # so we don't have to strip out the path from the ctags output
@@ -495,9 +521,8 @@ class Source:
         for file in os.listdir(cpio_dir):
             if self.re_tar.search(file):
                 # get the s_record for this source from the db
-                query   = "SELECT s_record FROM sources WHERE p_record = '%s' AND s_file = '%s'" % (record, self.db.sanitize_string(file))
-                db_srec = self.db.fetch_one(query)
-                if not db_srec:
+                sid = SRPM_Source.find_id(pid, file)
+                if not sid:
                     logging.critical('!!!!! adding files from %s failed...' % file)
                     # don't bail, it's logged, continue
                     #sys.exit(1)
@@ -536,24 +561,28 @@ class Source:
 
                 for tag in output.split('\n'):
                     try:
-                        (name, type, line, path, extra) = tag.split(None, 4)
+                        (name, ctype, line, path, extra) = tag.split(None, 4)
                     except:
                         continue
 
                     # only store some ctags info, not all of it
-                    if type in self.ctag_map:
+                    if ctype in self.ctag_map:
                         self.rcommon.show_progress()
-                        query = "INSERT INTO ctags (t_record, p_record, s_record, c_name, c_type, c_line, c_file, c_extra) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
-                            tag_id,
-                            record,
-                            db_srec,
-                            self.db.sanitize_string(name),
-                            self.ctag_map[type],
-                            self.db.sanitize_string(line),
-                            self.db.sanitize_string(path),
-                            self.db.sanitize_string(extra))
-                        result = self.db.do_query(query)
-                        #print '%s\n' % query
+                        try:
+                            c = SRPM_Ctag.create(
+                                tid   = tid,
+                                pid   = pid,
+                                sid   = sid,
+                                name  = name,
+                                ctype = self.ctag_map[ctype],
+                                line  = line,
+                                file  = path,
+                                extra = extra
+                            )
+                            logging.debug('Filed Ctag with id %d', c.id)
+                        except Exception, e:
+                            logging.error('Adding ctag %s for file %s failed!\n%s', name, file, e)
+
                 os.chdir(cpio_dir)
 
                 # make sure this is empty or it will eat lots of memory
@@ -568,11 +597,11 @@ class Source:
                     shutil.rmtree(tmpdir)
 
 
-    def add_buildreq_records(self, tag_id, record, cpio_dir):
+    def add_buildreq_records(self, tid, pid, cpio_dir):
         """
         Get the build requirements for this package from the spec file
         """
-        logging.debug('in Source.add_buildreq_records(%s, %s, %s)' % (tag_id, record, cpio_dir))
+        logging.debug('in Source.add_buildreq_records(%s, %s, %s)' % (tid, pid, cpio_dir))
 
         specfile = ''
         r        = []
@@ -638,7 +667,7 @@ class Source:
                         new = new[:-1]
 
                     # we want to make sure we don't list the same thing twice, we also don't want blank items
-                    if not new in r:
+                    if new not in r:
                         if new != '':
                             r.append(new)
 
@@ -657,12 +686,15 @@ class Source:
             n_rec = self.get_buildreq_record(require)
 
             # record == p_record
-            query = "INSERT INTO buildreqs (t_record, p_record, n_record) VALUES ('%s', '%s', '%s')" % (
-                            tag_id,
-                            record,
-                            n_rec)
-            result = self.db.do_query(query)
-            #print '%s\n' % query
+            try:
+                b = SRPM_BuildRequires.create(
+                    tid  = tid,
+                    pid  = pid,
+                    name = require
+                )
+                logging.debug('Filed BuildRequires with id %d', b.id)
+            except Exception, e:
+                logging.error('Unable to add buildrequires %s to database!\n%s', require, e)
 
         # make sure its empty
         del r[:]
@@ -672,38 +704,30 @@ class Source:
         """
         Function to look up the n_record and add it to the cache for buildreqs
         """
-        query = "SELECT n_record FROM breq_name WHERE b_name = '%s'" % name
-        n_rec = self.db.fetch_one(query)
-        if n_rec:
+        bid = SRPM_BuildRequires.get_id(name)
+        if bid:
             # add to the cache
-            self.breq_cache[name] = n_rec
-            return n_rec
+            self.breq_cache[name] = bid
+            return bid
         else:
             return False
 
 
-    def get_buildreq_record(self, require):
+    def get_buildreq_record(self, name):
         """
-        Function to lookup, add, and cache buildrequires info
+        Function to lookup and cache buildrequires info
         """
-        name = self.db.sanitize_string(require)
 
         # first check the cache
         if name in self.breq_cache:
             return self.breq_cache[name]
 
         # not cached, check the database
-        n_rec = self.cache_get_buildreq(name)
-        if n_rec:
-            return n_rec
+        bid = self.cache_get_buildreq(name)
+        if bid:
+            return bid
 
-        # not cached, not in the db, add it
-        query = "INSERT INTO breq_name (n_record, b_name) VALUES (NULL, '%s')" % name
-        n_rec = self.db.do_query(query, True)
-        if n_rec:
-            # add to the cache
-            self.breq_cache[name] = n_rec
-            return n_rec
+        return None
 
 
     def rpm_add_directory(self, tag, path, updatepath):
@@ -796,11 +820,11 @@ class Source:
             sys.stdout.write('\n')
 
 
-    def package_add_record(self, tag_id, file, update=0):
+    def package_add_record(self, tid, file, update=0):
         """
         Function to add a package record
         """
-        logging.debug('in Source.package_add_record(%s, %s, %d)' % (tag_id, file, update))
+        logging.debug('in Source.package_add_record(%s, %s, %d)' % (tid, file, update))
 
         fname   = os.path.basename(file)
         rpmtags = commands.getoutput("rpm -qp --nosignature --qf '%{NAME}|%{VERSION}|%{RELEASE}|%{BUILDTIME}' " + self.rcommon.clean_shell(file))
@@ -811,42 +835,30 @@ class Source:
         release = tlist[2].strip()
         pdate   = tlist[3].strip()
 
-        query = "SELECT tag FROM tags WHERE t_record = '%s' LIMIT 1" % tag_id
-        tag   = self.db.fetch_one(query)
+        tag   = SRPM_Tag.get_tag(tid)
 
-        query = "SELECT t_record, p_package, p_version, p_release FROM packages WHERE t_record = '%s' AND p_package = '%s' AND p_version = '%s' AND p_release = '%s'" % (
-            tag_id,
-            self.db.sanitize_string(package),
-            self.db.sanitize_string(version),
-            self.db.sanitize_string(release))
-        result = self.db.fetch_all(query)
-
-        if result:
+        if SRPM_Package.in_db(tid, package, version, release):
             print 'File %s-%s-%s is already in the database under tag %s' % (package, version, release, tag)
-            return(0)
+            return 0
 
         ## TODO: we shouldn't have to have p_tag here as t_record has the same info, but it
         ## sure makes it easier to sort alphabetically and I'm too lazy for the JOINs right now
 
-        query  = "INSERT INTO packages (t_record, p_tag, p_package, p_version, p_release, p_date, p_fullname, p_update) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d)" % (
-            tag_id,
-            self.db.sanitize_string(tag),
-            self.db.sanitize_string(package),
-            self.db.sanitize_string(version),
-            self.db.sanitize_string(release),
-            self.db.sanitize_string(pdate),
-            self.db.sanitize_string(fname),
-            update)
-        result = self.db.do_query(query)
         self.rcommon.show_progress(fname)
-
-        query    = "SELECT p_record FROM packages WHERE t_record = '%s' AND p_package = '%s' ORDER BY p_record DESC" % (tag_id, self.db.sanitize_string(package))
-        p_record = self.db.fetch_one(query)
-        if p_record:
-            return(p_record)
-        else:
-            print 'Adding file %s failed!\n' % file
-            return(0)
+        try:
+            p = SRPM_Package.create(
+                tid      = tid,
+                package  = package,
+                version  = version,
+                release  = release,
+                date     = pdate,
+                fullname = fname,
+                update   = update
+            )
+            return p.id
+        except Exception, e:
+            logging.error('Adding file %s failed!\n%s', file, e)
+            return 0
 
 
     def list_updates(self, tag):
@@ -857,13 +869,9 @@ class Source:
 
         print 'Updated packages in tag %s:\n' % tag
 
-        query   = "SELECT t_record FROM tags WHERE tag = '%s' LIMIT 1" % self.db.sanitize_string(tag)
-        tag_id  = self.db.fetch_one(query)
-
-        query   = "SELECT p_fullname FROM packages WHERE t_record = %s AND p_update = 1 ORDER BY p_fullname ASC" % tag_id
-        results = self.db.fetch_all(query)
+        results = SRPM_Package.list_updates(tag)
         if results:
             for xrow in results:
-                print '%s' % xrow['p_fullname']
+                print '%s' % xrow.fullname
         else:
             print 'No results found.'

@@ -681,6 +681,20 @@ class SRPM_Source(SRPMModel):
     stype   = CharField()  # s_type
     file    = TextField()  # s_file
 
+    @classmethod
+    def find_id(cls, pid, sfile):
+        """
+        Returns the source id for the provided package id and source file
+        :param pid: the package id to look up
+        :param sfile: the source file to look up
+        :return: int
+        """
+        try:
+            sid = SRPM_Source.get((SRPM_Source.pid == pid) & (SRPM_Source.file == sfile))
+            return sid
+        except:
+            return None
+
     def __repr__(self):
         return '<SRPM Source {self.file}>'.format(self=self)
 

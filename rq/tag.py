@@ -28,7 +28,8 @@ import os
 import commands
 from glob import glob
 from app.models import RPM_Tag, RPM_Package, RPM_Requires, RPM_Provides, RPM_File, RPM_Flags, RPM_Symbols, \
-    RPM_AlreadySeen, rpm_db
+    RPM_AlreadySeen, SRPM_Package, SRPM_Tag, SRPM_BuildRequires, SRPM_Ctag, SRPM_Source, SRPM_File, SRPM_AlreadySeen, \
+    rpm_db, srpm_db
 
 
 class Tag:
@@ -86,7 +87,10 @@ class Tag:
         """
         logging.debug('in Tag.lookup(%s)' % tag)
 
-        return RPM_Tag.info(tag)
+        if self.type == 'binary':
+            return RPM_Tag.info(tag)
+        else:
+            return SRPM_Tag.info(tag)
 
 
     def add_record(self, tag, path_to_tag, updatepath):
@@ -107,19 +111,32 @@ class Tag:
             path = os.path.abspath(os.path.dirname(path_to_tag))
         else:
             path = os.path.abspath(path_to_tag)
+
         # we can have multiple similar paths, but not multiple similar tags
-        dbtag = RPM_Tag.exists(tag)
+        if self.type == 'binary':
+            dbtag = RPM_Tag.exists(tag)
+        else:
+            dbtag = SRPM_Tag.exists(tag)
+
         if dbtag:
             print 'Tag (%s) already exists in the database!\n' % tag
             sys.exit(1)
 
         try:
-            t = RPM_Tag.create(
-                tag = tag.strip(),
-                path = path.strip(),
-                update_path = updatepath.strip(),
-                tdate = cur_date
-            )
+            if self.type == 'binary':
+                t = RPM_Tag.create(
+                    tag         = tag.strip(),
+                    path        = path.strip(),
+                    update_path = updatepath.strip(),
+                    tdate       = cur_date
+                )
+            else:
+                t = SRPM_Tag.create(
+                    tag         = tag.strip(),
+                    path        = path.strip(),
+                    update_path = updatepath.strip(),
+                    tdate       = cur_date
+                )
             return t.id
         except Exception, e:
             logging.error('Adding tag %s failed!\n%s', tag, e)
@@ -136,15 +153,19 @@ class Tag:
         """
         logging.debug('in Tag.delete_entries(%s)' % tag)
 
-        tid =  self.lookup(tag)
+        tid = self.lookup(tag)
 
         if not tid:
             print 'No matching tag found for entry %s!\n' % tag
             sys.exit(1)
         else:
             print 'Removing tag (%s) from Tags...\n' % tag
-            t = RPM_Tag.get(RPM_Tag.tag == tag)
+            if self.type == 'binary':
+                t = RPM_Tag.get(RPM_Tag.tag == tag)
+            else:
+                t = SRPM_Tag.get(SRPM_Tag.tag == tag)
             result = t.package_count
+
             if result:
                 if result == 1:
                     word_package = 'Package'
@@ -160,8 +181,10 @@ class Tag:
                     self.optimize_db()
 
                 # now delete the tag entry itself
-                RPM_Flags.delete_tags(tid['id'])
-                RPM_Symbols.delete_tags(tid['id'])
+                if self.type == 'binary':
+                    RPM_Flags.delete_tags(tid['id'])
+                    RPM_Symbols.delete_tags(tid['id'])
+
                 t.delete_instance(recursive=True)
 
                 sys.stdout.write(' done\n')
@@ -577,10 +600,13 @@ class Tag:
                 c_provs = RPM_Provides.select().where(RPM_Provides.tid == tid).count()
                 c_flags = RPM_Flags.select().where(RPM_Flags.tid == tid).count()
                 c_symbs = RPM_Symbols.select().where(RPM_Symbols.tid == tid).count()
-#            else:
-#                c_src   = SRPM_Sources.select().where(RPM_Tag.id == tid).count()
-#                c_ctags = SRPM_Ctags.select().where(RPM_Tag.id == tid).count()
-#                c_breqs = SRPM_Buildreqs.select().where(RPM_Tag.id == tid).count()
+            else:
+                c_tags  = SRPM_Tag.select().where(SRPM_Tag.id == tid).count()
+                c_pkgs  = SRPM_Package.select().where(SRPM_Package.tid == tid).count()
+                c_files = SRPM_File.select().where(SRPM_File.tid == tid).count()
+                c_src   = SRPM_Source.select().where(SRPM_Tag.id == tid).count()
+                c_ctags = SRPM_Ctag.select().where(SRPM_Tag.id == tid).count()
+                c_breqs = SRPM_BuildRequires.select().where(SRPM_Tag.id == tid).count()
         else:
             if self.type == 'binary':
                 c_tags  = RPM_Tag.select().count()
@@ -590,20 +616,31 @@ class Tag:
                 c_provs = RPM_Provides.select().count()
                 c_flags = RPM_Flags.select().count()
                 c_symbs = RPM_Symbols.select().count()
-#            else:
-#                c_src   = SRPM_Sources.select().count()
-#                c_ctags = SRPM_Ctags.select().count()
-#                c_breqs = SRPM_Buildreqs.select().count()
+            else:
+                c_tags  = SRPM_Tag.select().count()
+                c_pkgs  = SRPM_Package.select().count()
+                c_files = SRPM_File.select().count()
+                c_src   = SRPM_Source.select().count()
+                c_ctags = SRPM_Ctag.select().count()
+                c_breqs = SRPM_BuildRequires.select().count()
 
         # get the size of the database as well
         size   = 0.00
         btype  = ''
         # TODO: use srpm_db if type == source
+        if self.type == 'binary':
+            db   = rpm_db.database
+            user = rpm_db.connect_kwargs['user']
+            host = rpm_db.connect_kwargs['host']
+        else:
+            db   = srpm_db.database
+            user = srpm_db.connect_kwargs['user']
+            host = srpm_db.connect_kwargs['host']
         query = 'SELECT table_schema "name",  sum( data_length + index_length ) "size" FROM information_schema.TABLES \
-                 WHERE table_schema = "%s" GROUP BY table_schema' % rpm_db.database
+                 WHERE table_schema = "%s" GROUP BY table_schema' % db
         tbsize = rpm_db.execute_sql(query)
         for x in tbsize._rows:
-            if x[0] == rpm_db.database:
+            if x[0] == db:
                 size = int(x[1])
         count = 0
 
@@ -621,10 +658,7 @@ class Tag:
         print 'Database statistics:\n'
         if tag != 'all':
             print 'Printing statistics for tag: %s\n' % tag
-        print '   Database  => User: %s, Host: %s, Database: %s' % (
-            rpm_db.connect_kwargs['user'],
-            rpm_db.connect_kwargs['host'],
-            rpm_db.database)
+        print '   Database  => User: %s, Host: %s, Database: %s' % (user, host, db)
         print '   Data size => %2.2f %s\n' % (size, btype)
         print '   Tag records  : %-16d Package records : %-15d' % (c_tags, c_pkgs)
         if self.type == 'binary':
