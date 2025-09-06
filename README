@@ -35,17 +35,4 @@ guarantees, but would be neat things to see in the future:
 - an XMLRPC interface for a disconnected CLI client
 - better documentation
 
-
-Patches welcome.
-
-
-BUG REPORTING
-=============
-
-https://bugzilla.annvix.com/enter_bug.cgi?product=rq
-
-
-AUTHOR
-======
-
-Vincent Danen <vdanen@annvix.com>
+**NOTE**: This project is archived and hasn't had active development for years.  It's available as a curiosity, nothing more.
